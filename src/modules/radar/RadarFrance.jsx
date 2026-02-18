@@ -1,0 +1,877 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, ImageOverlay, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl, Circle } from 'react-leaflet';
+import { Play, Pause, ChevronLeft, ChevronRight, Clock, Info, Globe, Map as MapIcon, Layers, Square, Download, FileJson, Thermometer, Wind, Film, Settings2, Zap, Calendar } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import gifshot from 'gifshot';
+import L from 'leaflet';
+import { createClient } from '@supabase/supabase-js';
+import 'leaflet/dist/leaflet.css';
+import './RadarFrance.css';
+import { MAIN_CITIES } from "../../data/mainCities";
+
+const supabase = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+// Fix pour les icônes Leaflet par défaut
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+const ZONES = {
+    METROPOLE: { name: 'France (Métropole)', center: [46.4, 2.2], zoom: 5.7 },
+    HAUTS_DE_FRANCE: { name: 'Hauts-de-France', center: [50.1, 2.9], zoom: 8 },
+    NORMANDIE: { name: 'Normandie', center: [49.1, 0.4], zoom: 8 },
+    ILE_DE_FRANCE: { name: 'Île-de-France', center: [48.8, 2.3], zoom: 9 },
+    GRAND_EST: { name: 'Grand Est', center: [48.7, 5.8], zoom: 7 },
+    BRETAGNE: { name: 'Bretagne', center: [48.2, -2.9], zoom: 8 },
+    OCCITANIE: { name: 'Occitanie', center: [43.6, 1.4], zoom: 7 },
+    PACA: { name: 'PACA', center: [43.9, 6.0], zoom: 8 },
+    AUVERGNE_RHONE_ALPES: { name: 'Auvergne-Rhône-Alpes', center: [45.5, 5.3], zoom: 7 },
+    NOUVELLE_AQUITAINE: { name: 'Nouvelle-Aquitaine', center: [45.4, 0.5], zoom: 7 },
+    ANTILLES: { name: 'Antilles', center: [14.6, -61.0], zoom: 8 },
+    REUNION: { name: 'Réunion', center: [-21.1, 55.5], zoom: 9 },
+    GUYANE: { name: 'Guyane', center: [4.9, -52.3], zoom: 8 },
+    CALEDONIE: { name: 'Nouv. Calédonie', center: [-21.3, 165.5], zoom: 7 }
+};
+
+const RADAR_SCHEMES = [
+    { id: 2, name: 'Météo-France (HD)', colors: ['#dbeafe', '#3b82f6', '#10b981', '#facc15', '#ef4444'] },
+    { id: 1, name: 'Bleu Universel', colors: ['#eff6ff', '#60a5fa', '#2563eb', '#1e40af', '#1e3a8a'] },
+    { id: 6, name: 'Arc-en-Ciel (Météo-France New)', colors: ['#00009c', '#2d65d4', '#4aa4ff', '#00d000', '#faff00', '#ff9c00', '#ff0000'] },
+    { id: 8, name: 'Contrasté (OWM)', colors: ['#ffffff', '#0000ff', '#00ff00', '#ffff00', '#ff0000'] }
+];
+
+const MAP_STYLES = {
+    CLEAN: { name: 'Épurée (No Labels)', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png' },
+    STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
+    DETAILED: { name: 'Routes & Communes', url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png' },
+    VOYAGER: { name: 'Clean (Sans Lignes)', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png' }
+};
+
+const MAIN_STATIONS = [
+    { id: '59350001', name: 'Lille', pos: [50.57, 3.10] },
+    { id: '59178001', name: 'Douai', pos: [50.37, 3.08] },
+    { id: '80001001', name: 'Abbeville', pos: [50.14, 1.83] },
+    { id: '75114001', name: 'Paris', pos: [48.82, 2.34] },
+    { id: '67124001', name: 'Strasbourg', pos: [48.55, 7.63] },
+    { id: '29019001', name: 'Brest', pos: [48.45, -4.41] },
+    { id: '44020001', name: 'Nantes', pos: [47.15, -1.61] },
+    { id: '69029001', name: 'Lyon', pos: [45.72, 4.95] },
+    { id: '33281001', name: 'Bordeaux', pos: [44.83, -0.69] },
+    { id: '34172002', name: 'Montpellier', pos: [43.58, 3.96] },
+    { id: '13054001', name: 'Marseille', pos: [43.44, 5.21] },
+    { id: '06088001', name: 'Nice', pos: [43.65, 7.21] },
+    { id: '31069001', name: 'Toulouse', pos: [43.63, 1.37] }
+];
+
+const PERIODS = [
+    { id: '2H', name: 'Dernières 2h', count: 12 },
+    { id: '6H', name: 'Dernières 6h', count: 36 },
+    { id: '12H', name: 'Dernières 12h', count: 72 },
+    { id: '24H', name: 'Dernières 24h', count: 144 },
+    { id: '48H', name: 'Dernières 48h', count: 288 },
+    { id: '72H', name: 'Dernières 72h', count: 432 },
+    { id: '7D', name: 'Derniers 7 jours', count: 1008 }
+];
+
+const HOUR_COLORS = [
+    "#0000FF", "#0022FF", "#0044FF", "#0066FF", "#0088FF", "#00AAFF", // 0h-5h (Bleus)
+    "#00CCFF", "#00EEFF", "#00FFDD", "#00FFBB", "#00FF99", "#00FF77", // 6h-11h (Cyans/Verts)
+    "#00FF00", "#77FF00", "#BBFF00", "#FFFF00", "#FFCC00", "#FFAA00", // 12h-17h (Vert/Jaune/Orange)
+    "#FF8800", "#FF6600", "#FF4400", "#FF2200", "#FF0000", "#8B0000"  // 18h-23h (Rouge/Brun)
+];
+
+const MousePosition = () => {
+    const [pos, setPos] = useState(null);
+    const map = useMap();
+
+    useEffect(() => {
+        const onMouseMove = (e) => setPos(e.latlng);
+        map.on('mousemove', onMouseMove);
+        return () => map.off('mousemove', onMouseMove);
+    }, [map]);
+
+    if (!pos) return null;
+
+    return (
+        <div className="mouse-coords-overlay-radar">
+            <span className="coord-label">LAT:</span> <span className="coord-val">{pos.lat.toFixed(4)}°</span>
+            <span className="coord-label">LON:</span> <span className="coord-val">{pos.lng.toFixed(4)}°</span>
+        </div>
+    );
+};
+
+function MapController({ center, zoom }) {
+    const map = useMap();
+    useEffect(() => {
+        map.setView(center, zoom, { animate: true });
+    }, [center, zoom, map]);
+    return null;
+}
+
+const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showLabels, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, radarHost, isSmoothed }) => {
+    return (
+        <div className="radar-map-inner-wrapper" style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <MapContainer
+                center={zone.center}
+                zoom={zone.zoom}
+                zoomSnap={0.1}
+                zoomDelta={0.1}
+                className="radar-leaflet-map"
+                zoomControl={false}
+                maxZoom={20}
+            >
+
+
+                <TileLayer
+                    url={MAP_STYLES[mapStyle].url}
+                    attribution='&copy; OpenStreetMap'
+                />
+
+                <ScaleControl position="bottomleft" imperial={false} />
+                <MousePosition />
+
+
+
+                {deptGeojson && (
+                    <GeoJSON
+                        data={deptGeojson}
+                        style={{
+                            color: '#000',
+                            weight: 1.2,
+                            fillOpacity: 0,
+                            interactive: false
+                        }}
+                    />
+                )}
+
+                {/* Météo-France Radar ImageOverlay */}
+                {timestamps.map((ts, idx) => {
+                    const isCurrent = idx === currentIndex;
+                    const isBuffered = Math.abs(idx - currentIndex) <= 2;
+                    if (!isBuffered) return null;
+
+                    const filename = ts.filename;
+                    const bounds = ts.leaflet_bounds;
+                    if (!filename || !bounds) return null;
+
+                    return (
+                        <ImageOverlay
+                            key={filename}
+                            url={ts.imageUrl || `/radar-mf/${filename}`}
+                            bounds={bounds}
+                            opacity={isCurrent ? 0.85 : 0}
+                            zIndex={isCurrent ? 1000 : 100}
+                            className={`radar-tile-layer-pro ${isCurrent ? 'active' : ''}`}
+                        />
+                    );
+                })}
+
+                <MapController center={zone.center} zoom={zone.zoom} />
+
+                {showLabels && MAIN_CITIES.map((city, i) => (
+                    <Marker
+                        key={i}
+                        position={[city.lat, city.lon]}
+                        icon={L.divIcon({
+                            className: 'city-label-expert',
+                            html: `<div style="text-align:center;"><div style="width:4px;height:4px;background:#000;border-radius:50%;margin:0 auto 1px;"></div><span style="font-size:11px;font-weight:1000;color:#000;text-shadow:0 0 4px #fff, 0 0 2px #fff;">${city.name}</span></div>`,
+                            iconSize: [60, 40],
+                            iconAnchor: [30, 5]
+                        })}
+                    />
+                ))}
+
+                {overlayType !== 'NONE' && MAIN_STATIONS.map(station => {
+                    const obs = observations[station.id];
+                    if (!obs) return null;
+
+                    // FOUDRE (Simulé via obs car pas de source temps réel simple sans API payante, 
+                    // ici on utilise un marqueur fictif ou une donnée si dispo. 
+                    // NOTE: Pour l'instant, si overlayType === 'LIGHTNING', on peut afficher rien ou une donnée placeholder)
+                    if (overlayType === 'LIGHTNING') return null;
+
+                    return (
+                        <Marker
+                            key={station.id}
+                            position={station.pos}
+                            icon={L.divIcon({
+                                className: 'obs-marker',
+                                html: `<div class="obs-badge ${overlayType === 'TEMP' ? 'temp' : 'wind'}">
+                                    ${overlayType === 'TEMP' ? (obs.t !== null ? obs.t + '°' : 'N/A') : (obs.ff !== null ? obs.ff + ' km/h' : 'N/A')}
+                                </div>`,
+                                iconSize: L.point(40, 20)
+                            })}
+                        >
+                            <Tooltip direction="top" offset={[0, -5]}>
+                                <strong>{station.name}</strong><br />
+                                {obs.t !== null && `Temp: ${obs.t}°C`}<br />
+                                {obs.ff !== null && `Vent: ${obs.ff} km/h`}
+                            </Tooltip>
+                        </Marker>
+                    );
+                })}
+
+                {/* COUCHE FOUDRE (VIA AGATE API - VECTEURS COULEURS) */}
+                {overlayType === 'LIGHTNING' && lightningStrikes.map((s) => {
+                    const color = HOUR_COLORS[s.h] || '#ff0000';
+                    return (
+                        <Marker
+                            key={s.id}
+                            position={[s.lat, s.lon]}
+                            icon={L.divIcon({
+                                className: 'lightning-dot',
+                                html: `<div style="width:8px;height:8px;background:${color};border-radius:50%;border:1px solid black;"></div>`,
+                                iconSize: [8, 8],
+                                iconAnchor: [4, 4]
+                            })}
+                            zIndexOffset={500}
+                        >
+                            <Tooltip direction="top" offset={[0, -5]}>
+                                <strong>Impact Foudre</strong><br />
+                                Heure: {s.raw}<br />
+                                Date: {s.date}
+                            </Tooltip>
+                        </Marker>
+                    );
+                })}
+
+                {/* Marqueur de cible pour la ville recherchée */}
+                {selectedCity && (
+                    <Marker
+                        position={[selectedCity.lat, selectedCity.lon]}
+                        icon={L.divIcon({
+                            className: 'target-marker',
+                            html: `<div style="position: relative;">
+                                <div style="width: 24px; height: 24px; border: 3px solid #ef4444; border-radius: 50%; display: flex; alignItems: center; justifyContent: center;">
+                                    <div style="width: 6px; height: 6px; background: #ef4444; border-radius: 50%;"></div>
+                                </div>
+                                <div style="position: absolute; width: 40px; height: 2px; background: #ef4444; top: 11px; left: -8px;"></div>
+                                <div style="position: absolute; width: 2px; height: 40px; background: #ef4444; top: -8px; left: 11px;"></div>
+                            </div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        })}
+                        zIndexOffset={1000}
+                    >
+                        <Tooltip permanent direction="top" offset={[0, -15]} className="custom-city-label">
+                            <span style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', textShadow: '2px 2px 0 white, -2px -2px 0 white, 2px -2px 0 white, -2px 2px 0 white' }}>
+                                {selectedCity.name.toUpperCase()}
+                            </span>
+                        </Tooltip>
+                    </Marker>
+                )}
+            </MapContainer>
+
+            <div className="map-legend-compact">
+                <div className="legend-gradient-bar" style={{
+                    background: `linear-gradient(to right, ${RADAR_SCHEMES.find(s => s.id === radarScheme)?.colors.join(', ') || '#ccc'})`
+                }}></div>
+                <div className="legend-numbers">
+                    <span>0.1</span>
+                    <span>Intense</span>
+                </div>
+                <div className="map-timestamp-overlay">
+                    {timestamps[currentIndex] && (new Date(timestamps[currentIndex].time * 1000)).toLocaleString('fr-FR')}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const RadarFrance = () => {
+    const [timestamps, setTimestamps] = useState([]);
+    const [radarHost, setRadarHost] = useState('https://tilecache.rainviewer.com');
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [currentZone, setCurrentZone] = useState('METROPOLE');
+    const [deptGeojson, setDeptGeojson] = useState(null);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const [radarScheme, setRadarScheme] = useState(2);
+    const [mapStyle, setMapStyle] = useState('VOYAGER');
+    const [overlayType, setOverlayType] = useState('NONE');
+    const [currentPeriod, setCurrentPeriod] = useState('2H');
+    const [showLabels, setShowLabels] = useState(true);
+    const [isArchiveMode, setIsArchiveMode] = useState(false);
+    const [archiveDate, setArchiveDate] = useState(() => {
+        const now = new Date();
+        now.setMinutes(0, 0, 0);
+        const offset = now.getTimezoneOffset() * 60000;
+        return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+    });
+    const [isSmoothed, setIsSmoothed] = useState(true); // Default to smoothed
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState(0);
+    const [observations, setObservations] = useState({});
+    const [lightningStrikes, setLightningStrikes] = useState([]);
+
+    // Recherche de ville
+    const [searchQuery, setSearchQuery] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
+    const [selectedCity, setSelectedCity] = useState(null);
+
+    const [lastRadarUpdate, setLastRadarUpdate] = useState(null);
+    const [isLoadingData, setIsLoadingData] = useState(true);
+    const timerRef = useRef(null);
+
+    useEffect(() => {
+        fetch('https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson')
+            .then(res => res.json())
+            .then(data => setDeptGeojson(data))
+            .catch(err => console.error("Erreur GeoJSON:", err));
+
+        fetchLiveObservations();
+        fetchLightningData();
+
+        // Rafraîchir les données toutes les 5 minutes
+        const refreshInterval = setInterval(() => {
+            fetchTimestamps();
+            fetchLiveObservations();
+            fetchLightningData();
+        }, 5 * 60 * 1000);
+
+        return () => clearInterval(refreshInterval);
+    }, []);
+
+    const fetchLiveObservations = async () => {
+        try {
+            const stationIds = MAIN_STATIONS.map(s => s.id);
+            const { data, error } = await supabase
+                .from('observations_horaire')
+                .select('station_id, t, ff, timestamp')
+                .in('station_id', stationIds)
+                .order('timestamp', { ascending: false });
+
+            if (!error && data) {
+                // Keep only latest per station
+                const latest = {};
+                data.forEach(obs => {
+                    if (!latest[obs.station_id]) {
+                        latest[obs.station_id] = obs;
+                    }
+                });
+                setObservations(latest);
+            }
+        } catch (err) {
+            console.error("Error fetching live obs:", err);
+        }
+    };
+
+    const fetchLightningData = async () => {
+        try {
+            // Fetch Today AND Yesterday to cover rolling 24h
+            const now = new Date();
+            const datesToFetch = [now];
+            const yesterday = new Date(now);
+            yesterday.setHours(yesterday.getHours() - 24);
+            // Gets yesterday full day
+            const yDay = new Date();
+            yDay.setDate(yDay.getDate() - 1);
+            datesToFetch.push(yDay);
+
+            let allStrikes = [];
+
+            for (const d of datesToFetch) {
+                const dateStr = d.toISOString().split('T')[0];
+                const ds = dateStr.replace(/-/g, '');
+                const url = `/ORAGE/orage/ws/wsOragesGMaps.php?date=${ds}&heureD=00&heureF=23&pass=jh2kH3,R&_=${Date.now()}`;
+
+                let res = await fetch(url);
+                if (!res.ok) continue;
+
+                const api = await res.json();
+                if (Array.isArray(api)) {
+                    allStrikes.push(...api.map((s, i) => {
+                        const dObj = new Date(`${s.date.replace(/\//g, '-')}T${s.heure}+01:00`);
+                        return {
+                            lat: parseFloat(s.lat), lon: parseFloat(s.lon),
+                            time: dObj.getTime(),
+                            h: dObj.getHours(),
+                            raw: s.heure,
+                            date: s.date,
+                            id: `live-${dObj.getTime()}-${i}-${Math.random()}`
+                        };
+                    }));
+                }
+            }
+
+            const limit24h = new Date().getTime() - (24 * 60 * 60 * 1000);
+            const filtered = allStrikes.filter(s => s.time > limit24h).sort((a, b) => a.time - b.time);
+            setLightningStrikes(filtered);
+
+        } catch (err) {
+            console.error("Error fetching lightning:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (isArchiveMode) {
+            loadArchiveImage();
+        } else {
+            fetchTimestamps();
+        }
+    }, [currentPeriod, isArchiveMode, archiveDate]);
+
+    const loadArchiveImage = () => {
+        setIsLoadingData(true);
+        try {
+            const d = new Date(archiveDate);
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            const hour = String(d.getUTCHours()).padStart(2, '0');
+            const tsStr = `${year}${month}${day}${hour}0000`;
+
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            // Public URL for the archive bucket
+            const url = `${supabaseUrl}/storage/v1/object/public/radar-archive/${year}/${month}/radar_${tsStr}.png`;
+
+            // Set single frame
+            setTimestamps([{
+                time: d.getTime() / 1000,
+                filename: `radar_${tsStr}.png`,
+                imageUrl: url,
+                leaflet_bounds: [
+                    [38.14, -9.965],
+                    [53.67, 17.56]
+                ],
+                iso: d.toISOString()
+            }]);
+            setCurrentIndex(0);
+            setLastRadarUpdate(d);
+            setIsPlaying(false);
+        } catch (e) {
+            console.error("Archive load error", e);
+        } finally {
+            setIsLoadingData(false);
+            setLoading(false);
+        }
+    };
+
+    const fetchTimestamps = async () => {
+        setIsLoadingData(true);
+        try {
+            // Fetch the manifest - try Supabase first, then local
+            let manifest;
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseManifestUrl = supabaseUrl
+                ? `${supabaseUrl}/storage/v1/object/public/radar-mf/manifest.json?t=${Date.now()}`
+                : null;
+
+            try {
+                if (supabaseManifestUrl) {
+                    const res = await fetch(supabaseManifestUrl);
+                    if (res.ok) {
+                        manifest = await res.json();
+                    }
+                }
+            } catch (e) {
+                console.log('Supabase manifest not available, trying local...');
+            }
+
+            if (!manifest) {
+                const response = await fetch(`/radar-mf/manifest.json?t=${Date.now()}`);
+                manifest = await response.json();
+            }
+
+            if (!manifest.frames || manifest.frames.length === 0) {
+                throw new Error('No radar frames available in manifest');
+            }
+
+            // Determine base URL for images
+            const baseUrl = manifest.base_url || '/radar-mf/';
+
+            // Build timestamp objects with everything the UI needs
+            const framesToSet = manifest.frames.map(frame => {
+                // Parse timestamp string YYYYMMDDHHMMSS to unix
+                const ts = frame.timestamp;
+                const year = parseInt(ts.substring(0, 4));
+                const month = parseInt(ts.substring(4, 6)) - 1;
+                const day = parseInt(ts.substring(6, 8));
+                const hour = parseInt(ts.substring(8, 10));
+                const min = parseInt(ts.substring(10, 12));
+                const sec = parseInt(ts.substring(12, 14));
+                const date = new Date(Date.UTC(year, month, day, hour, min, sec));
+
+                return {
+                    time: date.getTime() / 1000,
+                    filename: frame.filename,
+                    imageUrl: `${baseUrl}${frame.filename}`,
+                    leaflet_bounds: manifest.leaflet_bounds,
+                    iso: date.toISOString(),
+                };
+            });
+
+            // Apply period filter
+            const count = PERIODS.find(p => p.id === currentPeriod)?.count || 12;
+            const sliced = framesToSet.slice(-count);
+
+            setTimestamps(sliced);
+            setCurrentIndex(sliced.length - 1);
+
+            if (sliced.length > 0) {
+                setLastRadarUpdate(new Date(sliced[sliced.length - 1].time * 1000));
+            }
+
+            setIsLoadingData(false);
+            setLoading(false);
+        } catch (error) {
+            console.error('Erreur chargement radar Météo-France:', error);
+            setTimestamps([]);
+            setCurrentIndex(0);
+            setIsLoadingData(false);
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isPlaying || timestamps.length === 0) {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            return;
+        }
+
+        const isLastFrame = currentIndex === timestamps.length - 1;
+        // Si c'est la dernière image, on attend 4 secondes, sinon 1.2 seconde (divisé par la vitesse)
+        const delay = isLastFrame ? 3000 : (1200 / playbackSpeed);
+
+        timerRef.current = setTimeout(() => {
+            setCurrentIndex((prev) => {
+                if (timestamps.length === 0) return 0;
+                const next = (prev >= timestamps.length - 1) ? 0 : prev + 1;
+                return next;
+            });
+        }, delay);
+
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, [isPlaying, currentIndex, timestamps.length, playbackSpeed]);
+
+    const handleSearch = async (query) => {
+        setSearchQuery(query);
+        if (query.length < 3) { setSuggestions([]); return; }
+        try {
+            const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${query}&limit=5&type=municipality`);
+            const data = await res.json();
+            setSuggestions(data.features || []);
+        } catch (err) { console.error(err); }
+    };
+
+    const selectCity = (city) => {
+        const [lon, lat] = city.geometry.coordinates;
+        setSelectedCity({ lat, lon, name: city.properties.city });
+        setCurrentZone('CUSTOM'); // Mode zone personnalisée
+        setSearchQuery('');
+        setSuggestions([]);
+    };
+
+    const formatTime = (ts) => {
+        const timeValue = typeof ts === 'object' ? ts.time : ts;
+        const date = new Date(timeValue * 1000);
+        return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const handleDownload = async () => {
+        const mapElement = document.querySelector('.radar-map-wrapper');
+        if (!mapElement) return;
+        try {
+            const canvas = await html2canvas(mapElement, {
+                useCORS: true,
+                backgroundColor: "#f1f5f9",
+                scale: 2
+            });
+            const link = document.createElement('a');
+            link.download = `radar-${currentTs ? formatTime(currentTs).replace(':', 'h') : 'capture'}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleExportGIF = async () => {
+        if (timestamps.length === 0) return;
+        setIsExporting(true);
+        setIsPlaying(false);
+        setExportProgress(0);
+
+        const mapElement = document.querySelector('.radar-map-wrapper');
+        const overlay = mapElement.querySelector('.map-settings-panel');
+        const rect = mapElement.getBoundingClientRect();
+
+        // Dimensions strictes en entiers
+        const w = Math.floor(rect.width);
+        const h = Math.floor(rect.height);
+
+        const frames = [];
+        const step = Math.max(1, Math.floor(timestamps.length / 48));
+        const framesToCapture = [];
+        for (let i = 0; i < timestamps.length; i += step) {
+            framesToCapture.push(i);
+        }
+
+        try {
+            // Cacher l'overlay pendant la capture
+            if (overlay) overlay.style.display = 'none';
+
+            for (let i = 0; i < framesToCapture.length; i++) {
+                const idx = framesToCapture[i];
+                setCurrentIndex(idx);
+                // Laisser le temps à Leaflet de faire le rendu
+                await new Promise(r => setTimeout(r, 850));
+
+                const canvas = await html2canvas(mapElement, {
+                    useCORS: true,
+                    scale: 1,
+                    logging: false,
+                    width: w,
+                    height: h
+                });
+
+                frames.push(canvas.toDataURL('image/png'));
+                setExportProgress(Math.round(((i + 1) / framesToCapture.length) * 50));
+            }
+
+            gifshot.createGIF({
+                images: frames,
+                gifWidth: w,
+                gifHeight: h,
+                interval: 0.15,
+                numFrames: frames.length,
+                sampleInterval: 5, // Meilleur compromis performance/qualité
+            }, (obj) => {
+                if (!obj.error) {
+                    const link = document.createElement('a');
+                    link.download = `animation-radar-${currentPeriod}.gif`;
+                    link.href = obj.image;
+                    link.click();
+                }
+                setIsExporting(false);
+                setExportProgress(0);
+                if (overlay) overlay.style.display = 'block';
+            });
+        } catch (err) {
+            console.error("Export Error:", err);
+            setIsExporting(false);
+            setExportProgress(0);
+            if (overlay) overlay.style.display = 'block';
+        }
+    };
+
+    if (loading) return <div className="radar-loading"><div className="spinner"></div><p>Récupération des échos radar...</p></div>;
+
+    const currentTs = timestamps[currentIndex];
+
+    return (
+        <div className="radar-container">
+            <div className="radar-controls-compact">
+                <div className="control-section main-player">
+                    <button className={`btn-compact ${isPlaying ? 'active' : ''}`} onClick={() => setIsPlaying(true)} title="Lecture">
+                        <Play size={16} fill="currentColor" />
+                    </button>
+                    <button className={`btn-compact ${!isPlaying ? 'active' : ''}`} onClick={() => { setIsPlaying(false); setCurrentIndex(timestamps.length - 1); }} title="Stop/Direct">
+                        <Square size={16} fill="currentColor" />
+                    </button>
+                    <div className="step-group">
+                        <button className="btn-compact" onClick={() => { setIsPlaying(false); setCurrentIndex((prev) => (prev + 1) % timestamps.length); }}>
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="control-divider"></div>
+
+                <div className="control-section search-radar" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', width: '100%' }}>
+                        <MapIcon size={14} color="#3b82f6" style={{ marginRight: '8px' }} />
+                        <input
+                            type="text"
+                            placeholder="Chercher une commune..."
+                            value={searchQuery}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '0.8rem', outline: 'none', width: '100%', fontWeight: 700 }}
+                        />
+                    </div>
+                    {suggestions.length > 0 && (
+                        <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 3000, overflow: 'hidden' }}>
+                            {suggestions.map((s, i) => (
+                                <div key={i} onClick={() => selectCity(s)} style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', transition: 'background 0.2s' }} className="suggestion-item-radar">
+                                    <span style={{ fontWeight: 700, color: 'white', fontSize: '0.75rem' }}>{s.properties.city}</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.65rem' }}>{s.properties.postcode}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="control-divider"></div>
+
+                <div className="control-section timeline">
+                    <div className="time-badge">
+                        <Clock size={14} />
+                        <span>{currentTs ? formatTime(currentTs) : '--:--'}</span>
+                    </div>
+                    {lastRadarUpdate && (
+                        <div className="last-update-tag">
+                            Données de {lastRadarUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                    )}
+                    <input
+                        type="range"
+                        min="0"
+                        max={timestamps.length - 1}
+                        value={currentIndex}
+                        onChange={(e) => {
+                            setCurrentIndex(parseInt(e.target.value));
+                            setIsPlaying(false);
+                        }}
+                        className="compact-range"
+                    />
+                </div>
+
+                <div className="control-divider"></div>
+
+                <div className="control-section settings-grid">
+                    <div className="mini-setting">
+                        <span className="tiny-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: isArchiveMode ? '#ef4444' : '#94a3b8' }} onClick={() => setIsArchiveMode(!isArchiveMode)}>
+                            {isArchiveMode ? 'ARCHIVE' : 'DIRECT'} <Calendar size={10} style={{ marginLeft: 4 }} />
+                        </span>
+
+                        {!isArchiveMode ? (
+                            <select value={currentPeriod} onChange={(e) => setCurrentPeriod(e.target.value)} className="compact-select">
+                                {PERIODS.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="datetime-local"
+                                className="compact-select"
+                                style={{ fontSize: '10px', width: '100%', padding: '0 2px' }}
+                                value={archiveDate}
+                                onChange={(e) => setArchiveDate(e.target.value)}
+                                step="3600"
+                            />
+                        )}
+                    </div>
+
+                    {!isArchiveMode && (
+                        <div className="mini-setting">
+                            <span className="tiny-label">Vitesse</span>
+                            <select value={playbackSpeed} onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))} className="compact-select">
+                                <option value="0.5">0.5x</option>
+                                <option value="1">1x</option>
+                                <option value="2">2x</option>
+                                <option value="3">3x</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                <div className="control-section actions">
+                    <button className={`btn-compact ${overlayType === 'TEMP' ? 'active' : ''}`} onClick={() => setOverlayType(overlayType === 'TEMP' ? 'NONE' : 'TEMP')} title="Temp">
+                        <Thermometer size={16} />
+                    </button>
+                    <button className={`btn-compact ${overlayType === 'WIND' ? 'active' : ''}`} onClick={() => setOverlayType(overlayType === 'WIND' ? 'NONE' : 'WIND')} title="Vent">
+                        <Wind size={16} />
+                    </button>
+                    <button className={`btn-compact ${overlayType === 'LIGHTNING' ? 'active' : ''}`} onClick={() => setOverlayType(overlayType === 'LIGHTNING' ? 'NONE' : 'LIGHTNING')} title="Foudre">
+                        <Zap size={16} />
+                    </button>
+                    <button className="btn-compact action" onClick={handleDownload} title="PNG HD">
+                        <Download size={16} />
+                    </button>
+                    <button className="btn-compact action export" onClick={handleExportGIF} disabled={isExporting} title="Export Animation">
+                        <Film size={16} />
+                        <span className="btn-text">{isExporting ? 'Calcul...' : 'GIF'}</span>
+                    </button>
+                </div>
+            </div>
+
+            {isLoadingData && (
+                <div className="radar-glass-loader">
+                    <div className="loader-content">
+                        <div className="spinner"></div>
+                        <p>Synchronisation Radar...</p>
+                    </div>
+                </div>
+            )}
+
+            {isExporting && (
+                <div className="radar-glass-loader export-overlay">
+                    <div className="loader-content">
+                        <div className="spinner"></div>
+                        <p>Génération de l'animation... {exportProgress}%</p>
+                        <div className="progress-bar-container">
+                            <div className="progress-bar-fill" style={{ width: `${exportProgress}%` }}></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="radar-main-content SINGLE">
+                <div className="radar-map-wrapper">
+                    <div className="map-settings-panel">
+                        <div className="settings-header">RÉGLAGES CARTE</div>
+                        <div className="settings-body">
+                            <div className="setting-item">
+                                <Globe size={14} />
+                                <select value={currentZone} onChange={(e) => setCurrentZone(e.target.value)} className="settings-select">
+                                    {Object.entries(ZONES).map(([key, zone]) => (
+                                        <option key={key} value={key}>{zone.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="setting-item">
+                                <Layers size={14} />
+                                <select value={mapStyle} onChange={(e) => setMapStyle(e.target.value)} className="settings-select">
+                                    {Object.entries(MAP_STYLES).map(([key, s]) => (
+                                        <option key={key} value={key}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="setting-item">
+                                <div className="color-dot" style={{ background: RADAR_SCHEMES.find(s => s.id === radarScheme)?.colors[1] || '#ccc' }}></div>
+                                <select value={radarScheme} onChange={(e) => setRadarScheme(parseInt(e.target.value))} className="settings-select">
+                                    {RADAR_SCHEMES.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <label className="settings-toggle">
+                                <input type="checkbox" checked={isSmoothed} onChange={(e) => setIsSmoothed(e.target.checked)} />
+                                <span>Lissage HD</span>
+                            </label>
+                            <label className="settings-toggle">
+                                <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
+                                <span>Villes</span>
+                            </label>
+                        </div>
+                    </div>
+                    <RadarMap
+                        zone={currentZone === 'CUSTOM' && selectedCity ? { center: [selectedCity.lat, selectedCity.lon], zoom: 11 } : ZONES[currentZone]}
+                        timestamps={timestamps}
+                        currentIndex={currentIndex}
+                        radarScheme={radarScheme}
+                        mapStyle={mapStyle}
+                        showLabels={showLabels}
+                        deptGeojson={deptGeojson}
+                        overlayType={overlayType}
+                        observations={observations}
+                        lightningStrikes={lightningStrikes}
+                        selectedCity={selectedCity}
+                        radarHost={radarHost}
+                        isSmoothed={isSmoothed}
+                        currentZoneId={currentZone}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default RadarFrance;

@@ -1,0 +1,1699 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { supabase } from '../../services/api';
+import { meteoFrancePosteService } from '../../services/meteoFrancePosteService';
+import { DEPARTMENTS } from '../../data/departments';
+import './BtpManager.css';
+
+const BtpManager = () => {
+    const [projects, setProjects] = useState([]);
+    const [currentProjectId, setCurrentProjectId] = useState('');
+    const [projectName, setProjectName] = useState('Météo BTP');
+
+    // States for configuration
+    const [activeTrades, setActiveTrades] = useState([]);
+    const [TRADES_FULL, setTRADES_FULL] = useState([
+        "Terrassement / Terrassement Voiries", "VRD – Voiries et Réseaux Divers", "Renforcement de sol / Traitement de sol", "Traitement de plateforme (chaux / ciment)", "Travaux Asphalte / Enrobés", "Rabattage de nappes", "Gros œuvre", "Fondations / Fondations spéciales", "Béton armé", "Coulage béton armé / Dalles", "Dallage", "Charpente", "Murs coupe-feu", "Couverture", "Bardage / Panneaux", "Étanchéité", "Isolation", "Menuiseries extérieures", "Métallerie", "Clôtures", "Espaces verts", "Ravalement / Peinture extérieure", "Grues / Bétonnières", "Levage d'éléments techniques", "Aires de béquillage", "Tous travaux extérieurs / Tâches extérieures", "Tous corps d’état", "Murs coupe feu"
+    ]);
+    const [globalData, setGlobalData] = useState({});
+    const [rules, setRules] = useState([]);
+    const [annexCols, setAnnexCols] = useState({ temp: true, rain: true, snow: true, windA: true, windG: true, humi: true, vis: true, soil: true, windAvgPdf: false });
+    const [txEnt, setTxEnt] = useState('400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+    const [txCli, setTxCli] = useState('');
+    const [emailCli, setEmailCli] = useState('');
+    const [stationMeteo, setStationMeteo] = useState('');
+    const [logoL, setLogoL] = useState('/logo_default.png');
+    const [logoR, setLogoR] = useState('');
+    const [emitterPhone, setEmitterPhone] = useState('06 83 90 91 60');
+    const [emitterEmail, setEmitterEmail] = useState('patrick.marliere@wanadoo.fr');
+
+    const [projectAddress, setProjectAddress] = useState('');
+    const [projectClient, setProjectClient] = useState('');
+    const [startChantierDate, setStartChantierDate] = useState('');
+    const [contractDuration, setContractDuration] = useState('');
+    const [reportType, setReportType] = useState('Hebdomadaire');
+
+    const [displaySimple, setDisplaySimple] = useState(false);
+    const [showCharts, setShowCharts] = useState(false);
+    const [checkPeriod, setCheckPeriod] = useState(true);
+    const [autoSnow, setAutoSnow] = useState(true);
+    const [snowTempLimit, setSnowTempLimit] = useState(0);
+
+    // States for data entry
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [soilData, setSoilData] = useState({});
+    const [heatData, setHeatData] = useState({});
+    const [frozeData, setFrozeData] = useState({});
+    const [status, setStatus] = useState('');
+
+    // UI Local state
+    const [activeOutTab, setActiveOutTab] = useState('out-report');
+    const [tradesModalOpen, setTradesModalOpen] = useState(false);
+    const [ruleTradesModalOpen, setRuleTradesModalOpen] = useState(false);
+    const [ruleTradesModalTimestamp, setRuleTradesModalTimestamp] = useState(0);
+    const [colsModalOpen, setColsModalOpen] = useState(false);
+    const [promptModalOpen, setPromptModalOpen] = useState(false);
+    const [currentRuleIndex, setCurrentRuleIndex] = useState(-1);
+    const [openRuleIdx, setOpenRuleIdx] = useState(-1);
+    const [reportOutput, setReportOutput] = useState('');
+    const [chartsOutput, setChartsOutput] = useState('');
+    const [emptyCellStyle, setEmptyCellStyle] = useState('gray');
+    const [chartDesign, setChartDesign] = useState('architect');
+    const [newTradeInput, setNewTradeInput] = useState('');
+
+    // MF Selection
+    const [selectedDept, setSelectedDept] = useState('');
+    const [stations, setStations] = useState([]);
+    const [stationNames, setStationNames] = useState({});
+    const [loadingStations, setLoadingStations] = useState(false);
+    const [selectedStationId, setSelectedStationId] = useState('');
+
+
+    const chartRefs = useRef({});
+    const fileInputRef = useRef(null);
+
+    const colsLabels = { temp: "Température", rain: "Pluie", snow: "Neige", windA: "Vent Moyen", windG: "Rafales", humi: "Humidité Air", vis: "Visibilité (brouillard)", soil: "Humidité Sol", windAvgPdf: "Vent Moyen (PDF)" };
+
+    const AI_PROMPT = `Agis comme un expert en nettoyage de données.
+Je vais te coller ci-dessous des données météorologiques brutes, copiées verticalement depuis un site web.
+Ta mission : Reformater ces données pour obtenir une liste propre, une ligne par heure.
+
+Règles strictes d'extraction :
+1. L'Heure : Garde le format "XX h".
+2. La Température : Trouve le chiffre avant "°C".
+3. La Pluie : Trouve le chiffre avant "mm".
+   ⚠️ IMPORTANT : Si tu vois le mot "traces" ou "aucune", remplace-le par "0 mm".
+   Si plusieurs valeurs apparaissent, garde la plus élevée.
+4. Le Vent et les Rafales : Repère le motif "XX km/h (YY km/h)".
+   - La première valeur (XX) est le "Vent Moyen".
+   - La valeur entre parenthèses (YY) est la "Rafale".
+5. L'Humidité : Trouve le pourcentage (ex: 85%).
+
+Format de sortie attendu (Texte brut, séparateurs clairs) :
+[Heure] : T [Temp]°C | Pluie [Pluie]mm | Vent [Moyen]km/h | Rafales [Rafale]km/h | Humidité [Humi]%
+
+Voici les données brutes :`;
+
+    // Initialization
+    useEffect(() => {
+        loadProjects();
+        loadTrades();
+        resetToNew(); // Initialize with clean state and open trades modal
+
+        if (!window.Chart) {
+            const script = document.createElement('script');
+            script.src = "https://cdn.jsdelivr.net/npm/chart.js";
+            script.async = true;
+            script.onload = () => {
+                console.log("[BTP] Chart.js loaded");
+                upd();
+            };
+            document.body.appendChild(script);
+        }
+    }, []);
+
+    useEffect(() => {
+        upd();
+    }, [globalData, rules, activeTrades, displaySimple, showCharts, checkPeriod, txEnt, txCli, logoL, logoR, annexCols, emptyCellStyle, chartDesign, projectName, projectAddress, projectClient, startChantierDate, contractDuration, reportType, emitterPhone, emitterEmail]);
+
+    // DB: Load Trades List
+    const loadTrades = async () => {
+        try {
+            if (!supabase) return;
+            const { data, error } = await supabase.from('btp_config').select('value').eq('key', 'trades_list').single();
+            if (data && data.value) {
+                setTRADES_FULL(data.value);
+            }
+        } catch (e) { console.error('Error loading trades config:', e); }
+    };
+
+    const saveTradesToDB = async (newTrades) => {
+        try {
+            if (!supabase) return;
+            await supabase.from('btp_config').upsert({ key: 'trades_list', value: newTrades, updated_at: new Date() });
+        } catch (e) { console.error('Error saving trades:', e); }
+    };
+
+    // DB: Load Projects
+    const loadProjects = async () => {
+        try {
+            if (!supabase) {
+                setStatus('⚠️ Supabase non configuré (VITE_SUPABASE_URL manquante)');
+                return;
+            }
+            const { data, error } = await supabase.from('btp_projects').select('*').order('name');
+            if (error) {
+                if (error.code === '42P01') { // Table not found
+                    setStatus('⚠️ Table <b>btp_projects</b> manquante. Voulez-vous exécuter le script SQL ?');
+                } else if (error.code === '42501') { // RLS / Permission
+                    setStatus('⚠️ Accès refusé (RLS). Exécutez le script FIX_RLS.');
+                } else {
+                    setStatus('❌ Erreur DB: ' + error.message);
+                }
+                setProjects([]);
+                return;
+            }
+            setProjects(data || []);
+            if (data && data.length > 0) setStatus('✅ Projets chargés.');
+            else setStatus('ℹ️ Aucun projet en base (Mode Nouveau activé).');
+        } catch (e) {
+            console.error('Error loading projects:', e);
+            setStatus('❌ Erreur de connexion Supabase.');
+        }
+    };
+
+    const handleProjectSelect = (projId) => {
+        if (!projId) { resetToNew(); return; }
+
+        if (projId === 'DEMO_QUARTUS') {
+            resetToNew();
+            setProjectName('QUARTUS - Officiel (DÉMO)');
+            setTxEnt('QUARTUS\n400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+            setTxCli('Résidence Les Grands Chênes\n84140 AVIGNON');
+
+            // Logos
+            setLogoL('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgODAiPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iODAiIGZpbGw9IiMxZTRvYWYiIHJ4PSIxMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iIGZvbnQtd2VpZ2h0PSJib2xkIj5RVUFSVFVTPC90ZXh0Pjwvc3ZnPg==');
+            setLogoR('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgODAiPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iODAiIGZpbGw9IiNmOGZhZmMiIHN0cm9rZT0iIzFmNDBhZiIgc3Ryb2tlLXdpZHRoPSI0IiByeD0iMTAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjIyIiBmaWxsPSIjMWU0MGFmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPkNMSUVOVCBCVFA8L3RleHQ+PC9zdmc+');
+
+            // Métiers Quatrus
+            const qTrades = [
+                "Terrassement / Terrassement Voiries", "Gros œuvre", "Dallage", "Charpente",
+                "Bardage / Panneaux", "Couverture", "Étanchéité", "Menuiseries extérieures",
+                "Espaces verts", "VRD – Voiries et Réseaux Divers"
+            ];
+            setActiveTrades(qTrades);
+
+            setRules([
+                { lots: ["Gros œuvre", "Dallage", "Terrassement / Terrassement Voiries"], var: "temp", type: "cond4", op: "<", val: "2", h1: 8, h2: 23, desc: "Gel (T < 2°C à 8h)" },
+                { lots: ["Gros œuvre", "Dallage"], var: "temp", type: "cond4", op: "<", val: "0", h1: 12, h2: 23, desc: "Gel Persistant" },
+                { lots: ["Terrassement / Terrassement Voiries", "VRD – Voiries et Réseaux Divers"], var: "pluie", type: "cond1", op: ">=", val: "5", desc: "Pluie Forte (5mm)" },
+                { lots: ["Charpente", "Couverture", "Bardage / Panneaux"], var: "vent_rafale", type: "cond1", op: ">", val: "60", desc: "Vent violent (>60km/h)" },
+                { lots: ["Étanchéité"], var: "pluie", type: "cond1", op: ">", val: "0", desc: "Pluie (Toute)" }
+            ]);
+
+            setShowCharts(true);
+            setCheckPeriod(true);
+            setStatus('✅ Modèle QUARTUS chargé avec succès.');
+            return;
+        }
+
+        const p = projects.find(x => x.id === projId);
+        if (!p) return;
+        setCurrentProjectId(p.id);
+        setProjectName(p.name);
+        setTxEnt(p.company_header || '');
+        setTxCli(p.client_header || '');
+        setEmailCli(p.client_email || '');
+        setStationMeteo(p.station_name || '');
+        setSelectedStationId(p.station_id || '');
+
+        setProjectAddress(p.project_address || '');
+        setProjectClient(p.project_client || '');
+        setStartChantierDate(p.start_chantier_date || '');
+        setContractDuration(p.contract_duration || '');
+        setReportType(p.report_type || 'Hebdomadaire');
+        setEmitterPhone(p.emitter_phone || '06 83 90 91 60');
+        setEmitterEmail(p.emitter_email || 'p.marliere@wanadoo.fr');
+
+        setLogoL(p.logo_left || '/logo_default.png');
+        setLogoR(p.logo_right || '');
+        setTRADES_FULL(p.trades_full || TRADES_FULL);
+        setActiveTrades(p.active_trades || []);
+        setRules(p.rules || []);
+        setAnnexCols(p.annex_cols || annexCols);
+        setDisplaySimple(p.display_simple);
+        setShowCharts(p.show_charts);
+        if (p.check_period !== undefined) setCheckPeriod(p.check_period);
+        if (p.auto_snow !== undefined) setAutoSnow(p.auto_snow);
+        if (p.snow_temp_limit !== undefined) setSnowTempLimit(p.snow_temp_limit);
+        if (p.global_data) {
+            setGlobalData(p.global_data);
+            const sD = {}; const hD = {}; const fD = {};
+            let minD = null; let maxD = null;
+
+            Object.entries(p.global_data).forEach(([d, v]) => {
+                const parts = d.split('/');
+                if (parts.length === 3) {
+                    const dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+                    if (!isNaN(dateObj.getTime())) {
+                        if (!minD || dateObj < minD) minD = dateObj;
+                        if (!maxD || dateObj > maxD) maxD = dateObj;
+                    }
+                }
+
+                if (v.soil) sD[d] = v.soil;
+                if (v.forceHeat) hD[d] = v.forceHeat;
+                if (v.forceFroze) fD[d] = v.forceFroze;
+            });
+
+            if (minD) setStartDate(minD.toISOString().split('T')[0]);
+            if (maxD) setEndDate(maxD.toISOString().split('T')[0]);
+
+            setSoilData(sD); setHeatData(hD); setFrozeData(fD);
+        }
+    };
+
+    const resetToNew = () => {
+        setCurrentProjectId('');
+        setProjectName('Météo BTP');
+        setTxEnt('400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+        setTxCli('');
+        setEmailCli(''); setSelectedStationId(''); setStationMeteo('');
+        setGlobalData({}); setStatus(''); setSoilData({}); setHeatData({}); setFrozeData({});
+        setProjectAddress(''); setProjectClient(''); setStartChantierDate(''); setContractDuration(''); setReportType('Hebdomadaire');
+        setActiveTrades([]); // Aucun métier sélectionné par défaut
+        setRules([]);
+        setLogoL('/logo_default.png'); setLogoR('');
+        // Open Trades modal automatically to guide user
+        setTradesModalOpen(true);
+    };
+
+    const deleteProject = async () => {
+        if (!currentProjectId) return;
+        if (!window.confirm(`⚠️ Supprimer définitivement le projet "${projectName}" ?`)) return;
+
+        try {
+            const { error } = await supabase.from('btp_projects').delete().eq('id', currentProjectId);
+            if (error) throw error;
+            resetToNew();
+            loadProjects();
+            setStatus('✅ Projet supprimé.');
+        } catch (e) { alert('Erreur suppression: ' + e.message); }
+    };
+
+    const duplicateProject = () => {
+        if (!currentProjectId && !Object.keys(globalData).length && rules.length <= 3) {
+            alert("Rien à dupliquer.");
+            return;
+        }
+        setCurrentProjectId('');
+        setProjectName(projectName + ' (Copie)');
+        setStatus('📝 Mode duplication : le projet a été cloné, cliquez sur "SAUVER" pour l\'enregistrer.');
+    };
+
+    const saveProject = async () => {
+        const payload = {
+            name: projectName,
+            company_header: txEnt,
+            client_header: txCli,
+            client_email: emailCli,
+            station_id: selectedStationId,
+            station_name: stationMeteo,
+            logo_left: logoL,
+            logo_right: logoR,
+            trades_full: TRADES_FULL,
+            active_trades: activeTrades,
+            rules: rules,
+            annex_cols: annexCols,
+            display_simple: displaySimple,
+            show_charts: showCharts,
+            check_period: checkPeriod,
+            auto_snow: autoSnow,
+            snow_temp_limit: snowTempLimit,
+            global_data: globalData,
+
+            project_address: projectAddress,
+            project_client: projectClient,
+            start_chantier_date: startChantierDate,
+            contract_duration: contractDuration,
+            report_type: reportType,
+            emitter_phone: emitterPhone,
+            emitter_email: emitterEmail,
+
+            updated_at: new Date()
+        };
+
+        try {
+            let res;
+            if (currentProjectId) {
+                res = await supabase.from('btp_projects').update(payload).eq('id', currentProjectId);
+            } else {
+                res = await supabase.from('btp_projects').insert([payload]).select();
+            }
+            if (res.error) throw res.error;
+
+            // Si c'est une création, on récupère l'ID généré
+            if (!currentProjectId && res.data && res.data[0]) {
+                setCurrentProjectId(res.data[0].id);
+            }
+
+            loadProjects();
+            const saveNotif = document.getElementById('btp-saveNotif');
+            if (saveNotif) {
+                saveNotif.classList.add('visible');
+                setTimeout(() => saveNotif.classList.remove('visible'), 2000);
+            }
+        } catch (e) { alert('Erreur sauvegarde: ' + e.message); }
+    };
+
+    // MF Load Stations
+    useEffect(() => {
+        if (!selectedDept) { setStations([]); return; }
+        async function getStations() {
+            setLoadingStations(true);
+            try {
+                const { weatherAPI } = await import('../../services/api');
+                let data = await weatherAPI.getDepartmentLatestHoraire(selectedDept);
+
+                // Fallback to local station list if database is empty for this department
+                if (data.length === 0) {
+                    console.log("[BTP] No stations in DB, using local fallback for dept:", selectedDept);
+                    const stationNamesData = await import('../../data/stationNames.json');
+                    const deptPrefix = (selectedDept === '2A' || selectedDept === '2B') ? '20' : selectedDept;
+                    const filtered = Object.entries(stationNamesData.default || stationNamesData)
+                        .filter(([id]) => id.startsWith(deptPrefix))
+                        .map(([id, name]) => ({ station_id: id, nom_station: name }));
+                    data = filtered;
+                }
+
+                setStations(data);
+                const names = { ...stationNames };
+                const { geoService } = await import('../../services/geoService');
+                for (const s of data) {
+                    const sid = s.station_id || s.id_station;
+                    if (!names[sid]) {
+                        if (s.nom_station) names[sid] = s.nom_station;
+                        else names[sid] = await geoService.getCommuneName(sid.substring(0, 5), sid);
+                    }
+                }
+                setStationNames(names);
+            } catch (e) { console.error("[BTP] Error loading stations:", e); } finally { setLoadingStations(false); }
+        }
+        getStations();
+    }, [selectedDept]);
+
+    const handlePeriodImport = async () => {
+        if (!selectedStationId) {
+            setStatus('⚠️ Sélectionnez d\'abord une station');
+            return;
+        }
+        if (!startDate || !endDate) {
+            setStatus('⚠️ Sélectionnez une période valide');
+            return;
+        }
+
+        setStatus('Récupération des données...');
+        setGlobalData({}); // Reset current data
+
+        try {
+            const { weatherAPI } = await import('../../services/api');
+
+            // 1. Tenter l'historique horaire direct Supabase
+            let history = await weatherAPI.getStationHourlyHistoryRange(selectedStationId, startDate, endDate);
+
+            const getLocalDateString = (date) => {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${d}/${m}/${y}`;
+            };
+
+            // 2. Vérifier si des jours manquent dans la période demandée
+            const checkMissingDays = (data) => {
+                const found = new Set(data.map(obs => getLocalDateString(obs.time)));
+                let curr = new Date(startDate);
+                const stop = new Date(endDate);
+                const missing = [];
+                while (curr <= stop) {
+                    const ds = getLocalDateString(curr);
+                    if (!found.has(ds)) missing.push(new Date(curr));
+                    curr.setDate(curr.getDate() + 1);
+                }
+                return missing;
+            };
+
+            let missingDays = checkMissingDays(history);
+
+            // 3. Si des jours manquent, tenter de les combler via Météo-France API (Archives / En direct)
+            if (missingDays.length > 0) {
+                console.log(`[BTP] Il manque ${missingDays.length} jours (${missingDays.map(d => getLocalDateString(d)).join(', ')}). Tentative Météo France...`);
+
+                try {
+                    const { meteoFrancePosteService } = await import('../../services/meteoFrancePosteService');
+                    // On demande à l'API toute la plage pour être sûr (le service filtrera localement)
+                    const apiData = await meteoFrancePosteService.getStationHourlyHistory(selectedStationId, startDate, endDate);
+
+                    if (apiData && apiData.length > 0) {
+                        // Fusion intelligente : on ne prend que ce qui n'est pas déjà dans history
+                        const existingTimes = new Set(history.map(h => h.time.getTime()));
+                        const newObs = apiData.filter(obs => !existingTimes.has(obs.time.getTime()));
+                        history = [...history, ...newObs].sort((a, b) => a.time - b.time);
+                        missingDays = checkMissingDays(history);
+                    }
+                } catch (e) {
+                    console.warn("[BTP] Erreur lors du comblement via MF API:", e);
+                }
+            }
+
+            // 4. Si encore vide ou incomplet, essayer le 6mn Supabase pour les jours restants
+            if (missingDays.length > 0) {
+                console.log(`[BTP] Données horaires encore incomplètes pour ${missingDays.length} jours. Essai via données 6mn...`);
+                for (const day of missingDays) {
+                    const dayData6mn = await weatherAPI.getStation6mnHistory(selectedStationId, day);
+                    if (dayData6mn && dayData6mn.length > 0) {
+                        // Agrégation horaire
+                        const dayHourly = dayData6mn.filter(h => h.time.getMinutes() === 0).map(hourlyItem => {
+                            const endTime = hourlyItem.time.getTime();
+                            const startTime = endTime - (60 * 60 * 1000);
+                            const hourlyRain = dayData6mn
+                                .filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime)
+                                .reduce((sum, d) => sum + (d.rain || 0), 0);
+                            return {
+                                time: hourlyItem.time,
+                                temp: hourlyItem.temp,
+                                rain: hourlyRain,
+                                wind: hourlyItem.wind,
+                                gust: hourlyItem.gust,
+                                hum: hourlyItem.hum
+                            };
+                        });
+                        history = [...history, ...dayHourly].sort((a, b) => a.time - b.time);
+                    }
+                }
+            }
+
+            if (!history || history.length === 0) {
+                setStatus('❌ Aucune donnée trouvée (Supabase/API) pour cette période.');
+                return;
+            }
+
+
+            const grouped = {};
+            history.forEach(obs => {
+                const dayKey = getLocalDateString(obs.time);
+                if (!grouped[dayKey]) grouped[dayKey] = [];
+
+                // Adapter format
+                grouped[dayKey].push({
+                    h: obs.time.getHours(),
+                    temp: obs.temp,
+                    rain: obs.rain || 0,
+                    snow: 0, // Will be calculated if autoSnow is true
+                    w_avg: obs.wind,
+                    w_gst: obs.gust,
+                    humi: obs.hum,
+                    vv: obs.vv
+                });
+            });
+
+            const newGlobalData = {};
+            Object.entries(grouped).forEach(([date, rows]) => {
+                // Apply auto snow logic
+                const processedRows = rows.map(r => {
+                    let sn = 0;
+                    if (autoSnow && r.rain > 0 && r.temp !== null && r.temp <= snowTempLimit) {
+                        sn = r.rain;
+                        r.rain = 0; // Move rain to snow
+                    }
+                    return { ...r, snow: sn };
+                }).sort((a, b) => a.h - b.h);
+
+                newGlobalData[date] = {
+                    rows: processedRows,
+                    soil: safeFloat(soilData[date] || 0),
+                    forceHeat: heatData[date] || false,
+                    forceFroze: frozeData[date] || false
+                };
+            });
+
+            setGlobalData(newGlobalData);
+            setStationMeteo(stationNames[selectedStationId] || selectedStationId);
+            setStatus(`✅ ${Object.keys(newGlobalData).length} jours importés avec succès.`);
+
+        } catch (e) {
+            console.error(e);
+            setStatus('❌ Erreur Import: ' + e.message);
+        }
+    };
+
+    const exportToJson = () => {
+        const payload = {
+            projectName,
+            txEnt,
+            txCli,
+            emailCli,
+            station_id: selectedStationId,
+            station_name: stationMeteo,
+            tradesFull: TRADES_FULL,
+            activeTrades,
+            rules,
+            annexCols,
+            displaySimple,
+            showCharts,
+            autoSnow,
+            snowTempLimit,
+            globalData,
+            projectAddress,
+            projectClient,
+            startChantierDate,
+            contractDuration,
+            reportType,
+            emitterPhone,
+            emitterEmail
+        };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `BTP_${projectName.replace(/\s+/g, '_')}.json`);
+        dlAnchorElem.click();
+    };
+
+    const importFromJson = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const p = JSON.parse(ev.target.result);
+                if (p.projectName) setProjectName(p.projectName);
+                if (p.txEnt) setTxEnt(p.txEnt);
+                if (p.txCli) setTxCli(p.txCli);
+                if (p.emailCli) setEmailCli(p.emailCli);
+                if (p.station_id) setSelectedStationId(p.station_id);
+                if (p.station_name) setStationMeteo(p.station_name);
+                if (p.tradesFull) setTRADES_FULL(p.tradesFull);
+                if (p.activeTrades) setActiveTrades(p.activeTrades);
+                if (p.rules) setRules(p.rules);
+                if (p.annexCols) setAnnexCols(p.annexCols);
+                if (p.displaySimple !== undefined) setDisplaySimple(p.displaySimple);
+                if (p.showCharts !== undefined) setShowCharts(p.showCharts);
+                if (p.autoSnow !== undefined) setAutoSnow(p.autoSnow);
+                if (p.snowTempLimit !== undefined) setSnowTempLimit(p.snowTempLimit);
+                if (p.globalData) setGlobalData(p.globalData);
+
+                if (p.projectAddress) setProjectAddress(p.projectAddress);
+                if (p.projectClient) setProjectClient(p.projectClient);
+                if (p.startChantierDate) setStartChantierDate(p.startChantierDate);
+                if (p.contractDuration) setContractDuration(p.contractDuration);
+                if (p.reportType) setReportType(p.reportType);
+                if (p.emitterPhone) setEmitterPhone(p.emitterPhone);
+                if (p.emitterEmail) setEmitterEmail(p.emitterEmail);
+                setStatus('✅ JSON Importé avec succès');
+            } catch (err) { alert('Erreur import JSON: ' + err.message); }
+        };
+        reader.readAsText(file);
+    };
+
+    const safeFloat = (valStr) => { if (!valStr) return 0; return parseFloat(String(valStr).replace(',', '.')); };
+    const chk = (a, op, b) => {
+        if (op == '<') return a < b; if (op == '<=') return a <= b; if (op == '>') return a > b; if (op == '>=') return a >= b; return false;
+    };
+
+    // Manual Update of Day Properties (Soil, Force Heat, etc.)
+    const updateDayProp = (date, prop, val) => {
+        const newData = { ...globalData };
+        if (!newData[date]) return; // Should not happen if UI is consistent
+
+        // Update deeply
+        newData[date] = { ...newData[date], [prop]: val };
+
+        // Sync with local states for persistence across re-imports if needed (though globalData is source of truth here)
+        if (prop === 'soil') setSoilData(prev => ({ ...prev, [date]: val }));
+        if (prop === 'forceHeat') setHeatData(prev => ({ ...prev, [date]: val }));
+        if (prop === 'forceFroze') setFrozeData(prev => ({ ...prev, [date]: val }));
+
+        setGlobalData(newData);
+    };
+
+    // AI Import Logic
+    const [aiImportModalOpen, setAiImportModalOpen] = useState(false);
+    const [aiRawText, setAiRawText] = useState('');
+
+    const parseAiText = (txt) => {
+        const lines = txt.split('\n').map(l => l.trim()).filter(l => l);
+        const parsed = [];
+
+        lines.forEach(line => {
+            // Hour: "06 h :" or "6h:"
+            const hMatch = line.match(/^(\d{1,2})\s*h\s*[:]?/i);
+            if (!hMatch) return;
+            const h = parseInt(hMatch[1]);
+
+            // Temp: matches "T +12.5°C" or "T -2°C"
+            const tMatch = line.match(/T\s*([+-]?\d+[.,]?\d*)\s*°C/i);
+            const t = tMatch ? parseFloat(tMatch[1].replace(',', '.')) : null;
+
+            // Rain: matches "Pluie 2.0mm" or "Pluie 0 mm"
+            let r = 0;
+            if (line.toLowerCase().includes('pluie traces') || line.toLowerCase().includes('pluie aucune')) {
+                r = 0;
+            } else {
+                const rMatch = line.match(/Pluie\s*(\d+[.,]?\d*)\s*mm/i);
+                if (rMatch) r = parseFloat(rMatch[1].replace(',', '.'));
+            }
+
+            // Wind (Average)
+            const wMatch = line.match(/Vent\s*(\d+)\s*km\/h/i);
+            const wA = wMatch ? parseInt(wMatch[1]) : 0;
+
+            // Gust
+            const gMatch = line.match(/Rafale[s]?\s*(\d+)\s*km\/h/i);
+            const wG = gMatch ? parseInt(gMatch[1]) : wA;
+
+            // Humidity
+            const huMatch = line.match(/Humidit(?:é|e)\s*(\d+)\s*%/i);
+            const hu = huMatch ? parseInt(huMatch[1]) : 0;
+
+            if (t !== null) {
+                parsed.push({ h, temp: t, rain: r, snow: 0, w_avg: wA, w_gst: wG, humi: hu, vv: null });
+            }
+        });
+
+        console.log("[BTP] AI Parsed result:", parsed);
+        return parsed.sort((a, b) => a.h - b.h);
+    };
+
+    const handleAiImport = () => {
+        if (!aiRawText.trim()) return;
+
+        // We need a date to attach these to. 
+        // Strategy: Use 'startDate' as the target date for this import. 
+        // Or ask user? For simplicity, we assume user selects the day in "Du" datepicker.
+        // But the range selector might be set to a week. 
+        // Let's parse just one day, and put it on the 'startDate'.
+
+        const rows = parseAiText(aiRawText);
+
+        if (rows.length === 0) {
+            alert("Impossible de lire les données. Assurez-vous qu'elles respectent le format : [Heure] : T ... | Pluie ... ");
+            return;
+        }
+
+        // Determine target date
+        const dSplit = startDate.split('-');
+        const dateKey = `${dSplit[2]}/${dSplit[1]}/${dSplit[0]}`; // d/m/Y
+
+        // Apply auto snow
+        const processedRows = rows.map(r => {
+            let sn = 0;
+            if (autoSnow && r.rain > 0 && r.temp !== null && r.temp <= snowTempLimit) {
+                sn = r.rain; r.rain = 0;
+            }
+            return { ...r, snow: sn };
+        });
+
+        setGlobalData(prev => ({
+            ...prev,
+            [dateKey]: {
+                rows: processedRows,
+                soil: safeFloat(soilData[dateKey] || 0),
+                forceHeat: heatData[dateKey] || false,
+                forceFroze: frozeData[dateKey] || false
+            }
+        }));
+
+        setAiImportModalOpen(false);
+        setAiRawText('');
+        setStatus(`✅ Données manuelles importées pour le ${dateKey}`);
+    };
+
+    const calculateKoV96 = (r, d, soilVal, forceHeat, forceFroze) => {
+        if (r.var === 'canicule') return forceHeat === true ? "DÉCLARÉE" : false;
+        if (r.var === 'soil') return chk(soilVal, r.op, safeFloat(r.val)) ? `${soilVal}%` : false;
+        if (r.var === 'heat' && forceHeat) return "DÉCLARÉE";
+        if (r.var === 'temp' && forceFroze && r.val <= 0) return "GELÉ";
+
+        let k = r.var == 'vent_rafale' ? 'w_gst' : (r.var == 'vent_avg' ? 'w_avg' : (r.var == 'pluie' ? 'rain' : (r.var == 'neige' ? 'snow' : (r.var == 'humi_max' ? 'humi' : (r.var == 'vis' ? 'vv' : 'temp')))));
+        let v1 = safeFloat(r.val);
+        if (r.var === 'heat') k = 'temp';
+        let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
+
+        const formatVal = (val, h) => {
+            if (r.var === 'vis') return `${(val / 1000).toFixed(1)}km (à ${h}h)`;
+            return `${val}${unit} (à ${h}h)`;
+        };
+
+        if (r.type == 'cond1') {
+            if (r.var == 'pluie' || r.var == 'neige') { const s = d.reduce((a, b) => a + b[k], 0); if (chk(s, r.op, v1)) return `${s.toFixed(1)}${unit} (24h)`; }
+            else { const ext = d.find(x => chk(x[k], r.op, v1)); if (ext) return formatVal(ext[k], ext.h); }
+        } else if (r.type == 'cond2') {
+            const sub = d.filter(x => x.h >= r.h1 && x.h <= r.h2);
+            if (r.var == 'pluie' || r.var == 'neige') { const s = sub.reduce((a, b) => a + b[k], 0); if (chk(s, r.op, v1)) return `${s.toFixed(1)}${unit} (${r.h1}h-${r.h2}h)`; }
+            else { const ext = sub.find(x => chk(x[k], r.op, v1)); if (ext) return formatVal(ext[k], ext.h); }
+        } else if (r.type == 'cond3') {
+            const sub = d.filter(x => x.h >= r.h1 && x.h <= r.h2);
+            let s = 0, maxS = 0, lastH = 0;
+            sub.forEach(x => { if (chk(x[k], r.op, v1)) { s++; lastH = x.h; } else s = 0; if (s > maxS) maxS = s; });
+            if (maxS >= r.dur) return `Pdt ${maxS}h (fin ${lastH}h)`;
+        } else if (r.type == 'cond4') {
+            const row = d.find(x => x.h == r.h1);
+            if (row && chk(row[k], r.op, v1)) return formatVal(row[k], row.h);
+        } else if (r.type == 'cond5') {
+            const v2 = safeFloat(r.val2);
+            const row1 = d.find(x => x.h == r.h1);
+            const row2 = d.find(x => x.h == r.h3);
+            const res1 = (row1 && chk(row1[k], r.op, v1));
+            const res2 = (row2 && chk(row2[k], r.op2 || r.op, v2));
+            const vStr1 = row1 ? formatVal(row1[k], r.h1) : `?`;
+            const vStr2 = row2 ? formatVal(row2[k], r.h3) : `?`;
+            if (r.logic === 'OR') { if (res1 || res2) return `${vStr1} OU ${vStr2}`; }
+            else { if (res1 && res2) return `${vStr1} ET ${vStr2}`; }
+        } else if (r.type == 'cond6') {
+            const fullData = new Array(24).fill(0);
+            d.forEach(row => { if (row.h >= 0 && row.h < 24) fullData[row.h] = row[k]; });
+            const duration = r.dur || 1;
+            const isCumulative = (r.var == 'pluie' || r.var == 'neige');
+            for (let h = 0; h <= 24 - duration; h++) {
+                let val = 0;
+                if (isCumulative) {
+                    for (let t = 0; t < duration; t++) val += fullData[h + t];
+                    val = Math.round(val * 100) / 100;
+                    if (chk(val, r.op, v1)) return `${val}${unit} (${h}h-${h + duration}h)`;
+                } else {
+                    let matchCount = 0;
+                    for (let t = 0; t < duration; t++) { if (chk(fullData[h + t], r.op, v1)) matchCount++; }
+                    if (matchCount === duration) return `Pdt ${duration}h (${h}h-${h + duration}h)`;
+                }
+            }
+        }
+        return false;
+    };
+
+    const upd = () => {
+        const ent = `<strong>PATRICK MARLIERE</strong><br>${(txEnt || "").replace(/\n/g, '<br>')}`;
+        const emitterInfo = `<div style="font-size:0.7rem; color:#64748b; margin-top:2px;">
+            ${emitterPhone ? `<span>${emitterPhone}</span>` : ''}
+            ${emitterEmail ? `<span style="margin-left:8px;">${emitterEmail}</span>` : ''}
+        </div>`;
+        const cli = (txCli || "Chantier...").replace(/\n/g, '<br>');
+        const imgL = logoL ? `<img src="${logoL}" style="max-height:80px">` : '';
+        const imgR = logoR ? `<img src="${logoR}" style="max-height:80px">` : '';
+        let html = '';
+        let chartsHtml = '';
+        const sortedActiveTrades = [...activeTrades].sort((a, b) => a.localeCompare(b, 'fr'));
+
+        if (Object.keys(globalData).length === 0) {
+            setReportOutput('<div style="padding:100px;text-align:center;color:#94a3b8;font-style:italic;font-size:1.2rem;">Sélectionnez une station et une période, puis cliquez sur "Récupérer Relevés" pour générer le rapport.</div>');
+            setChartsOutput('');
+            return;
+        }
+
+        // --- SYNTHÈSE GLOBALE ---
+        if (checkPeriod) {
+            let totalDays = Object.keys(globalData).length;
+            let totalRainPeriod = 0; const daysKO = new Set();
+            let syncHtml = `<div class="btp-doc-section">`;
+
+            syncHtml += `<div class="btp-doc-head">
+                <div style="width:230px;">${imgL}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex-grow:1;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+                    <div style="border: 3px solid #2563eb; padding: 10px 20px; border-radius: 8px; background: #f0f9ff;">
+                        <h1 style="color:#2563eb;font-size:1.8rem;margin:0;font-weight:900;text-transform:uppercase;letter-spacing:1px;">RELEVÉ D'INTEMPÉRIES</h1>
+                    </div>
+                    <div style="border: 2px solid #2563eb; padding: 5px 15px; border-radius: 6px; background: #f0f9ff; margin-top:10px;">
+                        <span style="color:#2563eb; font-weight:900; font-size:1rem; text-transform:uppercase;">${totalDays} JOUR(S) ANALYSÉ(S)</span>
+                    </div>
+                </div>
+                <div style="width:230px;text-align:right;">${imgR}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${cli}</div></div>
+            </div>`;
+
+            // NEW: PROJECT INFO & RULES SUMMARY
+            syncHtml += `
+            <div style="margin: 10px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;">
+                <h3 style="margin-top:0; color:#1e293b; font-size:0.9rem; border-bottom:1px solid #f1f5f9; padding-bottom:5px; font-weight:800; text-transform:uppercase; margin-bottom:8px;">1. INFORMATIONS CHANTIER</h3>
+                <table style="width:100%; border:none; border-collapse: collapse;">
+                    <tr style="border:none;">
+                        <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Nom :</strong> ${projectName}</td>
+                        <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Démarrage :</strong> ${startChantierDate || '--'}</td>
+                    </tr>
+                    <tr style="border:none;">
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Entreprise :</strong> ${projectClient || '--'}</td>
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Contrat :</strong> ${contractDuration || '--'}</td>
+                    </tr>
+                    <tr style="border:none;">
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Adresse :</strong> ${projectAddress || '--'}</td>
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Relevé :</strong> ${reportType || '--'}</td>
+                    </tr>
+                </table>
+
+                <h3 style="margin-top:15px; color:#1e293b; font-size:0.9rem; border-bottom:1px solid #f1f5f9; padding-bottom:5px; font-weight:800; text-transform:uppercase; margin-bottom:8px;">2. RÈGLES MÉTÉOROLOGIQUES</h3>
+                <table class="btp-table-decision" style="margin-top:5px; width:100%; font-size:0.75rem;">
+                    <thead>
+                        <tr>
+                            <th style="width:140px; text-align:left; padding:4px;">Paramètre</th>
+                            <th style="width:100px; padding:4px;">Seuil</th>
+                            <th style="padding:4px;">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rules.map(r => {
+                let k = r.var;
+                if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
+                if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
+                if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
+                if (r.var === 'vis') k = 'Visibilité (brouillard)';
+                let desc = r.desc || `${k} ${r.op} ${r.val}`;
+                let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
+                return `<tr><td style="text-align:left; font-weight:700; background:#f8fafc; padding-left:10px; padding:4px;">${k}</td><td style="font-weight:600; color:#2563eb; padding:4px;">${r.op} ${r.val}${unit}</td><td style="text-align:left; padding-left:10px; padding:4px;">${desc}</td></tr>`;
+            }).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+
+            syncHtml += `<h3 class="btp-section-title" style="margin-top:10px; text-transform:uppercase; font-size:0.9rem; margin-bottom:5px;">3. BILAN EXPLOITATION / INTEMPÉRIES</h3>
+            <table class="btp-table-period" style="font-size: ${totalDays > 15 ? 'page-break-inside:auto; 0.7rem' : '0.8rem'}; border-collapse: collapse;">
+                <thead><tr><th style="padding:4px;">Date</th><th style="padding:4px;">T. Min/Max</th><th style="padding:4px;">Pluie</th><th style="padding:4px;">Vent Max</th><th style="padding:4px;">Statut</th></tr></thead><tbody>`;
+
+            Object.entries(globalData).sort((a, b) => {
+                const [d1, m1, y1] = a[0].split('/').map(Number);
+                const [d2, m2, y2] = b[0].split('/').map(Number);
+                return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+            }).forEach(([date, dataObj]) => {
+                const ts = dataObj.rows.map(d => d.temp).filter(v => v !== null);
+                const rs = dataObj.rows.reduce((a, b) => a + (b.rain || 0), 0);
+                const maxG = dataObj.rows.length > 0 ? Math.max(...dataObj.rows.map(d => d.w_gst || 0)) : 0;
+                totalRainPeriod += rs;
+                let dayIsKo = false;
+                rules.forEach(r => {
+                    if (r.lots && r.lots.some(t => activeTrades.includes(t)) && calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze)) dayIsKo = true;
+                });
+                if (dayIsKo) daysKO.add(date);
+                syncHtml += `<tr><td style="font-weight:700; padding:4px;">${date}</td><td style="padding:4px;">${ts.length ? Math.min(...ts).toFixed(1) + '°' : '--'} / ${ts.length ? Math.max(...ts).toFixed(1) + '°' : '--'}</td><td style="padding:4px;">${rs.toFixed(1)} mm</td><td style="padding:4px;">${maxG.toFixed(1)} km/h</td><td style="padding:4px;">${dayIsKo ? '<span class="btp-tag btp-tag-ko" style="padding:2px 6px; font-size:0.65rem;">INTEMPÉRIE</span>' : '<span class="btp-tag btp-tag-ok" style="padding:2px 6px; font-size:0.65rem;">RAS</span>'}</td></tr>`;
+            });
+            syncHtml += `</tbody></table>
+            <div style="margin-top:20px; display:flex; flex-direction:column; align-items:center;">
+                <div style="border: 2px solid #2563eb; padding: 12px 30px; border-radius: 8px; background: #f0f9ff; text-align:center;">
+                    <h2 style="color:#2563eb; font-size:1.2rem; margin:0; font-weight:900; text-transform:uppercase; letter-spacing:1px;">RÉSULTAT FINAL</h2>
+                    <div style="font-size:1.1rem; margin-top:8px; color:#1e293b; font-weight:800;">
+                        ${daysKO.size} jour(s) d'intempérie(s) identifié(s) sur ${totalDays} jour(s) analysé(s).
+                    </div>
+                </div>
+            </div>
+            </div>`;
+            html += syncHtml;
+        }
+
+        // --- RAPPORTS QUOTIDIENS ---
+        Object.entries(globalData).sort((a, b) => {
+            const [d1, m1, y1] = a[0].split('/').map(Number);
+            const [d2, m2, y2] = b[0].split('/').map(Number);
+            return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+        }).forEach(([date, dataObj]) => {
+            const dData = dataObj.rows;
+            const soilVal = dataObj.soil;
+            const forceHeat = dataObj.forceHeat;
+            const forceFroze = dataObj.forceFroze;
+
+            const commonHead = (title) => `<div class="btp-doc-head">
+                <div style="width:230px;">${imgL}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex-grow:1;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+                    <div style="border: 2px solid #2563eb; padding: 5px 15px; border-radius: 6px; background: #f0f9ff; margin-bottom:5px;">
+                        <h1 style="color:#2563eb;font-size:1.4rem;margin:0;font-weight:900;text-transform:uppercase;">${title}</h1>
+                    </div>
+                    <div style="font-weight:bold;font-size:1.2rem;color:#1e293b;">${date}</div>
+                    ${stationMeteo ? `<div style="font-size:0.8rem;color:#64748b;margin-top:4px;">Poste : <strong>${stationMeteo}</strong></div>` : ''}
+                </div>
+                <div style="width:230px;text-align:right;">${imgR}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${cli}</div></div>
+            </div>`;
+
+            // PARTIE 1 : SYNTHÈSE & RÉSUMÉ
+            let part1 = `<div class="btp-doc-section">` + commonHead("RELEVÉ D'INTEMPÉRIES");
+
+            // 1. Synthèse Décisionnelle
+            part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">1. SYNTHÈSE DÉCISIONNELLE</h3><table class="btp-table-decision"><thead><tr><th style="width:200px;">Métiers / Corps d'état</th>`;
+            const ruleCols = [];
+            rules.forEach(r => {
+                let k = r.var;
+                if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
+                if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
+                if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
+                if (r.var === 'vis') k = 'Visibilité (brouillard)';
+                let desc = r.desc || `${k} ${r.op} ${r.val}`;
+                const res = calculateKoV96(r, dData, soilVal, forceHeat, forceFroze);
+                ruleCols.push({ desc, res, lots: r.lots || [] });
+                part1 += `<th>${desc}</th>`;
+            });
+            part1 += `</tr></thead><tbody>`;
+            if (sortedActiveTrades.length === 0) {
+                part1 += `<tr><td colspan="${ruleCols.length + 1}">Aucun métier sélectionné.</td></tr>`;
+            } else {
+                sortedActiveTrades.forEach(t => {
+                    part1 += `<tr><td style="text-align:left;font-weight:600;background:#f8fafc;padding-left:10px;">${t}</td>`;
+                    ruleCols.forEach(col => {
+                        if (col.lots.includes(t)) {
+                            if (col.res !== false) part1 += `<td><span class="btp-tag btp-tag-ko">${displaySimple ? 'INTEMPÉRIE' : col.res}</span></td>`;
+                            else part1 += `<td><span class="btp-tag btp-tag-ok">RAS</span></td>`;
+                        } else {
+                            part1 += `<td class="${emptyCellStyle === 'gray' ? 'btp-cell-empty' : 'btp-cell-white'}"></td>`;
+                        }
+                    });
+                    part1 += `</tr>`;
+                });
+            }
+            part1 += `</tbody></table></div>`;
+
+            // 2. Résumé du Jour
+            const tsAll = dData.map(d => d.temp).filter(v => v !== null);
+            const rsAll = dData.map(d => d.rain || 0);
+            const ssAll = dData.map(d => d.snow || 0);
+            const gsAll = dData.map(d => d.w_gst || 0);
+            const asAll = dData.map(d => d.w_avg || 0);
+            const hsAll = dData.map(d => d.humi || 0);
+            const vsAll = dData.map(d => d.vv).filter(v => v !== null);
+
+            let sumH = ""; let sumR = "";
+            if (annexCols.temp) { sumH += "<th>T. Min</th><th>T. Max</th>"; sumR += `<td>${tsAll.length ? Math.min(...tsAll).toFixed(1) : '--'}°</td><td>${tsAll.length ? Math.max(...tsAll).toFixed(1) : '--'}°</td>`; }
+            if (annexCols.rain) { sumH += "<th>Pluie Tot.</th>"; sumR += `<td>${rsAll.reduce((a, b) => a + b, 0).toFixed(1)} mm</td>`; }
+            if (annexCols.snow) { sumH += "<th>Neige Tot.</th>"; sumR += `<td>${ssAll.reduce((a, b) => a + b, 0).toFixed(1)} cm</td>`; }
+            if (annexCols.windAvgPdf) { sumH += "<th>Vent Moy. Max</th>"; sumR += `<td>${asAll.length ? Math.max(...asAll).toFixed(1) : 0} km/h</td>`; }
+            if (annexCols.windG) { sumH += "<th>Rafale Max</th>"; sumR += `<td>${gsAll.length ? Math.max(...gsAll).toFixed(1) : 0} km/h</td>`; }
+            if (annexCols.humi) { sumH += "<th>Hum. Max</th>"; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
+            if (annexCols.vis) { sumH += "<th>Vis. Min</th>"; sumR += `<td>${vsAll.length ? (Math.min(...vsAll) / 1000).toFixed(1) : '--'} km</td>`; }
+            if (annexCols.soil) { sumH += "<th>Hum. Sol</th>"; sumR += `<td>${soilVal || '--'}%</td>`; }
+
+            part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">2. RÉSUMÉ DU JOUR – ${date}</h3><table class="btp-table-period"><thead><tr>${sumH}</tr></thead><tbody><tr>${sumR}</tr></tbody></table></div>`;
+            part1 += `</div>`; // Fin section 1
+
+            // PARTIE 2 : ANNEXES & GRAPHES
+            let part2 = `<div class="btp-doc-section">` + commonHead("ANNEXES MÉTEOROLOGIQUES");
+
+            // 3. Annexe Horaire + Graphique (dans le même bloc pour rester sur la même page)
+            part2 += `<div class="btp-annexe-block">`;
+            part2 += `<h3 class="btp-section-title">3. DONNÉES HORAIRES – ${date}</h3>`;
+            part2 += `<table class="btp-table-hourly"><thead><tr><th>Heure</th>`;
+            if (annexCols.temp) part2 += "<th>T°C</th>";
+            if (annexCols.rain) part2 += "<th>Pluie</th>";
+            if (annexCols.snow) part2 += "<th>Neige</th>";
+            if (annexCols.windAvgPdf) part2 += "<th>V.Moy</th>";
+            if (annexCols.windG) part2 += "<th>Raf.</th>";
+            if (annexCols.humi) part2 += "<th>Hum.</th>";
+            if (annexCols.vis) part2 += "<th>Vis.</th>";
+            part2 += `</tr></thead><tbody>`;
+            dData.forEach(r => {
+                part2 += `<tr class="btp-stripe"><td>${r.h}h</td>`;
+                if (annexCols.temp) part2 += `<td>${r.temp !== null ? parseFloat(r.temp).toFixed(1) : '--'}</td>`;
+                if (annexCols.rain) part2 += `<td>${parseFloat(r.rain || 0).toFixed(1)}</td>`;
+                if (annexCols.snow) part2 += `<td>${parseFloat(r.snow || 0).toFixed(1)}</td>`;
+                if (annexCols.windAvgPdf) part2 += `<td>${parseFloat(r.w_avg || 0).toFixed(1)}</td>`;
+                if (annexCols.windG) part2 += `<td>${parseFloat(r.w_gst || 0).toFixed(1)}</td>`;
+                if (annexCols.humi) part2 += `<td>${Math.round(r.humi || 0)}%</td>`;
+                if (annexCols.vis) part2 += `<td>${r.vv !== null && r.vv !== undefined ? (r.vv / 1000).toFixed(1) : '--'}</td>`;
+                part2 += `</tr>`;
+            });
+            part2 += `</tbody></table>`;
+
+            // 4. Graphique (intégré dans le même bloc)
+            if (showCharts) {
+                part2 += `<div class="btp-chart-inline"><h4 style="font-size:0.85rem;color:#1e293b;margin:10px 0 5px 0;font-weight:600;">📊 Graphique du jour</h4><div class="btp-chart-block-small"><canvas id="btp-chart-${date.replace(/\//g, '-')}"></canvas></div></div>`;
+            }
+            part2 += `</div>`; // Fin bloc annexe
+            part2 += `</div>`; // Fin section 2
+
+            html += part1 + part2;
+        });
+
+        setReportOutput(html);
+        setChartsOutput(''); // No longer used separately
+
+        if (showCharts && Object.keys(globalData).length > 0) {
+            setTimeout(() => {
+                for (const [date, dataObj] of Object.entries(globalData)) {
+                    renderChart(`btp-chart-${date.replace(/\//g, '-')}`, dataObj.rows);
+                }
+            }, 800);
+        }
+    };
+
+    const renderChart = (canvasId, data) => {
+        const ctxEl = document.getElementById(canvasId);
+        if (!ctxEl || !window.Chart) return;
+        if (chartRefs.current[canvasId]) { chartRefs.current[canvasId].destroy(); }
+        const ctx = ctxEl.getContext('2d'); if (!ctx) return;
+
+        try {
+            let datasets = [];
+            const labels = data.map(d => d.h + 'h');
+
+            if (chartDesign === 'vibrant') {
+                datasets = [
+                    {
+                        type: 'line',
+                        label: 'Température (°C)',
+                        data: data.map(d => d.temp),
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.2)',
+                        fill: true,
+                        tension: 0.5,
+                        yAxisID: 'y',
+                        borderWidth: 4,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderWidth: 2
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Pluie (mm)',
+                        data: data.map(d => d.rain),
+                        backgroundColor: 'rgba(14, 165, 233, 0.7)',
+                        yAxisID: 'y1',
+                        borderRadius: 10,
+                        barThickness: 16
+                    }
+                ];
+            } else if (chartDesign === 'minimal') {
+                datasets = [
+                    {
+                        type: 'line',
+                        label: 'Température (°C)',
+                        data: data.map(d => d.temp),
+                        borderColor: '#0f172a',
+                        fill: false,
+                        tension: 0,
+                        yAxisID: 'y',
+                        borderWidth: 2,
+                        pointRadius: 3
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Pluie (mm)',
+                        data: data.map(d => d.rain),
+                        backgroundColor: '#cbd5e1',
+                        yAxisID: 'y1',
+                        barThickness: 8
+                    }
+                ];
+            } else { // architect (default)
+                datasets = [
+                    {
+                        type: 'line',
+                        label: 'Température (°C)',
+                        data: data.map(d => d.temp),
+                        borderColor: '#1e293b',
+                        backgroundColor: 'rgba(30, 41, 59, 0.05)',
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y',
+                        borderWidth: 3,
+                        pointRadius: 0
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Précipitations (mm)',
+                        data: data.map(d => d.rain),
+                        backgroundColor: 'rgba(37, 99, 235, 0.5)',
+                        yAxisID: 'y1',
+                        borderRadius: 3,
+                        barThickness: 14
+                    }
+                ];
+            }
+
+            const chart = new window.Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Inter' } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                        y: {
+                            type: 'linear', display: true, position: 'left',
+                            title: { display: true, text: 'T° (°C)', font: { size: 10, weight: '600' } },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            type: 'linear', display: true, position: 'right',
+                            title: { display: true, text: 'Pluie (mm)', font: { size: 10, weight: '600' } },
+                            grid: { display: false },
+                            min: 0,
+                            suggestedMax: 5
+                        }
+                    }
+                }
+            });
+            chartRefs.current[canvasId] = chart;
+        } catch (e) {
+            console.error("[BTP] Error rendering chart:", e);
+        }
+    };
+
+    const addRule = (t) => {
+        const n = { lots: [...activeTrades], var: t || "temp", type: "cond1", op: ">=", val: 10, h1: 0, h2: 23, dur: 0 };
+        if (t === 'temp') { n.op = "<="; n.val = 0; n.var = "temp"; }
+        else if (t === 'vent_rafale') { n.op = ">="; n.val = 60; n.var = "vent_rafale"; }
+        else if (t === 'vent_avg') { n.op = ">="; n.val = 40; n.var = "vent_avg"; }
+        else if (t === 'pluie') { n.op = ">="; n.val = 10; n.var = "pluie"; }
+        else if (t === 'neige') { n.op = ">="; n.val = 1; n.var = "neige"; }
+        else if (t === 'soil') { n.op = ">="; n.val = 20; n.var = "soil"; }
+        else if (t === 'heat') { n.op = ">="; n.val = 35; n.var = "heat"; }
+        else if (t === 'vis') { n.op = "<="; n.val = 1000; n.var = "vis"; }
+        else if (t === 'canicule') { n.var = "canicule"; n.type = "cond1"; n.val = "Déclarée"; n.op = "=="; }
+
+        setRules(prev => [...prev, n]);
+        setOpenRuleIdx(rules.length);
+    };
+    const delRule = (i) => { if (window.confirm("Supprimer?")) { const n = [...rules]; n.splice(i, 1); setRules(n); setOpenRuleIdx(-1); } };
+    const uR = (i, k, v) => { const n = [...rules]; n[i][k] = v; setRules(n); };
+
+    const ldImg = (e, setter) => { if (e.target.files && e.target.files[0]) { const reader = new FileReader(); reader.onload = (ev) => { setter(ev.target?.result); }; reader.readAsDataURL(e.target.files[0]); } };
+    const saveGlobalTrades = () => {
+        const sel = [];
+        document.querySelectorAll('#btp-tradesCheckboxes input:checked').forEach((c) => sel.push(c.value));
+
+        // SYNC RULES: Add new trades, Remove deleted trades
+        // This ensures that when user updates global trades, rules are updated accordingly
+        // while preserving existing rule customization (unchecked trades remain unchecked for that rule unless removed globally)
+        const added = sel.filter(x => !activeTrades.includes(x));
+        const removed = activeTrades.filter(x => !sel.includes(x));
+
+        if (added.length > 0 || removed.length > 0) {
+            setRules(prevRules => prevRules.map(r => {
+                let newLots = r.lots || [];
+                // Remove globally deleted trades
+                newLots = newLots.filter(t => !removed.includes(t));
+                // Add globally added trades (append)
+                newLots = [...new Set([...newLots, ...added])];
+                return { ...r, lots: newLots };
+            }));
+        }
+
+        setActiveTrades(sel);
+        setTradesModalOpen(false);
+    };
+    const closeRuleTradesModal = () => { if (currentRuleIndex === -1) return; const sel = []; document.querySelectorAll('#btp-ruleTradesList input:checked').forEach((c) => sel.push(c.value)); const n = [...rules]; n[currentRuleIndex].lots = sel; setRules(n); setRuleTradesModalOpen(false); };
+    const addCustomTrade = () => {
+        const val = newTradeInput.trim();
+        if (val && !TRADES_FULL.includes(val)) {
+            const n = [...TRADES_FULL, val];
+            setTRADES_FULL(n);
+            saveTradesToDB(n); // Save to DB
+
+            // Add to active trades AND add to all rules automatically
+            setActiveTrades(prev => [...prev, val]);
+            setRules(prevRules => prevRules.map(r => ({ ...r, lots: [...(r.lots || []), val] })));
+
+            setNewTradeInput('');
+        }
+    };
+    const checkAll = (id, val) => { document.querySelectorAll(`#${id} input`).forEach(c => c.checked = val); };
+    const copyPrompt = () => { navigator.clipboard.writeText(AI_PROMPT).then(() => alert("Prompt copié !")); };
+
+    const generateMailBody = () => {
+        const ent = txEnt || "Entreprise"; const cli = txCli || "Client";
+        let body = `Bonjour, \n\nVoici le relevé d'intempéries pour le chantier ${cli}.\nEntreprise : ${ent}\n\n`;
+        let hasData = false;
+        for (const [date, dataObj] of Object.entries(globalData)) {
+            hasData = true; body += `\n--- DATE : ${date} ---\n`;
+            let dayHasKo = false; const details = [];
+            rules.forEach(r => {
+                const affectsActive = r.lots && r.lots.some(t => activeTrades.includes(t));
+                if (affectsActive) {
+                    const res = calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze);
+                    if (res) {
+                        dayHasKo = true; let k = r.var;
+                        if (r.var == 'vent_rafale') k = 'Rafale'; if (r.var == 'vent_avg') k = 'Vent Moy';
+                        if (r.var == 'temp') k = 'Temp'; if (r.var == 'pluie') k = 'Pluie';
+                        details.push(`- ${k} (${r.op} ${r.val}): ${res}`);
+                    }
+                }
+            });
+            if (dayHasKo) { body += `[!] INTEMPÉRIES CONSTATÉES\nCauses :\n${details.join('\n')}\n`; }
+            else { body += `[OK] RAS\n`; }
+        }
+        if (!hasData) body += "Aucune donnée analysée.\n";
+        return body;
+    };
+
+    const sendMail = () => {
+        const body = generateMailBody();
+        const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
+        window.location.href = `mailto:${emailCli}?subject=Relevé Intempéries - ${txCli}&body=${encodedBody}`;
+    };
+
+    const copyMailBody = () => {
+        const body = generateMailBody();
+        navigator.clipboard.writeText(body).then(() => alert("Rapport copié ! Vous pouvez le coller dans votre mail (Ctrl+V)."));
+    };
+
+    const exportWord = () => {
+        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export</title><style>body{font-family:Arial;color:#000;} .doc-head{border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:20px;} table{width:100%;border-collapse:collapse;margin-top:10px;font-size:10pt;} td,th{border:1px solid #999;padding:4px;text-align:center;} th{background-color:#eee;} .text-alert{color:#dc2626;font-weight:bold;} .tag-ko{color:#991b1b;background-color:#fee2e2;font-weight:bold;} .tag-ok{color:#166534;background-color:#dcfce7;} .annex-table{font-size:9pt;} .keep-together{page-break-inside:avoid;} .doc-section{page-break-before:always;}</style></head><body>";
+        const footer = "</body></html>";
+        let htmlContent = reportOutput.replace(/btp-/g, ''); // Clean prefix for Word
+        const sourceHTML = header + htmlContent + footer;
+        const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", source);
+        dlAnchorElem.setAttribute("download", `Releve_BTP_${projectName.replace(/\s+/g, '_')}.doc`);
+        dlAnchorElem.click();
+    };
+
+    // Fix Charts rendering when tab changes
+    useEffect(() => {
+        if (activeOutTab === 'out-charts' && showCharts && Object.keys(globalData).length > 0) {
+            setTimeout(() => {
+                for (const [date, dataObj] of Object.entries(globalData)) {
+                    renderChart(`btp-chart-${date.replace(/\//g, '-')}`, dataObj.rows);
+                }
+            }, 100);
+        }
+    }, [activeOutTab, showCharts, globalData]);
+
+    const handleEditTrade = (oldName) => {
+        const newName = window.prompt("Modifier le nom du métier :", oldName);
+        if (newName && newName !== oldName && newName.trim() !== "") {
+            const nName = newName.trim();
+            const newTradesList = TRADES_FULL.map(t => t === oldName ? nName : t);
+            setTRADES_FULL(newTradesList);
+            saveTradesToDB(newTradesList); // Save to DB
+
+            setActiveTrades(prev => prev.map(t => t === oldName ? nName : t));
+            setRules(prevRules => prevRules.map(r => {
+                if (r.lots && r.lots.includes(oldName)) {
+                    return { ...r, lots: r.lots.map(l => l === oldName ? nName : l) };
+                }
+                return r;
+            }));
+        }
+    };
+
+    const handleDeleteTrade = (tradeToDelete) => {
+        if (window.confirm(`Voulez-vous vraiment supprimer le métier "${tradeToDelete}" ?\nIl sera retiré de la liste et des règles existantes.`)) {
+            const newTradesList = TRADES_FULL.filter(t => t !== tradeToDelete);
+            setTRADES_FULL(newTradesList);
+            saveTradesToDB(newTradesList); // Save to DB
+
+            setActiveTrades(prev => prev.filter(t => (t !== tradeToDelete)));
+            setRules(prevRules => prevRules.map(r => {
+                if (r.lots && r.lots.includes(tradeToDelete)) {
+                    return { ...r, lots: r.lots.filter(l => l !== tradeToDelete) };
+                }
+                return r;
+            }));
+        }
+    };
+
+    const sortedTrades = [...TRADES_FULL].sort((a, b) => a.localeCompare(b, 'fr'));
+    const sortedActiveTrades = [...activeTrades].sort((a, b) => a.localeCompare(b, 'fr'));
+
+    return (
+        <div className="btp-manager-container btp-manager-body">
+            <div id="btp-saveNotif">✅ Sauvegarde effectuée</div>
+
+            {/* Modals */}
+            <div className={`btp-modal ${tradesModalOpen ? 'btp-open open' : ''}`}>
+                <div className="btp-modal-content">
+                    <div className="btp-modal-header"><h2>Dossier & Métiers</h2><button onClick={() => setTradesModalOpen(false)}>×</button></div>
+
+                    <div style={{ marginBottom: '20px', background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Nom du Dossier / Projet</label>
+                        <input
+                            type="text"
+                            value={projectName}
+                            onChange={(e) => setProjectName(e.target.value)}
+                            placeholder="Ex: Chantier Martin..."
+                            style={{ fontSize: '1.1rem', fontWeight: '600', border: '2px solid #3b82f6' }}
+                        />
+                    </div>
+
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Sélection des Métiers concernés</label>
+                    <div style={{ marginBottom: '10px', display: 'flex', gap: '5px' }}>
+                        <button className="btp-btn-config" onClick={() => checkAll('btp-tradesCheckboxes', true)}>Tout Cocher</button>
+                        <button className="btp-btn-config" onClick={() => checkAll('btp-tradesCheckboxes', false)}>Tout Décocher</button>
+                    </div>
+                    <div id="btp-tradesCheckboxes" style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #eee', padding: '10px' }}>
+                        {sortedTrades.map(t => (
+                            <div key={t} className="btp-trade-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
+                                    <input type="checkbox" value={t} defaultChecked={activeTrades.includes(t)} />
+                                    {t}
+                                </label>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <button className="btp-btn-config" style={{ padding: '2px 6px', fontSize: '0.8rem', minWidth: 'auto' }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditTrade(t); }} title="Renommer">✏️</button>
+                                    <button className="btp-btn-del" style={{ padding: '2px 6px', fontSize: '0.8rem', width: 'auto', minWidth: 'auto' }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTrade(t); }} title="Supprimer">🗑️</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
+                        <input type="text" value={newTradeInput} onChange={(e) => setNewTradeInput(e.target.value)} placeholder="Ajouter métier..." />
+                        <button className="btp-btn-config" onClick={addCustomTrade}>Ajouter</button>
+                    </div>
+                    <button className="btp-btn btp-btn-primary" onClick={saveGlobalTrades} style={{ marginTop: '20px' }}>Valider</button>
+                </div>
+            </div>
+
+            <div className={`btp-modal ${ruleTradesModalOpen ? 'open' : ''}`}>
+                <div className="btp-modal-content">
+                    <h3>Métiers concernés</h3>
+                    <div style={{ marginBottom: '10px' }}>
+                        <button className="btp-btn-config" onClick={() => checkAll('btp-ruleTradesList', true)}>Tous</button>
+                        <button className="btp-btn-config" onClick={() => checkAll('btp-ruleTradesList', false)}>Aucun</button>
+                    </div>
+                    <div id="btp-ruleTradesList" key={ruleTradesModalTimestamp} style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        {sortedActiveTrades.map(t => (<label key={t} className="btp-trade-item"><input type="checkbox" value={t} defaultChecked={currentRuleIndex >= 0 && rules[currentRuleIndex]?.lots?.includes(t)} /> {t}</label>))}
+                    </div>
+                    <button className="btp-btn btp-btn-primary" onClick={closeRuleTradesModal} style={{ marginTop: '20px' }}>Valider</button>
+                </div>
+            </div>
+
+            <div className={`btp-modal ${colsModalOpen ? 'open' : ''}`}>
+                <div className="btp-modal-content">
+                    <div className="btp-modal-header"><h2>Colonnes Rapport</h2><button onClick={() => setColsModalOpen(false)}>×</button></div>
+                    {Object.entries(colsLabels).map(([key, label]) => (
+                        <label key={key} className="btp-trade-item"><input type="checkbox" checked={annexCols[key]} onChange={(e) => setAnnexCols({ ...annexCols, [key]: e.target.checked })} /> {label}</label>
+                    ))}
+                    <button className="btp-btn btp-btn-primary" onClick={() => setColsModalOpen(false)}>Valider</button>
+                </div>
+            </div>
+
+            <div className={`btp-modal ${aiImportModalOpen ? 'open' : ''}`}>
+                <div className="btp-modal-content">
+                    <div className="btp-modal-header"><h2>Import Manuel (IA)</h2><button onClick={() => setAiImportModalOpen(false)}>×</button></div>
+                    <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '10px' }}>
+                        1. Copiez les données brutes sur Internet.<br />
+                        2. Demandez à une IA (ChatGPT, etc.) de les formater avec le <button className="btp-btn-link" onClick={() => setPromptModalOpen(true)}>Prompt Fourni</button>.<br />
+                        3. Collez le résultat ci-dessous. <strong style={{ color: '#dc2626' }}>La date utilisée sera celle du champ "Du" : {startDate}</strong>
+                    </p>
+                    <textarea
+                        value={aiRawText}
+                        onChange={(e) => setAiRawText(e.target.value)}
+                        placeholder="[Heure] : T ... | Pluie ... "
+                        style={{ height: '200px', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                    />
+                    <button className="btp-btn btp-btn-primary" onClick={handleAiImport} style={{ marginTop: '10px' }}>Importer ces données</button>
+                </div>
+            </div>
+
+            <div className={`btp-modal ${promptModalOpen ? 'open' : ''}`}>
+                <div className="btp-modal-content">
+                    <div className="btp-modal-header"><h2>Prompt IA Nettoyage</h2><button onClick={() => setPromptModalOpen(false)}>×</button></div>
+                    <textarea value={AI_PROMPT} readOnly style={{ height: '300px' }} />
+                    <button className="btp-btn btp-btn-primary" onClick={copyPrompt} style={{ marginTop: '10px' }}>Copier le Prompt</button>
+                </div>
+            </div>
+
+            <div className="btp-layout">
+                <div className="btp-no-print">
+                    <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>🌦️ Météo BTP <span style={{ fontSize: '1rem', fontWeight: 400, opacity: 0.6 }}>V101 (Gold Master)</span></h1>
+
+                    <div className="btp-panel" style={{ border: '2px solid var(--primary)', padding: '12px' }}>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+
+                            {/* BLOC 1 : Sélection et Gestion Client */}
+                            <div style={{ display: 'flex', gap: '5px', flex: '1 1 350px' }}>
+                                <select value={currentProjectId} onChange={(e) => handleProjectSelect(e.target.value)} style={{ flex: 1, fontWeight: 'bold', height: '42px', border: '2px solid #ddd' }}>
+                                    <option value="">{currentProjectId ? '--- SELECTIONNER UN PROJET ---' : '--- MODE NOUVEAU PROJET ---'}</option>
+                                    <option value="DEMO_QUARTUS">📊 [DÉMO] QUARTUS - Officiel</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <button className="btp-btn btp-btn-primary" onClick={resetToNew} style={{ width: 'auto', background: '#0ea5e9', height: '42px', padding: '0 15px', whiteSpace: 'nowrap' }} title="Nouveau projet vide">➕ Nouveau</button>
+                            </div>
+
+                            {/* BLOC 2 : Nom du projet (Centre) */}
+                            <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Nom du projet..." style={{ flex: '1 1 200px', height: '42px', fontSize: '1.1rem', fontWeight: '500' }} />
+
+                            {/* BLOC 3 : Actions de Sauvegarde */}
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <button className="btp-btn btp-btn-save" onClick={saveProject} style={{ height: '42px', minWidth: '140px', background: '#7c3aed' }}>
+                                    💾 ENREGISTRER
+                                </button>
+                                {currentProjectId ? (
+                                    <>
+                                        <button className="btp-btn-config" onClick={duplicateProject} style={{ height: '42px', whiteSpace: 'nowrap' }}>📂 CLONER</button>
+                                        <button className="btp-btn-del" onClick={deleteProject} style={{ height: '42px', padding: '0 12px', background: '#ef4444', color: 'white', border: 'none', margin: 0 }}>🗑️</button>
+                                    </>
+                                ) : (
+                                    (projectName !== 'Météo BTP') && <button className="btp-btn-config" onClick={resetToNew} style={{ height: '42px' }}>❌ Annuler</button>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div className="btp-panel">
+                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">1</div><span className="btp-panel-title">Données & Période</span></div></div>
+
+                        <div style={{ background: '#f0f9ff', padding: '15px', borderRadius: '10px', border: '1px solid #bae6fd', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <span style={{ fontSize: '1.2rem' }}>🌡️</span>
+                                <span style={{ fontWeight: 'bold', color: '#1e40af', fontSize: '0.9rem' }}>Sélection Météo-France</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
+                                <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} style={{ flex: 1 }}>
+                                    <option value="">Département...</option>
+                                    {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
+                                </select>
+                                <select value={selectedStationId} disabled={!selectedDept || loadingStations} onChange={(e) => {
+                                    const newVal = e.target.value;
+                                    setSelectedStationId(newVal);
+                                    const name = stationNames[newVal] || stations.find(s => s.station_id === newVal)?.nom_usuel || newVal;
+                                    setStationMeteo(name);
+                                }} style={{ flex: 2 }}>
+                                    <option value="">{loadingStations ? 'Chargement...' : 'Choisir station...'}</option>
+                                    {stations.map(s => <option key={s.station_id} value={s.station_id}>{stationNames[s.station_id] || s.station_id}</option>)}
+                                </select>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '0.8rem', display: 'block' }}>Du</label>
+                                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%' }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '0.8rem', display: 'block' }}>Au</label>
+                                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%' }} />
+                                </div>
+                                <button className="btp-btn btp-btn-primary" onClick={handlePeriodImport} style={{ flex: 1, marginTop: '18px' }}>📥 Récupérer Relevés</button>
+                            </div>
+                            <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                                <button className="btp-btn-help" onClick={() => setAiImportModalOpen(true)} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>📋 Import Manuel (Format "Prompt")</button>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '10px', display: 'flex', gap: '15px', alignItems: 'center' }}>
+                            <label><input type="checkbox" checked={autoSnow} onChange={(e) => { setAutoSnow(e.target.checked); }} /> Déduire neige automatiquement (T° &lt; {snowTempLimit}°C)</label>
+                            <input type="number" value={snowTempLimit} onChange={(e) => setSnowTempLimit(parseFloat(e.target.value))} style={{ width: '60px', padding: '2px', marginLeft: '-10px' }} />
+                        </div>
+                        <div dangerouslySetInnerHTML={{ __html: status }} style={{ marginTop: '10px', marginBottom: '10px' }} />
+
+                        {Object.keys(globalData).length > 0 && (
+                            <div className="btp-days-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                                {Object.entries(globalData).sort((a, b) => {
+                                    // Sort by date d/m/y
+                                    const [d1, m1, y1] = a[0].split('/').map(Number);
+                                    const [d2, m2, y2] = b[0].split('/').map(Number);
+                                    return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+                                }).map(([date, data]) => (
+                                    <div key={date} style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px', background: 'white', fontSize: '0.9rem' }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{date}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Hum. Sol (%):</span>
+                                                <input type="number" value={data.soil || ''} onChange={(e) => updateDayProp(date, 'soil', parseFloat(e.target.value))} style={{ width: '50px', padding: '2px' }} />
+                                            </label>
+                                            <label><input type="checkbox" checked={data.forceHeat || false} onChange={(e) => updateDayProp(date, 'forceHeat', e.target.checked)} /> Canicule</label>
+                                            <label><input type="checkbox" checked={data.forceFroze || false} onChange={(e) => updateDayProp(date, 'forceFroze', e.target.checked)} /> Gelé</label>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="btp-panel">
+                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">2</div><span className="btp-panel-title">En-tête & Client</span></div></div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div className="btp-logo-zone" onClick={() => document.getElementById('inL').click()}>{logoL ? <img src={logoL} /> : '+ Logo Ent.'}<input type="file" id="inL" hidden onChange={(e) => ldImg(e, setLogoL)} /></div>
+                            <div className="btp-logo-zone" onClick={() => document.getElementById('inR').click()}>{logoR ? <img src={logoR} /> : '+ Logo Cli.'}<input type="file" id="inR" hidden onChange={(e) => ldImg(e, setLogoR)} /></div>
+                        </div>
+                        <textarea value={txEnt} onChange={(e) => setTxEnt(e.target.value)} placeholder="Entreprise émettrice..." style={{ height: '60px', marginTop: '10px' }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <input value={emitterPhone} onChange={(e) => setEmitterPhone(e.target.value)} placeholder="Téléphone émetteur" />
+                            <input value={emitterEmail} onChange={(e) => setEmitterEmail(e.target.value)} placeholder="Email émetteur" />
+                        </div>
+                        <div style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                            <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#64748b', marginBottom: '8px' }}>DÉTAILS CLIENT / CHANTIER</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <div className="btp-form-group">
+                                    <label>Entreprise (Client)</label>
+                                    <input value={projectClient} onChange={(e) => setProjectClient(e.target.value)} placeholder="Ex: IDEC AGRO" />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label>Type de relevé</label>
+                                    <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={{ margin: 0 }}>
+                                        <option value="Quotidien">Quotidien</option>
+                                        <option value="Hebdomadaire">Hebdomadaire</option>
+                                        <option value="Mensuel">Mensuel</option>
+                                        <option value="Journalier">Journalier</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <textarea value={projectAddress} onChange={(e) => setProjectAddress(e.target.value)} placeholder="Adresse du chantier..." style={{ height: '60px', marginTop: '10px' }} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                                <div className="btp-form-group">
+                                    <label>Date Démarrage</label>
+                                    <input type="date" value={startChantierDate} onChange={(e) => setStartChantierDate(e.target.value)} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label>Durée Contrat</label>
+                                    <input value={contractDuration} onChange={(e) => setContractDuration(e.target.value)} placeholder="ex: 8 mois" />
+                                </div>
+                            </div>
+                        </div>
+                        <textarea value={txCli} onChange={(e) => setTxCli(e.target.value)} placeholder="En-tête libre (chantier)..." style={{ height: '60px', marginTop: '10px' }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <input value={emailCli} onChange={(e) => setEmailCli(e.target.value)} placeholder="Email client (envoi direct)" />
+                            <input value={stationMeteo} onChange={(e) => setStationMeteo(e.target.value)} placeholder="Station de référence" />
+                        </div>
+                    </div>
+
+                    <div className="btp-panel">
+                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">3</div><span className="btp-panel-title">Règles & Conditions</span></div><button className="btp-btn-config" onClick={() => setTradesModalOpen(true)}>⚙️ Métiers</button></div>
+                        <button className="btp-btn btp-btn-add-main" onClick={() => addRule()}>➕ AJOUTER RÈGLE</button>
+                        <div className="btp-options-bar">
+                            <label><input type="checkbox" checked={displaySimple} onChange={(e) => setDisplaySimple(e.target.checked)} /> 👁️ Mode Simplifié</label>
+                            <label><input type="checkbox" checked={showCharts} onChange={(e) => setShowCharts(e.target.checked)} /> 📊 Graphiques</label>
+                            <button className="btp-btn-config" onClick={() => setColsModalOpen(true)}>👁️ Colonnes PDF</button>
+                            <select value={emptyCellStyle} onChange={(e) => setEmptyCellStyle(e.target.value)} className="btp-select-small">
+                                <option value="gray">Cases vides : Grises</option>
+                                <option value="white">Cases vides : Blanches</option>
+                            </select>
+                        </div>
+
+                        <div className="btp-separator">OU raccourcis</div>
+                        <div className="btp-quick-actions">
+                            <button className="btp-btn-quick" onClick={() => addRule('temp')}>❄️<br />Gel</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('vent_rafale')}>💨<br />Rafales</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('vent_avg')}>🌬️<br />V. Moy.</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('pluie')}>☔<br />Pluie</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('neige')}>☃️<br />Neige</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('soil')}>💧<br />Sol</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('heat')}>☀️<br />T° Élevée</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('vis')}>🌫️<br />Visibilité (brouillard)</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('canicule')}>🔥<br />Canicule</button>
+                        </div>
+                        <div className="btp-rules-list">
+                            {rules.map((r, i) => (
+                                <div key={i} className="btp-rule-card">
+                                    <div className="btp-rule-header" onClick={() => setOpenRuleIdx(openRuleIdx === i ? -1 : i)}>
+                                        <div>
+                                            <div className="btp-rule-title">
+                                                {r.var === 'vis' ? 'Visibilité (brouillard)' : (colsLabels[r.var] || r.var)} {r.op} {r.val}
+                                            </div>
+                                        </div>
+                                        <div>✏️</div>
+                                    </div>
+                                    <div className={`btp-rule-body ${openRuleIdx === i ? 'open' : ''}`}>
+                                        <button className="btp-btn-select-trades" onClick={() => { setCurrentRuleIndex(i); setRuleTradesModalOpen(true); setRuleTradesModalTimestamp(Date.now()); }}>Métiers ({r.lots.length})</button>
+                                        <select value={r.var} onChange={(e) => uR(i, 'var', e.target.value)}>
+                                            <option value="temp">Température</option>
+                                            <option value="pluie">Pluie</option>
+                                            <option value="vent_rafale">Rafale</option>
+                                            <option value="vent_avg">Vent Moyen</option>
+                                            <option value="neige">Neige</option>
+                                            <option value="heat">T° Elevée</option>
+                                            <option value="vis">Visibilité (brouillard)</option>
+                                            <option value="canicule">Canicule</option>
+                                            <option value="soil">Humidité Sol</option>
+                                        </select>
+                                        <select value={r.type} onChange={(e) => uR(i, 'type', e.target.value)}>
+                                            <option value="cond1">Condition 1 : Toute la journée</option>
+                                            <option value="cond2">Condition 2 : Plage horaire</option>
+                                            <option value="cond3">Condition 3 : Consécutif</option>
+                                            <option value="cond4">Condition 4 : Heure fixe</option>
+                                            <option value="cond5">Condition 5 : Avancée (ET/OU)</option>
+                                            <option value="cond6">Condition 6 : Cumul Glissant</option>
+                                        </select>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginTop: '10px' }}>
+                                            <div className="btp-form-group">
+                                                <label>Opérateur</label>
+                                                <select value={r.op} onChange={(e) => uR(i, 'op', e.target.value)}>
+                                                    <option value="<">&lt;</option><option value="<=">&le;</option><option value=">">&gt;</option><option value=">=">&ge;</option>
+                                                </select>
+                                            </div>
+                                            <div className="btp-form-group">
+                                                <label>Valeur / Seuil</label>
+                                                <input value={r.val} onChange={(e) => uR(i, 'val', e.target.value)} placeholder="ex: 10" />
+                                            </div>
+
+                                            {(r.type === 'cond2' || r.type === 'cond3' || r.type === 'cond4') && (
+                                                <div className="btp-form-group">
+                                                    <label>Heure Début (h1)</label>
+                                                    <input type="number" value={r.h1 || 0} onChange={(e) => uR(i, 'h1', parseInt(e.target.value))} />
+                                                </div>
+                                            )}
+                                            {(r.type === 'cond2' || r.type === 'cond3') && (
+                                                <div className="btp-form-group">
+                                                    <label>Heure Fin (h2)</label>
+                                                    <input type="number" value={r.h2 || 23} onChange={(e) => uR(i, 'h2', parseInt(e.target.value))} />
+                                                </div>
+                                            )}
+                                            {(r.type === 'cond3' || r.type === 'cond6') && (
+                                                <div className="btp-form-group">
+                                                    <label>Durée (h)</label>
+                                                    <input type="number" value={r.dur || 0} onChange={(e) => uR(i, 'dur', parseInt(e.target.value))} />
+                                                </div>
+                                            )}
+
+                                            {r.type === 'cond5' && (
+                                                <>
+                                                    <div className="btp-form-group">
+                                                        <label>Logique</label>
+                                                        <select value={r.logic || 'AND'} onChange={(e) => uR(i, 'logic', e.target.value)}>
+                                                            <option value="AND">ET</option><option value="OR">OU</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="btp-form-group">
+                                                        <label>Heure 1 (h1)</label>
+                                                        <input type="number" value={r.h1 || 0} onChange={(e) => uR(i, 'h1', parseInt(e.target.value))} />
+                                                    </div>
+                                                    <div className="btp-form-group">
+                                                        <label>Opérateur 2</label>
+                                                        <select value={r.op2 || r.op} onChange={(e) => uR(i, 'op2', e.target.value)}>
+                                                            <option value="<">&lt;</option><option value="<=">&le;</option><option value=">">&gt;</option><option value=">=">&ge;</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="btp-form-group">
+                                                        <label>Valeur 2</label>
+                                                        <input value={r.val2 || ''} onChange={(e) => uR(i, 'val2', e.target.value)} placeholder="ex: 5" />
+                                                    </div>
+                                                    <div className="btp-form-group">
+                                                        <label>Heure 2 (h3)</label>
+                                                        <input type="number" value={r.h3 || 0} onChange={(e) => uR(i, 'h3', parseInt(e.target.value))} />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        <button className="btp-btn-del" onClick={() => delRule(i)}>Supprimer</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <label className="btp-print-option"><input type="checkbox" checked={checkPeriod} onChange={(e) => setCheckPeriod(e.target.checked)} /> Ajouter page synthèse globale</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                        <button className="btp-btn btp-btn-print" onClick={() => window.print()}>🖨️ PDF / IMPRIMER</button>
+                        <button className="btp-btn btp-btn-word" onClick={exportWord}>📝 EXPORT WORD</button>
+                        <button className="btp-btn btp-btn-mail" onClick={sendMail}>📧 ENVOYER MAIL</button>
+                        <button className="btp-btn btp-btn-copy" onClick={copyMailBody}>📋 COPIER TEXTE</button>
+                    </div>
+
+                    <div style={{ marginTop: '20px', borderTop: '2px dashed #e2e8f0', paddingTop: '15px' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '1rem' }}>Style des Graphiques</div>
+                        <div className="btp-design-selector">
+                            <label className={chartDesign === 'architect' ? 'active' : ''}>
+                                <input type="radio" name="chartStyle" value="architect" checked={chartDesign === 'architect'} onChange={() => setChartDesign('architect')} /> 🏢 Architecte
+                            </label>
+                            <label className={chartDesign === 'vibrant' ? 'active' : ''}>
+                                <input type="radio" name="chartStyle" value="vibrant" checked={chartDesign === 'vibrant'} onChange={() => setChartDesign('vibrant')} /> 🌈 Vibrant
+                            </label>
+                            <label className={chartDesign === 'minimal' ? 'active' : ''}>
+                                <input type="radio" name="chartStyle" value="minimal" checked={chartDesign === 'minimal'} onChange={() => setChartDesign('minimal')} /> ❄️ Minimal
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="btp-preview">
+                    <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default BtpManager;

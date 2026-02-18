@@ -1,0 +1,643 @@
+﻿Analyzing: T_IPRN20_C_LFPW_20260215204500.h5
+
+=== ROOT ATTRIBUTES ===
+  Conventions = ODIM_H5/V2_3
+
+=== FILE STRUCTURE ===
+GROUP: /dataset1
+  GROUP: /dataset1/data1
+    DATASET: /dataset1/data1/data  shape=(3472, 3472)  dtype=uint16
+      ATTR: CLASS = IMAGE
+      ATTR: IMAGE_VERSION = 1.2
+      SAMPLE: [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]
+      MIN=0.0000  MAX=65535.0000  MEAN=33769.9391
+    GROUP: /dataset1/data1/quality1
+      DATASET: /dataset1/data1/quality1/data  shape=(3472, 3472)  dtype=uint8
+        ATTR: CLASS = IMAGE
+        ATTR: IMAGE_VERSION = 1.2
+        SAMPLE: [255, 255, 255, 255, 255, 255, 255, 255, 255, 255]
+        MIN=0.0000  MAX=255.0000  MEAN=167.3200
+      GROUP: /dataset1/data1/quality1/what
+        ATTR: gain = 0.01
+        ATTR: nodata = 255.0
+        ATTR: offset = 0.0
+        ATTR: quantity = QIND
+        ATTR: undetect = 254.0
+    GROUP: /dataset1/data1/what
+      ATTR: gain = 0.01
+      ATTR: nodata = 65535.0
+      ATTR: offset = 0.0
+      ATTR: quantity = ACRR
+      ATTR: undetect = 65534.0
+  GROUP: /dataset1/what
+    ATTR: enddate = 20260215
+    ATTR: endtime = 204500
+    ATTR: product = COMP
+    ATTR: startdate = 20260215
+    ATTR: starttime = 204000
+GROUP: /how
+  ATTR: missing_nodes = WMO:07336,WMO:07714,WMO:07366,WMO:07122,WMO:07694,WMO:07159,WMO:07690,WMO:06477
+  ATTR: nodes = WMO:03897,WMO:06699,WMO:07005,WMO:07774,WMO:07168,WMO:07083,WMO:07274,WMO:07569,WMO:07510,WMO:07255,WMO:07671,WMO:07578,WMO:07027,WMO:07436,WMO:07572,
+  ATTR: software = SERVAL
+  ATTR: sw_version = 3.2.0
+  GROUP: /how/node1
+    GROUP: /how/node1/how
+      ATTR: malfunc = False
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node1/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:ukjer,PLC:Jersey,WMO:03897
+      ATTR: time = 204500
+    GROUP: /how/node1/where
+      ATTR: height = 10.0
+      ATTR: lat = 49.178
+      ATTR: lon = -2.224
+  GROUP: /how/node10
+    GROUP: /how/node10/how
+      ATTR: angles = [9.0, 6.0, 5.2, 2.2, 1.3, 0.7]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node10/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frbou,PLC:Bourges,WMO:07255
+      ATTR: time = 204500
+    GROUP: /how/node10/where
+      ATTR: height = 173.2
+      ATTR: lat = 47.05861
+      ATTR: lon = 2.35955
+  GROUP: /how/node11
+    GROUP: /how/node11/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: wavelength = 5.3
+    GROUP: /how/node11/what
+      ATTR: source = CMT:OPERATIONNAL,NOD:frche,PLC:Cherves,WMO:07336
+    GROUP: /how/node11/where
+      ATTR: height = 174.4
+      ATTR: lat = 46.69864
+      ATTR: lon = 0.06555
+  GROUP: /how/node12
+    GROUP: /how/node12/how
+      ATTR: angles = [4.8, 3.6, 2.2, 1.4, 0.4, 0.8]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.2
+      ATTR: radconstV = 71.2
+      ATTR: wavelength = 10.7
+    GROUP: /how/node12/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frcol,PLC:Collobrieres,WMO:07671
+      ATTR: time = 204500
+    GROUP: /how/node12/where
+      ATTR: height = 653.5
+      ATTR: lat = 43.21656
+      ATTR: lon = 6.37291
+  GROUP: /how/node13
+    GROUP: /how/node13/how
+      ATTR: angles = [14.99, 12.99, 5.49, 0.5, 4.0, 2.7, 1.49, 0.5]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 74.3
+      ATTR: radconstV = 74.3
+      ATTR: wavelength = 3.2
+    GROUP: /how/node13/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frcom,PLC:Colombis,WMO:07578
+      ATTR: time = 204500
+    GROUP: /how/node13/where
+      ATTR: height = 1742.0
+      ATTR: lat = 44.49611
+      ATTR: lon = 6.22056
+  GROUP: /how/node14
+    GROUP: /how/node14/how
+      ATTR: angles = [9.0, 7.0, 4.0, 1.2, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node14/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frcae,PLC:Falaise,WMO:07027
+      ATTR: time = 204500
+    GROUP: /how/node14/where
+      ATTR: height = 167.4
+      ATTR: lat = 48.92716
+      ATTR: lon = -0.14955
+  GROUP: /how/node15
+    GROUP: /how/node15/how
+      ATTR: angles = [6.6, 3.6, 2.59, 1.6, 1.0, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node15/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frgre,PLC:Grezes,WMO:07436
+      ATTR: time = 204500
+    GROUP: /how/node15/where
+      ATTR: height = 360.6
+      ATTR: lat = 45.1044
+      ATTR: lon = 1.36967
+  GROUP: /how/node16
+    GROUP: /how/node16/how
+      ATTR: angles = [15.0, 13.0, 5.49, 0.5, 4.0, 2.7, 1.49, 0.5]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 74.3
+      ATTR: radconstV = 74.3
+      ATTR: wavelength = 3.2
+    GROUP: /how/node16/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frmau,PLC:Maurel,WMO:07572
+      ATTR: time = 204500
+    GROUP: /how/node16/where
+      ATTR: height = 1773.0
+      ATTR: lat = 44.0127
+      ATTR: lon = 6.52917
+  GROUP: /how/node17
+    GROUP: /how/node17/how
+      ATTR: angles = [6.6, 3.59, 2.6, 1.6, 0.99, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 67.6
+      ATTR: radconstV = 67.6
+      ATTR: wavelength = 5.3
+    GROUP: /how/node17/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frmom,PLC:Momuy,WMO:07606
+      ATTR: time = 204500
+    GROUP: /how/node17/where
+      ATTR: height = 145.5
+      ATTR: lat = 43.62447
+      ATTR: lon = -0.6094
+  GROUP: /how/node18
+    GROUP: /how/node18/how
+      ATTR: angles = [6.0, 3.0, 2.2, 1.2, 0.7, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node18/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frmtc,PLC:Montancy,WMO:07291
+      ATTR: time = 204500
+    GROUP: /how/node18/where
+      ATTR: height = 925.9
+      ATTR: lat = 47.36861
+      ATTR: lon = 7.01897
+  GROUP: /how/node19
+    GROUP: /how/node19/how
+      ATTR: angles = [6.5, 3.5, 2.5, 1.6, 1.0, 0.39]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node19/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frmcl,PLC:Montclar,WMO:07637
+      ATTR: time = 204500
+    GROUP: /how/node19/where
+      ATTR: height = 678.5
+      ATTR: lat = 43.9905
+      ATTR: lon = 2.60962
+  GROUP: /how/node2
+    GROUP: /how/node2/how
+      ATTR: malfunc = False
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node2/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:chdol,PLC:La Dole,WMO:06699
+      ATTR: time = 204500
+    GROUP: /how/node2/where
+      ATTR: height = 10.0
+      ATTR: lat = 46.4252
+      ATTR: lon = 6.1
+  GROUP: /how/node20
+    GROUP: /how/node20/how
+      ATTR: angles = [12.0, 5.99, 3.99, 2.99, 2.0, 1.2, 0.6, 0.3]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 74.3
+      ATTR: radconstV = 74.3
+      ATTR: wavelength = 3.2
+    GROUP: /how/node20/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frmoc,PLC:Moucherotte,WMO:07468
+      ATTR: time = 204500
+    GROUP: /how/node20/where
+      ATTR: height = 1913.0
+      ATTR: lat = 45.14772
+      ATTR: lon = 5.63939
+  GROUP: /how/node21
+    GROUP: /how/node21/how
+      ATTR: angles = [8.6, 5.6, 2.6, 1.9, 1.3, 0.7]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node21/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frnan,PLC:Nancy,WMO:07180
+      ATTR: time = 204500
+    GROUP: /how/node21/where
+      ATTR: height = 296.8
+      ATTR: lat = 48.71576
+      ATTR: lon = 6.58156
+  GROUP: /how/node22
+    GROUP: /how/node22/how
+      ATTR: angles = [90.0, 6.49, 2.4, 1.8, 1.2, 0.6]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 69.4
+      ATTR: radconstV = 69.4
+      ATTR: wavelength = 10.6
+    GROUP: /how/node22/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frnim,PLC:Nimes,WMO:07645
+      ATTR: time = 204500
+    GROUP: /how/node22/where
+      ATTR: height = 78.1
+      ATTR: lat = 43.80614
+      ATTR: lon = 4.50269
+  GROUP: /how/node23
+    GROUP: /how/node23/how
+      ATTR: angles = [9.5, 6.5, 1.8, 1.4, 1.0, 0.6]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.3
+      ATTR: radconstV = 71.3
+      ATTR: wavelength = 10.7
+    GROUP: /how/node23/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:fropo,PLC:Opoul,WMO:07745
+      ATTR: time = 204500
+    GROUP: /how/node23/where
+      ATTR: height = 718.0
+      ATTR: lat = 42.91839
+      ATTR: lon = 2.86499
+  GROUP: /how/node24
+    GROUP: /how/node24/how
+      ATTR: angles = [9.0, 4.0, 2.8, 1.8, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node24/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frpla,PLC:Plabennec,WMO:07108
+      ATTR: time = 204500
+    GROUP: /how/node24/where
+      ATTR: height = 110.5
+      ATTR: lat = 48.46088
+      ATTR: lon = -4.42983
+  GROUP: /how/node25
+    GROUP: /how/node25/how
+      ATTR: angles = [9.0, 7.0, 4.0, 1.2, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node25/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frlep,PLC:Sembadel,WMO:07471
+      ATTR: time = 204500
+    GROUP: /how/node25/where
+      ATTR: height = 1143.2
+      ATTR: lat = 45.28922
+      ATTR: lon = 3.70948
+  GROUP: /how/node26
+    GROUP: /how/node26/how
+      ATTR: angles = [8.6, 5.6, 2.6, 1.6, 1.0, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node26/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frniz,PLC:StNizier,WMO:07381
+      ATTR: time = 204500
+    GROUP: /how/node26/where
+      ATTR: height = 919.8
+      ATTR: lat = 46.06781
+      ATTR: lon = 4.44535
+  GROUP: /how/node27
+    GROUP: /how/node27/how
+      ATTR: angles = [9.52, 6.49, 3.5, 2.5, 1.52, 0.78]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node27/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frtou,PLC:Toulouse,WMO:07629
+      ATTR: time = 204500
+    GROUP: /how/node27/where
+      ATTR: height = 186.8
+      ATTR: lat = 43.57432
+      ATTR: lon = 1.3763
+  GROUP: /how/node28
+    GROUP: /how/node28/how
+      ATTR: angles = [8.5, 5.5, 2.49, 1.49, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 67.9
+      ATTR: radconstV = 67.9
+      ATTR: wavelength = 5.3
+    GROUP: /how/node28/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frtra,PLC:Trappes,WMO:07145
+      ATTR: time = 204500
+    GROUP: /how/node28/where
+      ATTR: height = 190.5
+      ATTR: lat = 48.77457
+      ATTR: lon = 2.00831
+  GROUP: /how/node29
+    GROUP: /how/node29/how
+      ATTR: angles = [8.0, 5.0, 2.01, 1.51, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node29/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frtre,PLC:Treillieres,WMO:07223
+      ATTR: time = 204500
+    GROUP: /how/node29/where
+      ATTR: height = 81.0
+      ATTR: lat = 47.33741
+      ATTR: lon = -1.65632
+  GROUP: /how/node3
+    GROUP: /how/node3/how
+      ATTR: angles = [8.5, 5.5, 0.9, 1.51, 2.5, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node3/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frabb,PLC:Abbeville,WMO:07005
+      ATTR: time = 204500
+    GROUP: /how/node3/where
+      ATTR: height = 84.1
+      ATTR: lat = 50.13595
+      ATTR: lon = 1.8347
+  GROUP: /how/node30
+    GROUP: /how/node30/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: wavelength = 3.2
+    GROUP: /how/node30/what
+      ATTR: source = CMT:OPERATIONNAL,NOD:frvar,PLC:Vars,WMO:07714
+    GROUP: /how/node30/where
+      ATTR: height = 2580.7
+      ATTR: lat = 44.58717
+      ATTR: lon = 6.65315
+  GROUP: /how/node31
+    GROUP: /how/node31/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: rad_horiz = 50.0
+      ATTR: wavelength = 3.2
+    GROUP: /how/node31/what
+      ATTR: source = CMT:OPERATIONNAL,NOD:frrem,PLC:StRemy,WMO:07366
+    GROUP: /how/node31/where
+      ATTR: height = 660.0
+      ATTR: lat = 46.06655
+      ATTR: lon = 2.96058
+  GROUP: /how/node32
+    GROUP: /how/node32/how
+      ATTR: angles = [4.8, 3.6, 2.2, 1.4, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node32/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:fraja,PLC:Ajaccio,WMO:07760
+      ATTR: time = 204500
+    GROUP: /how/node32/where
+      ATTR: height = 784.0
+      ATTR: lat = 41.95313
+      ATTR: lon = 8.70054
+  GROUP: /how/node33
+    GROUP: /how/node33/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: rad_horiz = 60.0
+      ATTR: wavelength = 3.2
+    GROUP: /how/node33/what
+      ATTR: source = CMT:OPERATIONNAL,NOD:frnoy,PLC:Noyal,WMO:07122
+    GROUP: /how/node33/where
+      ATTR: height = 155.0
+      ATTR: lat = 48.04682
+      ATTR: lon = -2.89417
+  GROUP: /how/node34
+    GROUP: /how/node34/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node34/what
+      ATTR: source = CMT:OPERATIONNAL,NOD:frvia,PLC:Vial,WMO:07694
+    GROUP: /how/node34/where
+      ATTR: height = 1583.0
+      ATTR: lat = 43.89476
+      ATTR: lon = 7.15263
+  GROUP: /how/node35
+    GROUP: /how/node35/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node35/what
+      ATTR: source = CMT:OPERATIONNAL,PLC:Roissy,WMO:07159
+    GROUP: /how/node35/where
+      ATTR: height = 124.0
+      ATTR: lat = 49.02126
+      ATTR: lon = 2.58163
+  GROUP: /how/node36
+    GROUP: /how/node36/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node36/what
+      ATTR: source = CMT:OPERATIONNAL,PLC:Nice,WMO:07690
+    GROUP: /how/node36/where
+      ATTR: height = 8.07
+      ATTR: lat = 43.6465
+      ATTR: lon = 7.20609
+  GROUP: /how/node37
+    GROUP: /how/node37/how
+      ATTR: comment = Data considered unfit for use
+      ATTR: malfunc = True
+      ATTR: poltype = simultaneous-dual
+    GROUP: /how/node37/what
+      ATTR: source = CMT:OPERATIONNAL,PLC:Wideumont,WMO:06477
+    GROUP: /how/node37/where
+      ATTR: height = 585.0
+      ATTR: lat = 49.9136
+      ATTR: lon = 5.5044
+  GROUP: /how/node4
+    GROUP: /how/node4/how
+      ATTR: angles = [8.0, 3.5, 2.5, 1.4, 1.0, 0.6]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.3
+      ATTR: radconstV = 71.3
+      ATTR: wavelength = 10.7
+    GROUP: /how/node4/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frale,PLC:Aleria,WMO:07774
+      ATTR: time = 204500
+    GROUP: /how/node4/where
+      ATTR: height = 63.0
+      ATTR: lat = 42.12971
+      ATTR: lon = 9.49639
+  GROUP: /how/node5
+    GROUP: /how/node5/how
+      ATTR: angles = [9.0, 6.0, 3.0, 2.01, 1.1, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node5/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frtro,PLC:Arcis,WMO:07168
+      ATTR: time = 204500
+    GROUP: /how/node5/where
+      ATTR: height = 164.6
+      ATTR: lat = 48.46213
+      ATTR: lon = 4.30932
+  GROUP: /how/node6
+    GROUP: /how/node6/how
+      ATTR: angles = [6.0, 2.6, 1.6, 0.99, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node6/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frave,PLC:Avesnes,WMO:07083
+      ATTR: time = 204500
+    GROUP: /how/node6/where
+      ATTR: height = 208.6
+      ATTR: lat = 50.12832
+      ATTR: lon = 3.81181
+  GROUP: /how/node7
+    GROUP: /how/node7/how
+      ATTR: angles = [6.0, 2.62, 1.61, 1.0, 0.5]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.0
+      ATTR: radconstV = 71.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node7/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frbla,PLC:Blaisy,WMO:07274
+      ATTR: time = 204500
+    GROUP: /how/node7/where
+      ATTR: height = 607.1
+      ATTR: lat = 47.35515
+      ATTR: lon = 4.77594
+  GROUP: /how/node8
+    GROUP: /how/node8/how
+      ATTR: angles = [3.5, 2.4, 1.8, 1.2, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 71.1
+      ATTR: radconstV = 71.1
+      ATTR: wavelength = 10.7
+    GROUP: /how/node8/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frbol,PLC:Bollene,WMO:07569
+      ATTR: time = 204500
+    GROUP: /how/node8/where
+      ATTR: height = 325.0
+      ATTR: lat = 44.32305
+      ATTR: lon = 4.76221
+  GROUP: /how/node9
+    GROUP: /how/node9/how
+      ATTR: angles = [8.0, 6.0, 3.0, 1.5, 0.8, 0.4]
+      ATTR: malfunc = False
+      ATTR: polmode = simultaneous-dual
+      ATTR: poltype = simultaneous-dual
+      ATTR: radconstH = 70.0
+      ATTR: radconstV = 70.0
+      ATTR: wavelength = 5.3
+    GROUP: /how/node9/what
+      ATTR: date = 20260215
+      ATTR: source = CMT:OPERATIONNAL,NOD:frbor,PLC:Bordeaux,WMO:07510
+      ATTR: time = 204500
+    GROUP: /how/node9/where
+      ATTR: height = 70.0
+      ATTR: lat = 44.83147
+      ATTR: lon = -0.69188
+GROUP: /what
+  ATTR: date = 20260215
+  ATTR: object = COMP
+  ATTR: source = CMT:ACRR_composite_metropole500_OPER,CTY:614,ORG:085
+  ATTR: time = 204500
+  ATTR: version = H5rad 2.3
+GROUP: /where
+  ATTR: LL_lat = 38.14493289858148
+  ATTR: LL_lon = -6.715173408021557
+  ATTR: LR_lat = 37.45745953865351
+  ATTR: LR_lon = 11.976054526221487
+  ATTR: UL_lat = 53.67
+  ATTR: UL_lon = -9.965
+  ATTR: UR_lat = 52.54813781717718
+  ATTR: UR_lon = 17.564202528305234
+  ATTR: projdef = +proj=stere +lat_0=90 +lon_0=0 +lat_ts=45 +ellps=WGS84 +x_0=619652.07 +y_0=5262818.34 +datum=WGS84 
+  ATTR: xscale = 500.0
+  ATTR: xsize = 3472
+  ATTR: yscale = 500.0
+  ATTR: ysize = 3472

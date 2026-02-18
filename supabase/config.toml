@@ -1,0 +1,4 @@
+project_id = "ubdevaemtwbzxksjlhjg"
+
+[functions.archive-horaire]
+verify_jwt = false

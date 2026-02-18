@@ -1,0 +1,18 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/archive-foudre",
+      "schedule": "0 23 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api-agate/(.*)",
+      "destination": "https://www.mwattest.fr/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

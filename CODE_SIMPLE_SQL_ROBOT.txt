@@ -1,0 +1,84 @@
+-- 1. On active l'extension qui permet à la Base de Données de faire des appels Internet (HTTP)
+CREATE EXTENSION IF NOT EXISTS "http" WITH SCHEMA extensions;
+
+-- 2. On crée une Fonction SQL "Robot Météo" qui fait tout le travail
+CREATE OR REPLACE FUNCTION recuperer_meteo_nord()
+RETURNS void AS $$
+DECLARE
+    -- La liste de vos stations favorites (Nord / Pas-de-Calais + Ceyzériat)
+    -- Vous pouvez en ajouter d'autres ici !
+    stations text[] := ARRAY[
+        '59178001', -- Douai
+        '59343001', -- Lille-Lesquin
+        '59183001', -- Dunkerque
+        '62041001', -- Arras
+        '62160001', -- Boulogne
+        '59606001', -- Valenciennes
+        '59139001', -- Cambrai
+        '01072001'  -- Ceyzériat
+    ];
+    
+    station_id text;
+    token text;
+    api_url text;
+    response_code integer;
+    response_data jsonb;
+    obs jsonb;
+BEGIN
+    -- Récupération du Token Secret
+    SELECT access_token INTO token FROM api_secrets WHERE provider = 'meteo_france';
+    
+    IF token IS NULL THEN
+        RAISE NOTICE 'Token manquant dans api_secrets !';
+        RETURN;
+    END IF;
+
+    -- Boucle sur chaque station
+    FOREACH station_id IN ARRAY stations
+    LOOP
+        api_url := 'https://public-api.meteofrance.fr/public/DPObs/v1/station/horaire?id_station=' || station_id || '&format=json';
+        
+        -- APPEL HTTP VERS METEO FRANCE
+        SELECT status, content::jsonb INTO response_code, response_data
+        FROM http((
+            'GET', 
+            api_url, 
+            ARRAY[http_header('apikey', token)]
+        )::http_request);
+
+        -- Si ça marche (Code 200), on insère les données
+        IF response_code = 200 THEN
+            -- L'API renvoie parfois un tableau, parfois un objet. On gère le tableau ici.
+             FOR obs IN SELECT * FROM jsonb_array_elements(response_data)
+             LOOP
+                INSERT INTO observations_horaire (
+                    station_id, timestamp, t, td, u, ff, fxi, dd, rr1, pres
+                ) VALUES (
+                    station_id,
+                    (obs->>'validity_time')::timestamptz,
+                    (obs->>'t')::real - 273.15,  -- Kelvin -> Celsius
+                    (obs->>'td')::real - 273.15, -- Kelvin -> Celsius
+                    (obs->>'u')::int,
+                    (obs->>'ff')::real * 3.6,    -- m/s -> km/h
+                    (COALESCE(obs->>'fxi', obs->>'fxi10'))::real * 3.6,
+                    (obs->>'dd')::int,
+                    COALESCE((obs->>'rr1')::real, 0),
+                    (obs->>'pres')::real
+                )
+                ON CONFLICT (station_id, timestamp) DO NOTHING; -- Évite les doublons
+             END LOOP;
+        ELSE
+            RAISE NOTICE 'Erreur pour station % : Code %', station_id, response_code;
+        END IF;
+        
+        -- Petite pause technique (via sleep pas possible en pur SQL simple sans extension, mais pg_net serait async)
+        -- ici c'est synchrone, ça ira vite pour 8 stations.
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. On lance le Robot UNE PREMIÈRE FOIS tout de suite pour tester
+SELECT recuperer_meteo_nord();
+
+-- 4. (Optionnel) Ajout au Cron pour tourner toutes les heures (si pg_cron dispo)
+-- SELECT cron.schedule('scan-nord-horaire', '5 * * * *', 'SELECT recuperer_meteo_nord();');
