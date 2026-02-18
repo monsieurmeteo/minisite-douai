@@ -59,15 +59,19 @@ if not MF_API_KEY or not SUPABASE_KEY:
 
 # Also check for the hardcoded key from the existing script if env is empty
 if not MF_API_KEY:
-    # Read from fetch_radar_mf.py as fallback
-    old_script = os.path.join(SCRIPT_DIR, 'fetch_radar_mf.py')
-    if os.path.exists(old_script):
-        with open(old_script, 'r') as f:
-            content = f.read()
-        import re
-        match = re.search(r'MF_API_KEY\s*=\s*"([^"]+)"', content)
-        if match:
-            MF_API_KEY = match.group(1)
+    # TRY HARDCODED WORKING TOKEN FIRST
+    MF_API_KEY = "eyJ4NXQiOiJZV0kxTTJZNE1qWTNOemsyTkRZeU5XTTRPV014TXpjek1UVmhNbU14T1RSa09ETXlOVEE0Tnc9PSIsImtpZCI6ImdhdGV3YXlfY2VydGlmaWNhdGVfYWxpYXMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJHcmVnNTk4ODBAY2FyYm9uLnN1cGVyIiwiYXBwbGljYXRpb24iOnsib3duZXIiOiJHcmVnNTk4ODAiLCJ0aWVyUXVvdGFUeXBlIjpudWxsLCJ0aWVyIjoiVW5saW1pdGVkIiwibmFtZSI6IkRlZmF1bHRBcHBsaWNhdGlvbiIsImlkIjoyMzg0MCwidXVpZCI6IjA3YTRhZjk0LWE4MzktNDllZC05MjJlLTAyZDMyMTM1ZjVlZSJ9LCJpc3MiOiJodHRwczpcL1wvcG9ydGFpbC1hcGkubWV0ZW9mcmFuY2UuZnI6NDQzXC9vYXV0aDJcL3Rva2VuIiwidGllckluZm8iOnsiNTBQZXJNaW4iOnsidGllclF1b3RhVHlwZSI6InJlcXVlc3RDb3VudCIsImdyYXBoUUxNYXhDb21wbGV4aXR5IjowLCJncmFwaFFMTWF4RGVwdGgiOjAsInN0b3BPblF1b3RhUmVhY2giOnRydWUsInNwaWtlQXJyZXN0TGltaXQiOjAsInNwaWtlQXJyZXN0VW5pdCI6InNlYyJ9LCI2MFJlcVBhck1pbiI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNWaWdpbGFuY2UiLCJjb250ZXh0IjoiXC9wdWJsaWNcL0RQVmlnaWxhbmNlXC92MSIsInB1Ymxpc2hlciI6ImFkbWluIiwidmVyc2lvbiI6InYxIiwic3Vic2NyaXB0aW9uVGllciI6IjYwUmVxUGFyTWluIn0seyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNPYnNlcnZhdGlvbiIsImNvbnRleHQiOiJcL3B1YmxpY1wvRFBPYnNcL3YxIiwicHVibGlzaGVyIjoiYmFzdGllbmciLCJ2ZXJzaW9uIjoidjEiLCJzdWJzY3JpcHRpb25UaWVyIjoiNTBQZXJNaW4ifSx7InN1YnNjcmliZXJUZW5hbnREb21haW4iOiJjYXJib24uc3VwZXIiLCJuYW1lIjoiRG9ubmVlc1B1YmxpcXVlc1BhcXVldE9ic2VydmF0aW9uIiwiY29udGV4dCI6IlwvcHVibGljXC9EUFBhcXVldE9ic1wvdjEiLCJwdWJsaXNoZXIiOiJiYXN0aWVuZyIsInZlcnNpb24iOiJ2MSIsInN1YnNjcmlwdGlvblRpZXIiOiI1MFBlck1pbiJ9LHsic3Vic2NyaWJlclRlbmFudERvbWFpbiI6ImNhcmJvbi5zdXBlciIsIm5hbWUiOiJEb25uZWVzUHVibGlxdWVzUGFxdWV0UmFkYXIiLCJjb250ZXh0IjoiXC9wdWJsaWNcL0RQUGFxdWV0UmFkYXJcL3YxIiwicHVibGlzaGVyIjoibG9pYy5tYXJ0aW4iLCJ2ZXJzaW9uIjoidjEiLCJzdWJzY3JpcHRpb25UaWVyIjoiNTBQZXJNaW4ifV0sImV4cCI6MTc5NTQ1NTk3MCwidG9rZW5fdHlwZSI6ImFwaUtleSIsImlhdCI6MTc2OTE1ODEyMCwianRpIjoiYzhjOWM4ODUtNTkwMi00MDcxLTliMmEtNzYzNjU2NjBlMTczIn0=.GwLM-0qaSCCn1meoV0a_zPE1vqoY-9bD0n951MuytlRfH_qB5udKEnaPZaa24ta7fO45QGwxqikX6do_Y0P-Hzhr3j1Fmtp6SQAt2xGgIQlv5fIf4SR8mv78mJto3J_Kmzccq66NpxFVr_BCZMkwN9STh-78PgVlJ6ympR9yCkHmYG8xBh8u3qvEHE5adCiIZ5su9Wl_ui25JQW0_ncc-lxjrBByp6Pmn1f33fGV6IG4gqs2xrhvh7VUeb_vSuG00JWn-2LFkKmyI-3uRxTqVi8o6xImihaSGkh-R-Xn8ixA4YHdniv2-AAI2AvVng12yXE8M2NPNlpNB_BUcOlt2w=="
+    
+    if not MF_API_KEY:
+        # Read from fetch_radar_mf.py as secondary fallback
+        old_script = os.path.join(SCRIPT_DIR, 'fetch_radar_mf.py')
+        if os.path.exists(old_script):
+            with open(old_script, 'r') as f:
+                content = f.read()
+            import re
+            match = re.search(r'MF_API_KEY\s*=\s*"([^"]+)"', content)
+            if match:
+                MF_API_KEY = match.group(1)
 
 # ============================================================
 # Official Météo-France precipitation color palette (mm/h)
