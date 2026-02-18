@@ -164,9 +164,10 @@ def ensure_bucket_exists():
         return True
     return False
 
-def upload_to_supabase(filename, data, content_type='image/png'):
-    """Upload a file to Supabase Storage. Uses upsert to overwrite."""
-    path = f'/object/{STORAGE_BUCKET}/{filename}'
+def upload_to_supabase(filename, data, content_type, bucket=None):
+    """Upload data to Supabase Storage."""
+    target_bucket = bucket or STORAGE_BUCKET
+    path = f"/object/{target_bucket}/{filename}"
     
     url = f"{SUPABASE_URL}/storage/v1{path}"
     req = urllib.request.Request(url, data=data, method='POST')
@@ -180,17 +181,19 @@ def upload_to_supabase(filename, data, content_type='image/png'):
             return True
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8', errors='replace')
-        print(f"  Upload Error {e.code} for {filename}: {error_body[:200]}")
+        print(f"  Upload Error {e.code} for {filename} in {target_bucket}: {error_body[:200]}")
         return False
 
-def delete_from_supabase(filename):
+def delete_from_supabase(filename, bucket=None):
     """Delete a file from Supabase Storage."""
-    result = supabase_request('DELETE', f'/object/{STORAGE_BUCKET}', [filename])
+    target_bucket = bucket or STORAGE_BUCKET
+    result = supabase_request('DELETE', f'/object/{target_bucket}', [filename])
     return result is not None
 
-def get_public_url(filename):
+def get_public_url(filename, bucket=None):
     """Get the public URL for a file in Supabase Storage."""
-    return f"{SUPABASE_URL}/storage/v1/object/public/{STORAGE_BUCKET}/{filename}"
+    target_bucket = bucket or STORAGE_BUCKET
+    return f"{SUPABASE_URL}/storage/v1/object/public/{target_bucket}/{filename}"
 
 def get_existing_manifest():
     """Fetch the existing manifest from Supabase Storage."""
@@ -360,6 +363,12 @@ def main():
         print(f"  Mode: SUPABASE ({SUPABASE_URL})")
         if not ensure_bucket_exists():
             print("  WARNING: Could not ensure bucket exists, will try anyway")
+        # Ensure archive bucket exists as well
+        supabase_request('POST', '/bucket', {
+            'id': 'radar-archive',
+            'name': 'radar-archive',
+            'public': True
+        })
     else:
         print(f"  Mode: LOCAL ({LOCAL_OUTPUT_DIR})")
         os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
@@ -413,9 +422,17 @@ def main():
         }
         
         if use_supabase:
-            # Upload PNG to Supabase Storage
+            # Upload PNG to Supabase Storage (LIVE)
             if upload_to_supabase(filename, png_bytes, 'image/png'):
                 new_frames[ts_str] = frame_info
+                
+                # ARCHIVE: If top of the hour (HH:00), upload to archive bucket
+                if ts_str.endswith('0000'):
+                    year = ts_str[0:4]
+                    month = ts_str[4:6]
+                    archive_path = f"{year}/{month}/{filename}"
+                    print(f"  Archiving: {archive_path}...")
+                    upload_to_supabase(archive_path, png_bytes, 'image/png', bucket='radar-archive')
             else:
                 print(f"  FAILED upload: {filename}")
         else:
