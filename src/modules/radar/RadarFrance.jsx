@@ -42,6 +42,7 @@ const RADAR_SCHEMES = [
 
 const MAP_STYLES = {
     RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
+    SATELLITE: { name: 'Météo-Satellite (Réel)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
     STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
 };
 
@@ -176,9 +177,9 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                         position={[city.lat, city.lon]}
                         icon={L.divIcon({
                             className: 'city-label-expert',
-                            html: `<div style="text-align:center;"><div style="width:4px;height:4px;background:#000;border-radius:50%;margin:0 auto 1px;"></div><span style="font-size:11px;font-weight:1000;color:${mapStyle === 'RELIEF' ? '#222' : '#000'};text-shadow:0 0 4px #fff, 0 0 2px #fff;">${city.name}</span></div>`,
-                            iconSize: [60, 40],
-                            iconAnchor: [30, 5]
+                            html: `<div style="text-align:center;"><span style="font-size:11px;font-weight:900;color:#fff;text-transform:uppercase;text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">${city.name}</span></div>`,
+                            iconSize: [80, 40],
+                            iconAnchor: [40, 20]
                         })}
                     />
                 ))}
@@ -802,6 +803,28 @@ const RadarFrance = () => {
                                 <select value={mapStyle} onChange={(e) => setMapStyle(e.target.value)} className="settings-select">
                                     {Object.entries(MAP_STYLES).map(([key, s]) => (
                                         <option key={key} value={key}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="setting-item">
+                                <MapIcon size={14} />
+                                <select
+                                    className="settings-select"
+                                    value={selectedCity?.name || ''}
+                                    onChange={(e) => {
+                                        const city = MAIN_CITIES.find(c => c.name === e.target.value);
+                                        if (city) {
+                                            setSelectedCity({ lat: city.lat, lon: city.lon, name: city.name });
+                                            setCurrentZone('CUSTOM');
+                                        } else {
+                                            setSelectedCity(null);
+                                            setCurrentZone('METROPOLE');
+                                        }
+                                    }}
+                                >
+                                    <option value="">Zoom sur une Ville...</option>
+                                    {[...MAIN_CITIES].sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+                                        <option key={c.name} value={c.name}>{c.name}</option>
                                     ))}
                                 </select>
                             </div>
