@@ -241,7 +241,7 @@ def extract_h5_files(gzip_data):
         size_str = decompressed[offset+124:offset+136].decode('utf8', errors='replace').replace('\0', '').strip()
         size = int(size_str, 8) if size_str else 0
         
-        if not name.startswith('././@') and 'IPRN20' in name and name.endswith('.h5'):
+        if not name.startswith('././@') and 'IPRN' in name and name.endswith('.h5'):
             data = decompressed[offset+512:offset+512+size]
             parts = name.replace('.h5', '').split('_')
             ts_str = parts[-1]
