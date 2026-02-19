@@ -162,8 +162,9 @@ async function h5ToPngBuffer(h5wasm, h5Data, timestampStr) {
     const { rawData, shape, gain, offset, nodata, undetect, bounds } = await parseH5Radar(h5wasm, h5Data);
     const [ysize, xsize] = shape;
 
-    // Downscale 8x for MAXIMUM speed (434x434) - To fit in 10s Vercel limit
-    const scale = 8;
+    // Downscale 4x for High Definition (868x868)
+    // 4x provides a good balance between zoom precision and processing speed
+    const scale = 4;
     const hNew = Math.floor(ysize / scale);
     const wNew = Math.floor(xsize / scale);
 

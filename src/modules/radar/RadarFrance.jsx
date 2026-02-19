@@ -47,6 +47,7 @@ const RADAR_SCHEMES = [
 ];
 
 const MAP_STYLES = {
+    RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
     CLEAN: { name: 'Épurée (No Labels)', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png' },
     STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
     DETAILED: { name: 'Routes & Communes', url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png' },
@@ -114,7 +115,7 @@ function MapController({ center, zoom }) {
     return null;
 }
 
-const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showLabels, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, radarHost, isSmoothed }) => {
+const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showLabels, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, radarHost, isSmoothed, showRoads, showTowns }) => {
     return (
         <div className="radar-map-inner-wrapper" style={{ width: '100%', height: '100%', position: 'relative' }}>
             <MapContainer
@@ -122,28 +123,41 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                 zoom={zone.zoom}
                 zoomSnap={0.1}
                 zoomDelta={0.1}
-                className="radar-leaflet-map"
+                className={`radar-leaflet-map style-${mapStyle}`}
                 zoomControl={false}
                 maxZoom={20}
             >
-
-
                 <TileLayer
                     url={MAP_STYLES[mapStyle].url}
-                    attribution='&copy; OpenStreetMap'
+                    attribution='&copy; ESRI &copy; OpenStreetMap'
                 />
+
+                {mapStyle === 'RELIEF' && (
+                    <TileLayer
+                        url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+                        opacity={0.6}
+                        zIndex={1001}
+                    />
+                )}
+
+                {showRoads && (
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        opacity={0.2}
+                        zIndex={900}
+                        className="roads-overlay"
+                    />
+                )}
 
                 <ScaleControl position="bottomleft" imperial={false} />
                 <MousePosition />
-
-
 
                 {deptGeojson && (
                     <GeoJSON
                         data={deptGeojson}
                         style={{
-                            color: '#000',
-                            weight: 1.2,
+                            color: mapStyle === 'RELIEF' ? '#444' : '#000',
+                            weight: mapStyle === 'RELIEF' ? 0.8 : 1.2,
                             fillOpacity: 0,
                             interactive: false
                         }}
@@ -174,26 +188,24 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
 
                 <MapController center={zone.center} zoom={zone.zoom} />
 
-                {showLabels && MAIN_CITIES.map((city, i) => (
+                {(showLabels || showTowns) && MAIN_CITIES.map((city, i) => (
                     <Marker
                         key={i}
                         position={[city.lat, city.lon]}
                         icon={L.divIcon({
                             className: 'city-label-expert',
-                            html: `<div style="text-align:center;"><div style="width:4px;height:4px;background:#000;border-radius:50%;margin:0 auto 1px;"></div><span style="font-size:11px;font-weight:1000;color:#000;text-shadow:0 0 4px #fff, 0 0 2px #fff;">${city.name}</span></div>`,
+                            html: `<div style="text-align:center;"><div style="width:4px;height:4px;background:#000;border-radius:50%;margin:0 auto 1px;"></div><span style="font-size:11px;font-weight:1000;color:${mapStyle === 'RELIEF' ? '#222' : '#000'};text-shadow:0 0 4px #fff, 0 0 2px #fff;">${city.name}</span></div>`,
                             iconSize: [60, 40],
                             iconAnchor: [30, 5]
                         })}
                     />
                 ))}
 
+                {/* Overlay observations selectionnées */}
                 {overlayType !== 'NONE' && MAIN_STATIONS.map(station => {
                     const obs = observations[station.id];
                     if (!obs) return null;
 
-                    // FOUDRE (Simulé via obs car pas de source temps réel simple sans API payante, 
-                    // ici on utilise un marqueur fictif ou une donnée si dispo. 
-                    // NOTE: Pour l'instant, si overlayType === 'LIGHTNING', on peut afficher rien ou une donnée placeholder)
                     if (overlayType === 'LIGHTNING') return null;
 
                     return (
@@ -202,7 +214,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                             position={station.pos}
                             icon={L.divIcon({
                                 className: 'obs-marker',
-                                html: `<div class="obs-badge ${overlayType === 'TEMP' ? 'temp' : 'wind'}">
+                                html: `<div class="obs-badge ${overlayType === 'TEMP' ? 'temp' : 'wind'}" style="opacity: 0.9;">
                                     ${overlayType === 'TEMP' ? (obs.t !== null ? obs.t + '°' : 'N/A') : (obs.ff !== null ? obs.ff + ' km/h' : 'N/A')}
                                 </div>`,
                                 iconSize: L.point(40, 20)
@@ -226,7 +238,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                             position={[s.lat, s.lon]}
                             icon={L.divIcon({
                                 className: 'lightning-dot',
-                                html: `<div style="width:8px;height:8px;background:${color};border-radius:50%;border:1px solid black;"></div>`,
+                                html: `<div style="width:8px;height:8px;background:${color};border-radius:50%;border:1px solid black;box-shadow: 0 0 5px ${color}"></div>`,
                                 iconSize: [8, 8],
                                 iconAnchor: [4, 4]
                             })}
@@ -248,7 +260,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                         icon={L.divIcon({
                             className: 'target-marker',
                             html: `<div style="position: relative;">
-                                <div style="width: 24px; height: 24px; border: 3px solid #ef4444; border-radius: 50%; display: flex; alignItems: center; justifyContent: center;">
+                                <div style="width: 24px; height: 24px; border: 3px solid #ef4444; border-radius: 50%; display: flex; alignItems: center; justifyContent: center; background: rgba(239, 68, 68, 0.1)">
                                     <div style="width: 6px; height: 6px; background: #ef4444; border-radius: 50%;"></div>
                                 </div>
                                 <div style="position: absolute; width: 40px; height: 2px; background: #ef4444; top: 11px; left: -8px;"></div>
@@ -268,13 +280,13 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                 )}
             </MapContainer>
 
-            <div className="map-legend-compact">
+            <div className={`map-legend-compact ${mapStyle === 'RELIEF' ? 'expert' : ''}`}>
                 <div className="legend-gradient-bar" style={{
                     background: `linear-gradient(to right, ${RADAR_SCHEMES.find(s => s.id === radarScheme)?.colors.join(', ') || '#ccc'})`
                 }}></div>
                 <div className="legend-numbers">
-                    <span>0.1</span>
-                    <span>Intense</span>
+                    <span>0.1 mm/h</span>
+                    <span>Extreme</span>
                 </div>
                 <div className="map-timestamp-overlay">
                     {timestamps[currentIndex] && (new Date(timestamps[currentIndex].time * 1000)).toLocaleString('fr-FR')}
@@ -293,11 +305,13 @@ const RadarFrance = () => {
     const [currentZone, setCurrentZone] = useState('METROPOLE');
     const [deptGeojson, setDeptGeojson] = useState(null);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [radarScheme, setRadarScheme] = useState(2);
-    const [mapStyle, setMapStyle] = useState('VOYAGER');
+    const [radarScheme, setRadarScheme] = useState(6); // Default to rainbow (MF new)
+    const [mapStyle, setMapStyle] = useState('RELIEF');
     const [overlayType, setOverlayType] = useState('NONE');
     const [currentPeriod, setCurrentPeriod] = useState('2H');
     const [showLabels, setShowLabels] = useState(true);
+    const [showRoads, setShowRoads] = useState(true);
+    const [showTowns, setShowTowns] = useState(true);
     const [isArchiveMode, setIsArchiveMode] = useState(false);
     const [archiveDate, setArchiveDate] = useState(() => {
         const now = new Date();
@@ -685,15 +699,15 @@ const RadarFrance = () => {
 
                 <div className="control-divider"></div>
 
-                <div className="control-section search-radar" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', width: '100%' }}>
+                <div className="control-section search-radar" style={{ position: 'relative', flex: 1, maxWidth: '200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%' }}>
                         <MapIcon size={14} color="#3b82f6" style={{ marginRight: '8px' }} />
                         <input
                             type="text"
-                            placeholder="Chercher une commune..."
+                            placeholder="Chercher ville..."
                             value={searchQuery}
                             onChange={(e) => handleSearch(e.target.value)}
-                            style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '0.8rem', outline: 'none', width: '100%', fontWeight: 700 }}
+                            style={{ background: 'transparent', border: 'none', color: '#1e293b', fontSize: '0.8rem', outline: 'none', width: '100%', fontVariantNumeric: 'tabular-nums' }}
                         />
                     </div>
                     {suggestions.length > 0 && (
@@ -850,6 +864,14 @@ const RadarFrance = () => {
                                 <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
                                 <span>Villes</span>
                             </label>
+                            <label className="settings-toggle">
+                                <input type="checkbox" checked={showTowns} onChange={(e) => setShowTowns(e.target.checked)} />
+                                <span>Tous Villages</span>
+                            </label>
+                            <label className="settings-toggle">
+                                <input type="checkbox" checked={showRoads} onChange={(e) => setShowRoads(e.target.checked)} />
+                                <span>Routes</span>
+                            </label>
                         </div>
                     </div>
                     <RadarMap
@@ -859,6 +881,8 @@ const RadarFrance = () => {
                         radarScheme={radarScheme}
                         mapStyle={mapStyle}
                         showLabels={showLabels}
+                        showTowns={showTowns}
+                        showRoads={showRoads}
                         deptGeojson={deptGeojson}
                         overlayType={overlayType}
                         observations={observations}

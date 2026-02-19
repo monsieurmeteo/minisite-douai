@@ -297,8 +297,8 @@ def h5_to_png_bytes(h5_data, timestamp_str):
         mm_accum[mask_invalid] = 0.0
         mmh_data = mm_accum * 12.0
         
-        # Downscale 2x
-        scale = 2
+        # Native Resolution (1x) for MAXIMUM precision
+        scale = 1
         h_new = ysize // scale
         w_new = xsize // scale
         mmh_small = mmh_data[:h_new*scale, :w_new*scale].reshape(h_new, scale, w_new, scale).mean(axis=(1,3))
