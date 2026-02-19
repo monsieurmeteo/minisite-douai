@@ -32,26 +32,17 @@ const ZONES = {
     OCCITANIE: { name: 'Occitanie', center: [43.6, 1.4], zoom: 7 },
     PACA: { name: 'PACA', center: [43.9, 6.0], zoom: 8 },
     AUVERGNE_RHONE_ALPES: { name: 'Auvergne-Rhône-Alpes', center: [45.5, 5.3], zoom: 7 },
-    NOUVELLE_AQUITAINE: { name: 'Nouvelle-Aquitaine', center: [45.4, 0.5], zoom: 7 },
-    ANTILLES: { name: 'Antilles', center: [14.6, -61.0], zoom: 8 },
-    REUNION: { name: 'Réunion', center: [-21.1, 55.5], zoom: 9 },
-    GUYANE: { name: 'Guyane', center: [4.9, -52.3], zoom: 8 },
-    CALEDONIE: { name: 'Nouv. Calédonie', center: [-21.3, 165.5], zoom: 7 }
+    NOUVELLE_AQUITAINE: { name: 'Nouvelle-Aquitaine', center: [45.4, 0.5], zoom: 7 }
 };
 
 const RADAR_SCHEMES = [
-    { id: 2, name: 'Météo-France (HD)', colors: ['#dbeafe', '#3b82f6', '#10b981', '#facc15', '#ef4444'] },
-    { id: 1, name: 'Bleu Universel', colors: ['#eff6ff', '#60a5fa', '#2563eb', '#1e40af', '#1e3a8a'] },
-    { id: 6, name: 'Arc-en-Ciel (Météo-France New)', colors: ['#00009c', '#2d65d4', '#4aa4ff', '#00d000', '#faff00', '#ff9c00', '#ff0000'] },
-    { id: 8, name: 'Contrasté (OWM)', colors: ['#ffffff', '#0000ff', '#00ff00', '#ffff00', '#ff0000'] }
+    { id: 6, name: 'Arc-en-Ciel (Officiel HD)', colors: ['#00009c', '#2d65d4', '#4aa4ff', '#00d000', '#faff00', '#ff9c00', '#ff0000'] },
+    { id: 2, name: 'Météo-France (Soft)', colors: ['#dbeafe', '#3b82f6', '#10b981', '#facc15', '#ef4444'] }
 ];
 
 const MAP_STYLES = {
     RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
-    CLEAN: { name: 'Épurée (No Labels)', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png' },
-    STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
-    DETAILED: { name: 'Routes & Communes', url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png' },
-    VOYAGER: { name: 'Clean (Sans Lignes)', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png' }
+    STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
 };
 
 const MAIN_STATIONS = [
@@ -74,10 +65,7 @@ const PERIODS = [
     { id: '2H', name: 'Dernières 2h', count: 12 },
     { id: '6H', name: 'Dernières 6h', count: 36 },
     { id: '12H', name: 'Dernières 12h', count: 72 },
-    { id: '24H', name: 'Dernières 24h', count: 144 },
-    { id: '48H', name: 'Dernières 48h', count: 288 },
-    { id: '72H', name: 'Dernières 72h', count: 432 },
-    { id: '7D', name: 'Derniers 7 jours', count: 1008 }
+    { id: '24H', name: 'Dernières 24h', count: 144 }
 ];
 
 const HOUR_COLORS = [
@@ -182,6 +170,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                             opacity={isCurrent ? 0.85 : 0}
                             zIndex={isCurrent ? 1000 : 100}
                             className={`radar-tile-layer-pro ${isCurrent ? 'active' : ''}`}
+                            style={{ imageRendering: isSmoothed ? 'auto' : 'pixelated' }}
                         />
                     );
                 })}
@@ -298,7 +287,6 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
 
 const RadarFrance = () => {
     const [timestamps, setTimestamps] = useState([]);
-    const [radarHost, setRadarHost] = useState('https://tilecache.rainviewer.com');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(true);
     const [loading, setLoading] = useState(true);
@@ -394,7 +382,7 @@ const RadarFrance = () => {
             for (const d of datesToFetch) {
                 const dateStr = d.toISOString().split('T')[0];
                 const ds = dateStr.replace(/-/g, '');
-                const url = `/ORAGE/orage/ws/wsOragesGMaps.php?date=${ds}&heureD=00&heureF=23&pass=jh2kH3,R&_=${Date.now()}`;
+                const url = `/api-agate/orage/ws/wsOragesGMaps.php?date=${ds}&heureD=00&heureF=23&pass=jh2kH3,R&_=${Date.now()}`;
 
                 let res = await fetch(url);
                 if (!res.ok) continue;
