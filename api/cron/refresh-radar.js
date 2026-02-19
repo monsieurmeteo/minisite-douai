@@ -91,18 +91,25 @@ function extractH5Files(gzipData) {
     let offset = 0;
 
     while (offset < decompressed.length - 512) {
-        const nameRaw = decompressed.subarray(offset, offset + 100).toString('utf8').replace(/\0/g, '').trim();
+        // TAR header: name is at offset 0, 100 bytes, NUL-terminated
+        const nameBytes = decompressed.subarray(offset, offset + 100);
+        const nulIndex = nameBytes.indexOf(0);
+        const nameRaw = nameBytes.subarray(0, nulIndex !== -1 ? nulIndex : 100).toString('utf8').trim();
+
         if (!nameRaw) break;
 
-        const sizeStr = decompressed.subarray(offset + 124, offset + 136).toString('utf8').replace(/\0/g, '').trim();
+        // TAR header: size is at offset 124, 12 bytes, octal string
+        const sizeStr = decompressed.subarray(offset + 124, offset + 136).toString('utf8').split('\0')[0].trim();
         const size = sizeStr ? parseInt(sizeStr, 8) : 0;
 
-        if (!nameRaw.startsWith('././@') && nameRaw.includes('IPRN20') && nameRaw.endsWith('.h5')) {
+        // Focus on composite radar data (IPRN)
+        // Check for IPRN anywhere in the name as the path might vary
+        if (!nameRaw.startsWith('././@') && nameRaw.includes('IPRN') && nameRaw.endsWith('.h5')) {
             const data = Buffer.from(decompressed.subarray(offset + 512, offset + 512 + size));
             const parts = nameRaw.replace('.h5', '').split('_');
             const tsStr = parts[parts.length - 1];
             h5Files[tsStr] = data;
-            console.log('  Found: ' + tsStr + ' (' + size + ' bytes)');
+            console.log('  Found: ' + nameRaw + ' -> ' + tsStr + ' (' + size + ' bytes)');
         }
 
         offset += 512 + Math.ceil(size / 512) * 512;
