@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, ImageOverlay, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl, Circle } from 'react-leaflet';
-import { Play, Pause, ChevronLeft, ChevronRight, Clock, Info, Globe, Map as MapIcon, Layers, Square, Download, FileJson, Thermometer, Wind, Film, Settings2, Zap, Calendar } from 'lucide-react';
+import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import gifshot from 'gifshot';
 import L from 'leaflet';
@@ -68,12 +68,7 @@ const PERIODS = [
     { id: '24H', name: 'Dernières 24h', count: 144 }
 ];
 
-const HOUR_COLORS = [
-    "#0000FF", "#0022FF", "#0044FF", "#0066FF", "#0088FF", "#00AAFF", // 0h-5h (Bleus)
-    "#00CCFF", "#00EEFF", "#00FFDD", "#00FFBB", "#00FF99", "#00FF77", // 6h-11h (Cyans/Verts)
-    "#00FF00", "#77FF00", "#BBFF00", "#FFFF00", "#FFCC00", "#FFAA00", // 12h-17h (Vert/Jaune/Orange)
-    "#FF8800", "#FF6600", "#FF4400", "#FF2200", "#FF0000", "#8B0000"  // 18h-23h (Rouge/Brun)
-];
+
 
 const MousePosition = () => {
     const [pos, setPos] = useState(null);
@@ -103,7 +98,7 @@ function MapController({ center, zoom }) {
     return null;
 }
 
-const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showLabels, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, radarHost, isSmoothed, showRoads, showTowns }) => {
+const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showCities, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, isSmoothed, showRoads }) => {
     return (
         <div className="radar-map-inner-wrapper" style={{ width: '100%', height: '100%', position: 'relative' }}>
             <MapContainer
@@ -177,7 +172,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
 
                 <MapController center={zone.center} zoom={zone.zoom} />
 
-                {(showLabels || showTowns) && MAIN_CITIES.map((city, i) => (
+                {showCities && MAIN_CITIES.map((city, i) => (
                     <Marker
                         key={i}
                         position={[city.lat, city.lon]}
@@ -220,7 +215,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
 
                 {/* COUCHE FOUDRE (VIA AGATE API - VECTEURS COULEURS) */}
                 {overlayType === 'LIGHTNING' && lightningStrikes.map((s) => {
-                    const color = HOUR_COLORS[s.h] || '#ff0000';
+                    const color = '#facc15'; // Jaune vif pour tous les impacts récents
                     return (
                         <Marker
                             key={s.id}
@@ -297,9 +292,8 @@ const RadarFrance = () => {
     const [mapStyle, setMapStyle] = useState('RELIEF');
     const [overlayType, setOverlayType] = useState('NONE');
     const [currentPeriod, setCurrentPeriod] = useState('2H');
-    const [showLabels, setShowLabels] = useState(true);
+    const [showCities, setShowCities] = useState(true);
     const [showRoads, setShowRoads] = useState(true);
-    const [showTowns, setShowTowns] = useState(true);
     const [isArchiveMode, setIsArchiveMode] = useState(false);
     const [archiveDate, setArchiveDate] = useState(() => {
         const now = new Date();
@@ -849,16 +843,12 @@ const RadarFrance = () => {
                                 <span>Lissage HD</span>
                             </label>
                             <label className="settings-toggle">
-                                <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />
-                                <span>Villes</span>
-                            </label>
-                            <label className="settings-toggle">
-                                <input type="checkbox" checked={showTowns} onChange={(e) => setShowTowns(e.target.checked)} />
-                                <span>Tous Villages</span>
+                                <input type="checkbox" checked={showCities} onChange={(e) => setShowCities(e.target.checked)} />
+                                <span>Villes & Communes</span>
                             </label>
                             <label className="settings-toggle">
                                 <input type="checkbox" checked={showRoads} onChange={(e) => setShowRoads(e.target.checked)} />
-                                <span>Routes</span>
+                                <span>Réseau Routier</span>
                             </label>
                         </div>
                     </div>
@@ -868,15 +858,13 @@ const RadarFrance = () => {
                         currentIndex={currentIndex}
                         radarScheme={radarScheme}
                         mapStyle={mapStyle}
-                        showLabels={showLabels}
-                        showTowns={showTowns}
+                        showCities={showCities}
                         showRoads={showRoads}
                         deptGeojson={deptGeojson}
                         overlayType={overlayType}
                         observations={observations}
                         lightningStrikes={lightningStrikes}
                         selectedCity={selectedCity}
-                        radarHost={radarHost}
                         isSmoothed={isSmoothed}
                         currentZoneId={currentZone}
                     />
