@@ -121,12 +121,11 @@ function extractH5Files(gzipData) {
 // HDF5 -> PNG conversion
 // ============================================================
 async function parseH5Radar(h5wasm, buffer) {
-    // h5wasm is now passed as argument, already ready.
-    const tmpFile = join(tmpdir(), 'radar_' + Date.now() + Math.random() + '.h5');
+    const tmpFileName = 'radar_tmp.h5';
 
     try {
-        writeFileSync(tmpFile, buffer);
-        const f = new h5wasm.File(tmpFile, 'r');
+        h5wasm.FS.writeFile(tmpFileName, buffer);
+        const f = new h5wasm.File(tmpFileName, 'r');
 
         const dataDS = f.get('dataset1/data1/data');
         const rawData = dataDS.value;
@@ -155,7 +154,7 @@ async function parseH5Radar(h5wasm, buffer) {
         f.close();
         return { rawData, shape: [ysize, xsize], gain, offset: offsetVal, nodata, undetect, bounds };
     } finally {
-        try { unlinkSync(tmpFile); } catch (e) { }
+        try { h5wasm.FS.unlink(tmpFileName); } catch (e) { }
     }
 }
 
