@@ -122,13 +122,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                     attribution='&copy; ESRI &copy; OpenStreetMap'
                 />
 
-                {mapStyle === 'RELIEF' && (
-                    <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
-                        opacity={0.6}
-                        zIndex={1001}
-                    />
-                )}
+
 
                 {showRoads && (
                     <TileLayer
@@ -688,28 +682,7 @@ const RadarFrance = () => {
 
                 <div className="control-divider"></div>
 
-                <div className="control-section search-radar" style={{ position: 'relative', flex: 1, maxWidth: '200px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', padding: '4px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%' }}>
-                        <MapIcon size={14} color="#3b82f6" style={{ marginRight: '8px' }} />
-                        <input
-                            type="text"
-                            placeholder="Chercher ville..."
-                            value={searchQuery}
-                            onChange={(e) => handleSearch(e.target.value)}
-                            style={{ background: 'transparent', border: 'none', color: '#1e293b', fontSize: '0.8rem', outline: 'none', width: '100%', fontVariantNumeric: 'tabular-nums' }}
-                        />
-                    </div>
-                    {suggestions.length > 0 && (
-                        <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 3000, overflow: 'hidden' }}>
-                            {suggestions.map((s, i) => (
-                                <div key={i} onClick={() => selectCity(s)} style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', transition: 'background 0.2s' }} className="suggestion-item-radar">
-                                    <span style={{ fontWeight: 700, color: 'white', fontSize: '0.75rem' }}>{s.properties.city}</span>
-                                    <span style={{ color: '#94a3b8', fontSize: '0.65rem' }}>{s.properties.postcode}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+
 
                 <div className="control-divider"></div>
 
