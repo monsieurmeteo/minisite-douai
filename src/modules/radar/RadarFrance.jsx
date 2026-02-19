@@ -104,7 +104,11 @@ function MapController({ lat, lon, zoom }) {
     return null;
 }
 
-const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, mapStyle, showCities, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, isSmoothed, showRoads }) => {
+const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, showCities, deptGeojson, overlayType, observations, lightningStrikes, selectedCity }) => {
+    const radarScheme = 6; // Fixed Arc-en-Ciel HD
+    const isSmoothed = false; // Fixed sharp pixels
+    const showRoads = false; // Fixed no roads
+
     return (
         <div className="radar-map-inner-wrapper" style={{ width: '100%', height: '100%', position: 'relative' }}>
             <MapContainer
@@ -124,14 +128,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
 
 
 
-                {showRoads && (
-                    <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        opacity={0.2}
-                        zIndex={900}
-                        className="roads-overlay"
-                    />
-                )}
+
 
                 <ScaleControl position="bottomleft" imperial={false} />
                 <MousePosition />
@@ -289,12 +286,10 @@ const RadarFrance = () => {
     const [currentZone, setCurrentZone] = useState('METROPOLE');
     const [deptGeojson, setDeptGeojson] = useState(null);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [radarScheme, setRadarScheme] = useState(6); // Default to rainbow (MF new)
     const [mapStyle, setMapStyle] = useState('RELIEF');
     const [overlayType, setOverlayType] = useState('NONE');
     const [currentPeriod, setCurrentPeriod] = useState('2H');
     const [showCities, setShowCities] = useState(true);
-    const [showRoads, setShowRoads] = useState(true);
     const [isArchiveMode, setIsArchiveMode] = useState(false);
     const [archiveDate, setArchiveDate] = useState(() => {
         const now = new Date();
@@ -810,25 +805,9 @@ const RadarFrance = () => {
                                     ))}
                                 </select>
                             </div>
-                            <div className="setting-item">
-                                <div className="color-dot" style={{ background: RADAR_SCHEMES.find(s => s.id === radarScheme)?.colors[1] || '#ccc' }}></div>
-                                <select value={radarScheme} onChange={(e) => setRadarScheme(parseInt(e.target.value))} className="settings-select">
-                                    {RADAR_SCHEMES.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <label className="settings-toggle">
-                                <input type="checkbox" checked={isSmoothed} onChange={(e) => setIsSmoothed(e.target.checked)} />
-                                <span>Lissage HD</span>
-                            </label>
                             <label className="settings-toggle">
                                 <input type="checkbox" checked={showCities} onChange={(e) => setShowCities(e.target.checked)} />
-                                <span>Villes & Communes</span>
-                            </label>
-                            <label className="settings-toggle">
-                                <input type="checkbox" checked={showRoads} onChange={(e) => setShowRoads(e.target.checked)} />
-                                <span>Réseau Routier</span>
+                                <span>Afficher les Grandes Villes</span>
                             </label>
                         </div>
                     </div>
@@ -836,16 +815,13 @@ const RadarFrance = () => {
                         zone={currentZone === 'CUSTOM' && selectedCity ? { center: [selectedCity.lat, selectedCity.lon], zoom: 11 } : ZONES[currentZone]}
                         timestamps={timestamps}
                         currentIndex={currentIndex}
-                        radarScheme={radarScheme}
                         mapStyle={mapStyle}
                         showCities={showCities}
-                        showRoads={showRoads}
                         deptGeojson={deptGeojson}
                         overlayType={overlayType}
                         observations={observations}
                         lightningStrikes={lightningStrikes}
                         selectedCity={selectedCity}
-                        isSmoothed={isSmoothed}
                         currentZoneId={currentZone}
                     />
                 </div>
