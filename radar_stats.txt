@@ -1,5 +1,0 @@
-﻿gain=0.01 nodata=65535 undetect=65534
-valid_px=1230964
-raw_min=1 raw_max=236
-mm_min=0.0100 mm_max=2.3600 mm_median=0.0600
-mmh_max=28.32
