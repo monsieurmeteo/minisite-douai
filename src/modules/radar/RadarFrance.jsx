@@ -120,7 +120,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                 className={`radar-leaflet-map style-${mapStyle}`}
                 zoomControl={false}
                 maxZoom={20}
-                preferCanvas={true}
+                preferCanvas={false}
             >
                 <TileLayer
                     url={MAP_STYLES[mapStyle].url}
@@ -179,7 +179,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                             className: 'city-label-expert',
                             html: `<div style="text-align:center;"><span style="font-size:11px;font-weight:900;color:#fff;text-transform:uppercase;text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">${city.name}</span></div>`,
                             iconSize: [80, 40],
-                            iconAnchor: [40, 20]
+                            iconAnchor: [40, 5]
                         })}
                     />
                 ))}
