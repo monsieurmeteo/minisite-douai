@@ -806,28 +806,6 @@ const RadarFrance = () => {
                                     ))}
                                 </select>
                             </div>
-                            <div className="setting-item">
-                                <MapIcon size={14} />
-                                <select
-                                    className="settings-select"
-                                    value={selectedCity?.name || ''}
-                                    onChange={(e) => {
-                                        const city = MAIN_CITIES.find(c => c.name === e.target.value);
-                                        if (city) {
-                                            setSelectedCity({ lat: city.lat, lon: city.lon, name: city.name });
-                                            setCurrentZone('CUSTOM');
-                                        } else {
-                                            setSelectedCity(null);
-                                            setCurrentZone('METROPOLE');
-                                        }
-                                    }}
-                                >
-                                    <option value="">Zoom sur une Ville...</option>
-                                    {[...MAIN_CITIES].sort((a, b) => a.name.localeCompare(b.name)).map(c => (
-                                        <option key={c.name} value={c.name}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
                             <label className="settings-toggle">
                                 <input type="checkbox" checked={showCities} onChange={(e) => setShowCities(e.target.checked)} />
                                 <span>Afficher les Grandes Villes</span>
