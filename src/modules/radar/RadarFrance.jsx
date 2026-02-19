@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, ImageOverlay, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl, Circle } from 'react-leaflet';
-import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar } from 'lucide-react';
+import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar, Film } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import gifshot from 'gifshot';
 import L from 'leaflet';
