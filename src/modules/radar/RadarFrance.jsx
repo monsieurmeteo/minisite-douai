@@ -41,8 +41,8 @@ const RADAR_SCHEMES = [
 ];
 
 const MAP_STYLES = {
-    RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
     SATELLITE: { name: 'Météo-Satellite (Réel)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
+    RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
     STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
 };
 
@@ -99,7 +99,7 @@ function MapController({ lat, lon, zoom }) {
         const currentPos = `${lat},${lon},${zoom}`;
         if (lastPos.current === currentPos) return;
 
-        map.setView([lat, lon], zoom, { animate: true });
+        map.setView([lat, lon], zoom, { animate: false });
         lastPos.current = currentPos;
     }, [lat, lon, zoom, map]);
     return null;
@@ -113,6 +113,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
     return (
         <div className="radar-map-inner-wrapper" style={{ width: '100%', height: '100%', position: 'relative' }}>
             <MapContainer
+                key={`${mapStyle}-${currentZoneId}`}
                 center={zone.center}
                 zoom={zone.zoom}
                 zoomSnap={0.1}
@@ -179,7 +180,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                             className: 'city-label-expert',
                             html: `<div style="text-align:center;"><span style="font-size:11px;font-weight:900;color:#fff;text-transform:uppercase;text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">${city.name}</span></div>`,
                             iconSize: [80, 40],
-                            iconAnchor: [40, 5]
+                            iconAnchor: [40, 20]
                         })}
                     />
                 ))}
@@ -287,7 +288,7 @@ const RadarFrance = () => {
     const [currentZone, setCurrentZone] = useState('METROPOLE');
     const [deptGeojson, setDeptGeojson] = useState(null);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [mapStyle, setMapStyle] = useState('RELIEF');
+    const [mapStyle, setMapStyle] = useState('SATELLITE');
     const [overlayType, setOverlayType] = useState('NONE');
     const [currentPeriod, setCurrentPeriod] = useState('2H');
     const [showCities, setShowCities] = useState(true);
