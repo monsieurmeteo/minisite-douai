@@ -90,11 +90,17 @@ const MousePosition = () => {
     );
 };
 
-function MapController({ center, zoom }) {
+function MapController({ lat, lon, zoom }) {
     const map = useMap();
+    const lastPos = useRef(null);
+
     useEffect(() => {
-        map.setView(center, zoom, { animate: true });
-    }, [center, zoom, map]);
+        const currentPos = `${lat},${lon},${zoom}`;
+        if (lastPos.current === currentPos) return;
+
+        map.setView([lat, lon], zoom, { animate: true });
+        lastPos.current = currentPos;
+    }, [lat, lon, zoom, map]);
     return null;
 }
 
@@ -109,6 +115,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                 className={`radar-leaflet-map style-${mapStyle}`}
                 zoomControl={false}
                 maxZoom={20}
+                preferCanvas={true}
             >
                 <TileLayer
                     url={MAP_STYLES[mapStyle].url}
@@ -170,7 +177,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, radarScheme, 
                     );
                 })}
 
-                <MapController center={zone.center} zoom={zone.zoom} />
+                <MapController lat={zone.center[0]} lon={zone.center[1]} zoom={zone.zoom} />
 
                 {showCities && MAIN_CITIES.map((city, i) => (
                     <Marker
