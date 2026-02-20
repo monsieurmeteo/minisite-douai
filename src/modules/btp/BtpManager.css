@@ -1,6 +1,6 @@
 :root {
     --primary: #1e293b;
-    --accent: #2563eb;
+    --accent: #1e293b;
     --bg: #f8fafc;
     --surface: #ffffff;
     --border: #cbd5e1;
@@ -649,8 +649,9 @@
 }
 
 .btp-table-period th {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: #1e293b !important;
+    border-color: #1e293b !important;
+    color: white !important;
     font-size: 0.8rem;
     padding: 8px 6px;
 }
@@ -992,7 +993,7 @@
     .btp-doc-head h1 {
         font-size: 14pt !important;
         margin: 0 !important;
-        color: #2563eb !important;
+        color: #1e293b !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         font-weight: 800 !important;
@@ -1169,7 +1170,7 @@
 
     /* ===== TABLE PÉRIODE (synthèse) ===== */
     .btp-table-period th {
-        background: #2563eb !important;
+        background: #1e293b !important;
         color: white !important;
     }
 

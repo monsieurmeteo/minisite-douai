@@ -60,6 +60,7 @@ const AttestationIntemperieManager = () => {
     const [loadingArchives, setLoadingArchives] = useState(false);
 
     const chartRefs = useRef({});
+    const fileInputRef = useRef(null);
 
     // Synchro dates & Load Chart.js
     useEffect(() => {
@@ -118,7 +119,7 @@ const AttestationIntemperieManager = () => {
     // --- Mise à jour du rapport ---
     useEffect(() => {
         generateReport();
-    }, [globalData, docType, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion]);
+    }, [globalData, docType, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion, stationMeteo]);
 
     // --- Monitoring Changes for Conclusion ---
     useEffect(() => {
@@ -181,6 +182,96 @@ const AttestationIntemperieManager = () => {
     };
 
     // --- Récupération des données ---
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setStatus('⏳ Lecture du fichier CSV...');
+        const reader = new FileReader();
+
+        reader.onload = async (event) => {
+            try {
+                const content = event.target.result;
+                const lines = content.split('\n');
+                if (lines.length < 2) throw new Error("Fichier vide ou mal formaté");
+
+                // Headers: POSTE;DATE;RR;TN;TX;FXI
+                const dataLines = lines.slice(1).filter(l => l.trim().length > 0);
+
+                const days = {};
+                let firstDate = null;
+                let lastDate = null;
+                let stationId = '';
+
+                dataLines.forEach(line => {
+                    const cols = line.trim().split(';');
+                    if (cols.length < 5) return;
+
+                    const rawDate = cols[1]; // YYYYMMDD
+                    if (!rawDate || rawDate.length !== 8) return;
+
+                    const year = parseInt(rawDate.substring(0, 4));
+                    const month = parseInt(rawDate.substring(4, 6));
+                    const day = parseInt(rawDate.substring(6, 8));
+                    const dateKey = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+                    const dateObj = new Date(year, month - 1, day);
+                    if (!firstDate || dateObj < firstDate) firstDate = dateObj;
+                    if (!lastDate || dateObj > lastDate) lastDate = dateObj;
+
+                    stationId = cols[0];
+
+                    const rr = parseFloat(cols[2]?.replace(',', '.')) || 0;
+                    const tn = parseFloat(cols[3]?.replace(',', '.')) || 99;
+                    const tx = parseFloat(cols[4]?.replace(',', '.')) || -99;
+                    const fxi = parseFloat(cols[5]?.replace(',', '.')) || 0;
+
+                    days[dateKey] = {
+                        rows: [{
+                            time: dateObj,
+                            temp: (tn !== 99 && tx !== -99) ? (tn + tx) / 2 : (tn !== 99 ? tn : tx),
+                            rain: rr,
+                            gust: fxi * 3.6,
+                            w_gst: fxi * 3.6
+                        }],
+                        stats: {
+                            tmin: tn,
+                            tmax: tx,
+                            rainTotal: rr,
+                            gustMax: fxi * 3.6,
+                            gustTime: 'N/A'
+                        }
+                    };
+                });
+
+                if (Object.keys(days).length === 0) throw new Error("Aucune donnée valide trouvée dans le fichier.");
+
+                setGlobalData(days);
+                setSelectedStationId(stationId);
+                setStationMeteo(`Import CSV (${stationId})`);
+
+                // Sync dates UI
+                setStartDate(firstDate.toISOString().split('T')[0]);
+                if (Object.keys(days).length > 1) {
+                    setIsPeriod(true);
+                    setEndDate(lastDate.toISOString().split('T')[0]);
+                } else {
+                    setIsPeriod(false);
+                    setEndDate(firstDate.toISOString().split('T')[0]);
+                }
+
+                setStatus(`✅ ${Object.keys(days).length} jours importés avec succès depuis le fichier.`);
+
+                // Trigger client/city info update if available in data? No, stay with manual entry.
+            } catch (err) {
+                console.error(err);
+                setStatus('❌ Erreur Import : ' + err.message);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
     const handleFetchData = async () => {
         if (!selectedStationId || !startDate) {
             setStatus('⚠️ Sélectionnez une station et une date.');
@@ -285,7 +376,8 @@ const AttestationIntemperieManager = () => {
             });
 
             setGlobalData(days);
-            setStationMeteo(stationNames[selectedStationId] || selectedStationId);
+            const name = stationNames[selectedStationId] || selectedStationId;
+            setStationMeteo(`${name} (${selectedStationId})`);
             setStatus(`✅ ${Object.keys(days).length} jours chargés avec succès.`);
             refreshNearbyStations(startDate, finalEndDate);
 
@@ -334,7 +426,7 @@ const AttestationIntemperieManager = () => {
             body { margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .cert-page { 
                 width: 210mm; 
-                height: 296mm; 
+                min-height: 296mm; 
                 padding: 12mm 15mm; 
                 box-sizing: border-box; 
                 position: relative; 
@@ -346,9 +438,9 @@ const AttestationIntemperieManager = () => {
             .cert-main-title-box { border: 2px solid #000; padding: 8px; text-align: center; margin-bottom: 20px; }
             .cert-main-title { font-size: 18pt; font-weight: 800; color: #003366; margin: 0; text-transform: uppercase; }
             .cert-section-header { background: #003366 !important; color: white !important; padding: 6px 10px; font-weight: bold; margin-top: 15px; text-transform: uppercase; border-left: 5px solid #000; }
-            .cert-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9pt; }
-            .cert-table th { background: #1e293b !important; color: white !important; padding: 6px; border: 1px solid #000; text-transform: uppercase; }
-            .cert-table td { padding: 5px; border: 1px solid #000; text-align: center; }
+            .cert-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 8.5pt; line-height: 1.1; }
+            .cert-table th { background: #1e293b !important; color: white !important; padding: 3px 2px; border: 1px solid #000; text-transform: uppercase; font-size: 8pt; }
+            .cert-table td { padding: 2px; border: 1px solid #000; text-align: center; }
             .cert-table tr:nth-child(even) { background-color: #f8fafc !important; }
             .cert-info-row { display: flex; font-size: 9pt; margin-bottom: 5px; align-items: center; }
             .cert-info-label { width: 140px; font-weight: bold; color: #003366; }
@@ -359,9 +451,9 @@ const AttestationIntemperieManager = () => {
     const getReportHeaderHtml = (title, subtitle) => {
         const startD = new Date(startDate);
         const endD = isPeriod ? new Date(endDate) : startD;
-        let dateLabel = startD.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        let dateLabel = startD.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
         if (isPeriod && startDate !== endDate) {
-            dateLabel = `du ${startD.toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric' })} au ${endD.toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric', year: 'numeric' })}`;
+            dateLabel = `DU ${startD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} AU ${endD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
         }
 
         return `
@@ -402,9 +494,13 @@ const AttestationIntemperieManager = () => {
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 8.5pt; margin-bottom: 10px; background: #f8fafc; padding: 5px 10px; border-bottom: 1px solid #e2e8f0; margin-top:10px;">
-                <div class="cert-info-row" style="margin-bottom: 0;">
-                    <div class="cert-info-label" style="width: 130px; font-weight:bold;">PÉRIODE ANALYSÉE :</div>
-                    <div class="cert-info-val">${dateLabel}</div>
+                <div class="cert-info-row" style="margin-bottom: 0; flex: 1;">
+                    <span class="cert-info-label" style="width: auto; margin-right: 10px; font-weight:bold;">PÉRIODE ANALYSÉE :</span>
+                    <span class="cert-info-val">${dateLabel}</span>
+                </div>
+                <div class="cert-info-row" style="margin-bottom: 0; flex: 1; justify-content: flex-end;">
+                    <span class="cert-info-label" style="width: auto; margin-right: 10px; font-weight:bold;">POSTE DE RÉFÉRENCE :</span>
+                    <span class="cert-info-val">${stationMeteo}</span>
                 </div>
             </div>
         `;
@@ -449,7 +545,7 @@ const AttestationIntemperieManager = () => {
                         ${countIntemperieDays()} JOUR(S) D'INTEMPÉRIES IDENTIFIÉ(S)
                     </div>
                     <div style="font-size: 8.5pt; color: #64748b; margin-top: 5px;">
-                        Station de ${stationMeteo} | Période du ${startD.toLocaleDateString()} au ${endD.toLocaleDateString()}
+                        Station de ${stationMeteo} | Période du ${startD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} au ${endD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </div>
                 </div>
             </div>
@@ -460,145 +556,155 @@ const AttestationIntemperieManager = () => {
         if (!globalData) return '';
         const sortedDaysK = Object.keys(globalData).sort();
 
-        return `
-            <div class="cert-page">
-                <div class="cert-main-title-box" style="margin-bottom: 20px; border: 2px solid #000; padding: 10px; background: #fff;">
-                    <h2 style="font-size: 13pt; margin:0; color:#003366; text-transform:uppercase; font-weight: 800;">ANNEXE 1 : DOSSIER DE CLASSIFICATION</h2>
-                    <div style="font-size: 9.5pt; margin-top:5px; color:#64748b;">Analyse détaillée des jours d'intempéries selon les critères contractuels.</div>
-                </div>
+        // Group by month
+        const groups = {};
+        sortedDaysK.forEach(k => {
+            const m = k.substring(0, 7);
+            if (!groups[m]) groups[m] = [];
+            groups[m].push(k);
+        });
 
-                <table class="cert-table" style="border: 1px solid #000;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; border: 1px solid #000;">Date</th>
-                            <th style="border: 1px solid #000;">Pluie(mm)</th>
-                            <th style="border: 1px solid #000;">T&deg;mini</th>
-                            <th style="border: 1px solid #000;">T&deg;maxi</th>
-                            <th style="border: 1px solid #000;">Rafales</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${sortedDaysK.map(dayK => {
-            const day = globalData[dayK];
-            const s = day.stats;
-            const d = new Date(dayK);
-
-            const isRain = s.rainTotal >= limitRain;
-            const isGel = s.tmin <= limitTemp;
-            const isVent = s.gustMax >= limitWind;
-            const isHot = s.tmax >= limitTempMax;
-
-            const isStandardRain = s.rainTotal >= 10;
-            const isStandardGel = s.tmin <= 0;
-            const isStandardVent = s.gustMax >= 60;
-
-            let isIntemp = false;
-            if (showPersonalization) {
-                if (isRain || isGel || isVent || isHot || isStandardRain || isStandardGel || isStandardVent) isIntemp = true;
-            } else {
-                if (isStandardRain || isStandardGel || isStandardVent) isIntemp = true;
-            }
+        return Object.keys(groups).sort().map((monthK, index) => {
+            const [year, month] = monthK.split('-');
+            const monthName = new Date(year, month - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
             return `
-                                <tr>
-                                    <td style="border:1px solid #000; font-weight:bold;">
-                                        ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                        ${isIntemp ? '<span style="color:#e11d48; font-size:7pt;"><br/>(INTEMPERIES)</span>' : ''}
-                                    </td>
-                                    <td style="border:1px solid #000;">
-                                        ${isRain || isStandardRain ? '<span style="color:#e11d48; font-weight:900;">INTEMPÉRIES</span>' : getRainLabel(s.rainTotal)}
-                                    </td>
-                                    <td style="border:1px solid #000;">
-                                        ${getTempMiniLabel(s.tmin, showPersonalization ? Math.min(0, limitTemp) : 0)}
-                                    </td>
-                                    <td style="border:1px solid #000;">
-                                        ${getTempMaxiLabel(s.tmax, showPersonalization ? limitTempMax : 99)}
-                                    </td>
-                                    <td style="border:1px solid #000;">
-                                        ${getWindLabel(s.gustMax, showPersonalization ? Math.max(60, limitWind) : 60)}
-                                    </td>
-                                </tr>
-                            `;
-        }).join('')}
-                    </tbody>
-                </table>
+                <div class="cert-page">
+                    <div class="cert-main-title-box" style="margin-bottom: 20px; border: 2px solid #000; padding: 10px; background: #fff;">
+                        <h2 style="font-size: 13pt; margin:0; color:#003366; text-transform:uppercase; font-weight: 800;">ANNEXE 1 : DOSSIER DE CLASSIFICATION</h2>
+                        <div style="font-size: 9.5pt; margin-top:5px; color:#64748b; font-weight:bold; text-transform: uppercase;">Mois de ${monthName}</div>
+                    </div>
 
-                <div style="margin-top:30px; padding:15px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px;">
-                    <div style="font-weight:800; color:#003366; margin-bottom:10px; text-transform:uppercase; font-size:10pt;">DÉTAILS DES CRITÈRES DÉCISIONNELS</div>
-                    <table style="width:100%; font-size:8.5pt; border-collapse:collapse;">
-                        <tr>
-                            <td style="padding:4px; font-weight:bold; color:#475569; border-bottom:1px solid #e2e8f0;">Précipitations :</td>
-                            <td style="padding:4px; border-bottom:1px solid #e2e8f0;">Dépassement si pluie &ge; 10.0mm (Standard) ${showPersonalization ? `ou &ge; ${limitRain}mm (Options)` : ''}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:4px; font-weight:bold; color:#475569; border-bottom:1px solid #e2e8f0;">Températures minimales :</td>
-                            <td style="padding:4px; border-bottom:1px solid #e2e8f0;">Dépassement si T.min &le; 0.0&deg;C (Standard) ${showPersonalization ? `ou &le; ${limitTemp}&deg;C (Options)` : ''}</td>
-                        </tr>
-                        ${showPersonalization ? `
-                        <tr>
-                            <td style="padding:4px; font-weight:bold; color:#475569; border-bottom:1px solid #e2e8f0;">Rafales de vent :</td>
-                            <td style="padding:4px; border-bottom:1px solid #e2e8f0;">Dépassement si rafales &ge; ${limitWind} km/h</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:4px; font-weight:bold; color:#475569; border-bottom:1px solid #e2e8f0;">Températures maximales :</td>
-                            <td style="padding:4px; border-bottom:1px solid #e2e8f0;">Dépassement si T.max &ge; ${limitTempMax} &deg;C</td>
-                        </tr>
-                        ` : ''}
+                    <table class="cert-table" style="border: 1px solid #000;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; border: 1px solid #000;">Date</th>
+                                <th style="border: 1px solid #000;">Pluie(mm)</th>
+                                <th style="border: 1px solid #000;">T&deg;mini</th>
+                                <th style="border: 1px solid #000;">T&deg;maxi</th>
+                                <th style="border: 1px solid #000;">Rafales</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${groups[monthK].map(dayK => {
+                const day = globalData[dayK];
+                const s = day.stats;
+                const d = new Date(dayK);
+
+                const isRain = s.rainTotal >= limitRain;
+                const isGel = s.tmin <= limitTemp;
+                const isVent = s.gustMax >= limitWind;
+                const isHot = s.tmax >= limitTempMax;
+
+                const isStandardRain = s.rainTotal >= 10;
+                const isStandardGel = s.tmin <= 0;
+                const isStandardVent = s.gustMax >= 60;
+                const isStandardSnow = s.tmin <= 0 && s.rainTotal >= 1;
+
+                let isIntemp = false;
+                if (showPersonalization) {
+                    if (isRain || isGel || isVent || isHot || isStandardRain || isStandardGel || isStandardVent || isStandardSnow) isIntemp = true;
+                } else {
+                    if (isStandardRain || isStandardGel || isStandardVent || isStandardSnow) isIntemp = true;
+                }
+
+                return `
+                                    <tr>
+                                        <td style="border:1px solid #000; font-weight:bold;">
+                                            ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            ${isIntemp ? '<span style="color:#e11d48; font-size:7pt;"><br/>(INTEMPERIES)</span>' : ''}
+                                        </td>
+                                        <td style="border:1px solid #000;">
+                                            ${isRain || isStandardRain ? '<span style="color:#e11d48; font-weight:900;">INTEMPÉRIES</span>' : getRainLabel(s.rainTotal)}
+                                        </td>
+                                        <td style="border:1px solid #000;">
+                                            ${getTempMiniLabel(s.tmin, showPersonalization ? Math.min(0, limitTemp) : 0)}
+                                        </td>
+                                        <td style="border:1px solid #000;">
+                                            ${getTempMaxiLabel(s.tmax, showPersonalization ? limitTempMax : 99)}
+                                        </td>
+                                        <td style="border:1px solid #000;">
+                                            ${getWindLabel(s.gustMax, showPersonalization ? Math.max(60, limitWind) : 60)}
+                                        </td>
+                                    </tr>
+                                `;
+            }).join('')}
+                        </tbody>
                     </table>
+
+                    <div style="margin-top:20px; padding:15px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px;">
+                        <div style="font-weight:800; color:#003366; margin-bottom:5px; text-transform:uppercase; font-size:9pt;">RAPPEL DES SEUILS</div>
+                        <div style="font-size:8pt; color:#475569;">
+                            Pluie &ge; ${limitRain}mm | Gel &le; ${limitTemp}&deg;C | Vent &ge; ${limitWind}km/h | Chaleur &ge; ${limitTempMax}&deg;C
+                        </div>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }).join('');
     };
 
     const getDailySummaryHtml = () => {
         if (!globalData) return '';
         const sortedDaysK = Object.keys(globalData).sort();
 
-        return `
-            <div class="cert-page">
-                <div class="cert-main-title-box" style="margin-bottom: 20px; border: 2px solid #000; padding: 10px; background: #fff;">
-                    <h2 style="font-size: 13pt; margin:0; color:#003366; text-transform:uppercase; font-weight: 800;">ANNEXE 2 : RELEVÉS JOURNALIERS</h2>
-                    <div style="font-size: 9.5pt; margin-top:5px; color:#64748b;">Détail journalier des paramètres météorologiques observés à la station de ${stationMeteo}.</div>
-                </div>
+        // Group by month
+        const groups = {};
+        sortedDaysK.forEach(k => {
+            const m = k.substring(0, 7);
+            if (!groups[m]) groups[m] = [];
+            groups[m].push(k);
+        });
 
-                <table class="cert-table" style="border: 2px solid #000;">
-                    <thead>
-                        <tr style="background:#003366; color:white;">
-                            <th style="border:1px solid #000;">DATE</th>
-                            <th style="border:1px solid #000;">T. MIN (&deg;C)</th>
-                            <th style="border:1px solid #000;">T. MAX (&deg;C)</th>
-                            <th style="border:1px solid #000;">PLUIE (MM)</th>
-                            <th style="border:1px solid #000;">VENT MAX (KM/H)</th>
-                            <th style="border:1px solid #000;">STATUT</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${sortedDaysK.map(dayK => {
-            const day = globalData[dayK];
-            const s = day.stats;
-            const d = new Date(dayK);
-
-            const isKo = s.rainTotal >= limitRain || s.tmin <= limitTemp || s.gustMax >= limitWind || s.tmax >= limitTempMax;
-            const isStandardKo = s.rainTotal >= 10 || s.tmin <= 0 || s.gustMax >= 60;
-            const dayIsKo = showPersonalization ? (isStandardKo || isKo) : isStandardKo;
+        return Object.keys(groups).sort().map((monthK, index) => {
+            const [year, month] = monthK.split('-');
+            const monthName = new Date(year, month - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
             return `
-                                <tr style="${dayIsKo ? 'background:#fff1f2;' : ''}">
-                                    <td style="border:1px solid #000; font-weight:bold;">${d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'numeric' })}</td>
-                                    <td style="border:1px solid #000; ${s.tmin <= 0 ? 'color:red; font-weight:bold;' : ''}">${s.tmin.toFixed(1).replace('.', ',')}</td>
-                                    <td style="border:1px solid #000;">${s.tmax.toFixed(1).replace('.', ',')}</td>
-                                    <td style="border:1px solid #000; ${s.rainTotal >= 10 ? 'color:blue; font-weight:bold;' : ''}">${s.rainTotal.toFixed(1).replace('.', ',')}</td>
-                                    <td style="border:1px solid #000; ${s.gustMax >= 60 ? 'color:#ea580c; font-weight:bold;' : ''}">${Math.round(s.gustMax)}</td>
-                                    <td style="border:1px solid #000;">
-                                        ${dayIsKo ? '<strong>INTEMPÉRIE</strong>' : '<span style="color:#64748b;">RAS</span>'}
-                                    </td>
-                                </tr>
-                            `;
-        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
+                <div class="cert-page">
+                    <div class="cert-main-title-box" style="margin-bottom: 20px; border: 2px solid #000; padding: 10px; background: #fff;">
+                        <h2 style="font-size: 13pt; margin:0; color:#003366; text-transform:uppercase; font-weight: 800;">ANNEXE 2 : RELEVÉS JOURNALIERS</h2>
+                        <div style="font-size: 9.5pt; margin-top:5px; color:#64748b; font-weight:bold; text-transform: uppercase;">Mois de ${monthName}</div>
+                    </div>
+
+                    <table class="cert-table" style="border: 2px solid #000;">
+                        <thead>
+                            <tr style="background:#003366; color:white;">
+                                <th style="border:1px solid #000;">DATE</th>
+                                <th style="border:1px solid #000;">T. MIN (&deg;C)</th>
+                                <th style="border:1px solid #000;">T. MAX (&deg;C)</th>
+                                <th style="border:1px solid #000;">PLUIE (MM)</th>
+                                <th style="border:1px solid #000;">VENT MAX (KM/H)</th>
+                                <th style="border:1px solid #000;">STATUT</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${groups[monthK].map(dayK => {
+                const day = globalData[dayK];
+                const s = day.stats;
+                const d = new Date(dayK);
+
+                const isKo = s.rainTotal >= limitRain || s.tmin <= limitTemp || s.gustMax >= limitWind || s.tmax >= limitTempMax;
+                const isStandardKo = s.rainTotal >= 10 || s.tmin <= 0 || s.gustMax >= 60 || (s.tmin <= 0 && s.rainTotal >= 1);
+                const dayIsKo = showPersonalization ? (isStandardKo || isKo) : isStandardKo;
+
+                return `
+                                    <tr style="${dayIsKo ? 'background:#fff1f2;' : ''}">
+                                        <td style="border:1px solid #000; font-weight:bold;">${d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: '2-digit', year: 'numeric' })}</td>
+                                        <td style="border:1px solid #000; ${s.tmin <= 0 ? 'color:red; font-weight:bold;' : ''}">${s.tmin.toFixed(1).replace('.', ',')}</td>
+                                        <td style="border:1px solid #000;">${s.tmax.toFixed(1).replace('.', ',')}</td>
+                                        <td style="border:1px solid #000; ${s.rainTotal >= 10 ? 'color:blue; font-weight:bold;' : ''}">${s.rainTotal.toFixed(1).replace('.', ',')}</td>
+                                        <td style="border:1px solid #000; ${s.gustMax >= 60 ? 'color:#ea580c; font-weight:bold;' : ''}">${Math.round(s.gustMax)}</td>
+                                        <td style="border:1px solid #000;">
+                                            ${dayIsKo ? '<strong>INTEMPÉRIE</strong>' : '<span style="color:#64748b;">RAS</span>'}
+                                        </td>
+                                    </tr>
+                                `;
+            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }).join('');
     };
 
     const getChartsHtml = () => {
@@ -765,6 +871,11 @@ const AttestationIntemperieManager = () => {
                 <td style="padding:6px; border:1px solid #e2e8f0;">&ge; 60 km/h</td>
                 <td style="padding:6px; border:1px solid #e2e8f0;">${Object.values(globalData).filter(d => d.stats.gustMax >= 60).length} jours</td>
             </tr>
+            <tr>
+                <td style="padding:6px; border:1px solid #e2e8f0; text-align:left;">Neige (T &le; 0&deg;C + Précip. &ge; 1mm)<br/><small style="color:#64748b;">(Règle: 1 mm précip. = 1 cm neige)</small></td>
+                <td style="padding:6px; border:1px solid #e2e8f0;">T &le; 0&deg;C + R &ge; 1</td>
+                <td style="padding:6px; border:1px solid #e2e8f0;">${Object.values(globalData).filter(d => d.stats.tmin <= 0 && d.stats.rainTotal >= 1).length} jours</td>
+            </tr>
         `;
 
         if (showPersonalization) {
@@ -802,7 +913,7 @@ const AttestationIntemperieManager = () => {
                     <td style="padding:6px; border:1px solid #e2e8f0;">${nbGelLimit} jours</td>
                 </tr>
                 <tr>
-                    <td style="padding:6px; border:1px solid #e2e8f0; text-align:left;">Temperature Maxi Option</td>
+                    <td style="padding:6px; border:1px solid #e2e8f0; text-align:left;">Canicule</td>
                     <td style="padding:6px; border:1px solid #e2e8f0;">&ge; ${limitTempMax} °C</td>
                     <td style="padding:6px; border:1px solid #e2e8f0;">${nbHotLimit} ${nbHotLimit > 1 ? 'jours' : 'jour'}</td>
                 </tr>
@@ -819,7 +930,7 @@ const AttestationIntemperieManager = () => {
             if (excludeWeekends && (d.getDay() === 0 || d.getDay() === 6)) return false;
 
             const s = day.stats;
-            const standard = s.rainTotal >= 10 || s.tmin <= 0 || s.gustMax >= 60;
+            const standard = s.rainTotal >= 10 || s.tmin <= 0 || s.gustMax >= 60 || (s.tmin <= 0 && s.rainTotal >= 1);
             if (!showPersonalization) return standard;
             return standard || s.rainTotal >= limitRain || s.tmin <= limitTemp || s.gustMax >= limitWind || s.tmax >= limitTempMax;
         }).length;
@@ -828,7 +939,7 @@ const AttestationIntemperieManager = () => {
     const generateAutoConclusion = () => {
         if (!globalData) return "";
 
-        const stats = { all: 0, rain: 0, freeze: 0, wind: 0, heat: 0, saturday: 0, sunday: 0 };
+        const stats = { all: 0, rain: 0, freeze: 0, wind: 0, heat: 0, snow: 0, saturday: 0, sunday: 0 };
 
         Object.keys(globalData).sort().forEach(dayK => {
             const day = globalData[dayK];
@@ -841,22 +952,25 @@ const AttestationIntemperieManager = () => {
             const isRain = s.rainTotal >= (showPersonalization ? limitRain : 10);
             const isFreeze = s.tmin <= (showPersonalization ? limitTemp : 0);
             const isWind = s.gustMax >= (showPersonalization ? limitWind : 60);
-            const isHeat = s.tmax >= (showPersonalization ? limitTempMax : 99);
+            const isHeat = s.tmax >= limitTempMax;
+            const isSnow = s.tmin <= 0 && s.rainTotal >= 1;
 
-            const isIntemp = isRain || isFreeze || isWind || isHeat;
+            const isIntemp = isRain || isFreeze || isWind || isHeat || isSnow;
 
             if (isIntemp) {
                 stats.all++;
                 if (isWind) stats.wind++;
                 if (isRain) stats.rain++;
                 if (isFreeze) stats.freeze++;
-                if (isHeat) stats.heat++;
+                if (showPersonalization && isHeat) stats.heat++;
+                if (isSnow) stats.snow++;
                 if (dow === 6) stats.saturday++;
                 if (dow === 0) stats.sunday++;
             }
         });
 
-        let txt = `On retiendra ${stats.all} jour(s) avec des intempéries météo cumulées, dont ${stats.wind} jour(s) avec rafales, ${stats.rain} jour(s) avec de fortes pluies, ${stats.freeze} jour(s) avec de fortes gelées, ${stats.heat} jour(s) avec de fortes chaleurs`;
+        let heatTxt = showPersonalization ? `, ${stats.heat} jour(s) de canicule` : '';
+        let txt = `On retiendra ${stats.all} jour(s) avec des intempéries météo cumulées, dont ${stats.wind} jour(s) avec rafales, ${stats.rain} jour(s) avec de fortes pluies, ${stats.freeze} jour(s) avec de fortes gelées${heatTxt}, ${stats.snow} jour(s) de neige (calculés sur la base de 1 mm de précipitations pour 1 cm de neige)`;
 
         if (!excludeWeekends) {
             txt += `, dont ${stats.saturday} Samedi et ${stats.sunday} Dimanche`;
@@ -1088,15 +1202,46 @@ const AttestationIntemperieManager = () => {
                         </div>
                         <div className="btp-form-group">
                             <label>Station Météo de référence</label>
-                            <select value={selectedStationId} onChange={(e) => setSelectedStationId(e.target.value)} disabled={loadingStations}>
+                            <select value={selectedStationId} onChange={(e) => {
+                                setSelectedStationId(e.target.value);
+                                const name = stationNames[e.target.value] || e.target.value;
+                                setStationMeteo(`${name} (${e.target.value})`);
+                            }} disabled={loadingStations}>
                                 <option value="">{loadingStations ? 'Chargement...' : '-- Sélectionner une station --'}</option>
                                 {stations.map(s => <option key={s.station_id} value={s.station_id}>{stationNames[s.station_id] || s.station_id} ({s.station_id})</option>)}
                             </select>
                         </div>
+                        <div className="btp-form-group">
+                            <label>Désignation station (Éditable)</label>
+                            <input
+                                type="text"
+                                value={stationMeteo}
+                                onChange={e => setStationMeteo(e.target.value)}
+                                placeholder="Nom de la station tel qu'il apparaîtra"
+                            />
+                        </div>
 
                         <button className="btp-btn btp-btn-primary mt-10" onClick={handleFetchData}>
-                            <Download size={18} /> Charger les Données
+                            <Download size={18} /> Charger (Météo-France)
                         </button>
+
+                        <div className="mt-10">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
+                                accept=".csv"
+                                onChange={handleFileUpload}
+                            />
+                            <button
+                                className="btp-btn btp-btn-secondary w-full"
+                                style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #10b981' }}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <FileText size={18} /> Importer un fichier CSV (Données BTP)
+                            </button>
+                        </div>
+
                         <div className="mt-10 p-10 border rounded text-sm bg-slate-50" dangerouslySetInnerHTML={{ __html: status || '<span style="color:#94a3b8">Aucune donnée chargée</span>' }} />
                     </div>
 
@@ -1117,7 +1262,7 @@ const AttestationIntemperieManager = () => {
                                 <input type="number" value={limitTemp} onChange={e => setLimitTemp(parseFloat(e.target.value))} />
                             </div>
                             <div className="btp-form-group">
-                                <label><Thermometer size={12} /> Chaud (max)</label>
+                                <label><Thermometer size={12} /> Canicule (max)</label>
                                 <input type="number" value={limitTempMax} onChange={e => setLimitTempMax(parseFloat(e.target.value))} />
                             </div>
                         </div>

@@ -795,16 +795,15 @@ Voici les données brutes :`;
             let syncHtml = `<div class="btp-doc-section">`;
 
             syncHtml += `<div class="btp-doc-head">
-                <div style="width:230px;">${imgL}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
-                <div style="flex-grow:1;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;">
-                    <div style="border: 3px solid #2563eb; padding: 10px 20px; border-radius: 8px; background: #f0f9ff;">
-                        <h1 style="color:#2563eb;font-size:1.8rem;margin:0;font-weight:900;text-transform:uppercase;letter-spacing:1px;">RELEVÉ D'INTEMPÉRIES</h1>
+                <div style="min-width:160px; max-width:200px;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex-grow:1; text-align:center; padding: 0 15px;">
+                    <div class="btp-main-title-box">
+                        <h1>RELEVÉ D'INTEMPÉRIES</h1>
+                        <div class="btp-subtitle">BILAN PÉRIODIQUE</div>
                     </div>
-                    <div style="border: 2px solid #2563eb; padding: 5px 15px; border-radius: 6px; background: #f0f9ff; margin-top:10px;">
-                        <span style="color:#2563eb; font-weight:900; font-size:1rem; text-transform:uppercase;">${totalDays} JOUR(S) ANALYSÉ(S)</span>
-                    </div>
+                    <div style="font-weight:bold; font-size:9pt; color:#1e293b; margin-top:4px;">${totalDays} JOUR(S) ANALYSÉ(S)</div>
                 </div>
-                <div style="width:230px;text-align:right;">${imgR}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${cli}</div></div>
+                <div style="min-width:160px; max-width:200px; text-align:right;">${imgR}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${cli}</div></div>
             </div>`;
 
             // NEW: PROJECT INFO & RULES SUMMARY
@@ -830,9 +829,9 @@ Voici les données brutes :`;
                 <table class="btp-table-decision" style="margin-top:5px; width:100%; font-size:0.75rem;">
                     <thead>
                         <tr>
-                            <th style="width:140px; text-align:left; padding:4px;">Paramètre</th>
-                            <th style="width:100px; padding:4px;">Seuil</th>
-                            <th style="padding:4px;">Description</th>
+                            <th style="width:140px; text-align:left; padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Paramètre</th>
+                            <th style="width:100px; padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Seuil</th>
+                            <th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Description</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -844,15 +843,15 @@ Voici les données brutes :`;
                 if (r.var === 'vis') k = 'Visibilité (brouillard)';
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
                 let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
-                return `<tr><td style="text-align:left; font-weight:700; background:#f8fafc; padding-left:10px; padding:4px;">${k}</td><td style="font-weight:600; color:#2563eb; padding:4px;">${r.op} ${r.val}${unit}</td><td style="text-align:left; padding-left:10px; padding:4px;">${desc}</td></tr>`;
+                return `<tr><td style="text-align:left; font-weight:700; background:#f8fafc; padding-left:10px; padding:4px;">${k}</td><td style="font-weight:600; color:#1e293b; padding:4px;">${r.op} ${r.val}${unit}</td><td style="text-align:left; padding-left:10px; padding:4px;">${desc}</td></tr>`;
             }).join('')}
                     </tbody>
                 </table>
             </div>`;
 
             syncHtml += `<h3 class="btp-section-title" style="margin-top:10px; text-transform:uppercase; font-size:0.9rem; margin-bottom:5px;">3. BILAN EXPLOITATION / INTEMPÉRIES</h3>
-            <table class="btp-table-period" style="font-size: ${totalDays > 15 ? 'page-break-inside:auto; 0.7rem' : '0.8rem'}; border-collapse: collapse;">
-                <thead><tr><th style="padding:4px;">Date</th><th style="padding:4px;">T. Min/Max</th><th style="padding:4px;">Pluie</th><th style="padding:4px;">Vent Max</th><th style="padding:4px;">Statut</th></tr></thead><tbody>`;
+            <table class="btp-table-period" style="font-size: ${totalDays > 15 ? '0.7rem' : '0.8rem'}; page-break-inside: auto; border-collapse: collapse;">
+                <thead><tr><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Date</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">T. Min/Max</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Pluie</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Vent Max</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Statut</th></tr></thead><tbody>`;
 
             Object.entries(globalData).sort((a, b) => {
                 const [d1, m1, y1] = a[0].split('/').map(Number);
@@ -871,13 +870,12 @@ Voici les données brutes :`;
                 syncHtml += `<tr><td style="font-weight:700; padding:4px;">${date}</td><td style="padding:4px;">${ts.length ? Math.min(...ts).toFixed(1) + '°' : '--'} / ${ts.length ? Math.max(...ts).toFixed(1) + '°' : '--'}</td><td style="padding:4px;">${rs.toFixed(1)} mm</td><td style="padding:4px;">${maxG.toFixed(1)} km/h</td><td style="padding:4px;">${dayIsKo ? '<span class="btp-tag btp-tag-ko" style="padding:2px 6px; font-size:0.65rem;">INTEMPÉRIE</span>' : '<span class="btp-tag btp-tag-ok" style="padding:2px 6px; font-size:0.65rem;">RAS</span>'}</td></tr>`;
             });
             syncHtml += `</tbody></table>
-            <div style="margin-top:20px; display:flex; flex-direction:column; align-items:center;">
-                <div style="border: 2px solid #2563eb; padding: 12px 30px; border-radius: 8px; background: #f0f9ff; text-align:center;">
-                    <h2 style="color:#2563eb; font-size:1.2rem; margin:0; font-weight:900; text-transform:uppercase; letter-spacing:1px;">RÉSULTAT FINAL</h2>
-                    <div style="font-size:1.1rem; margin-top:8px; color:#1e293b; font-weight:800;">
-                        ${daysKO.size} jour(s) d'intempérie(s) identifié(s) sur ${totalDays} jour(s) analysé(s).
-                    </div>
+            <div class="btp-result-box">
+                <h2>RÉSULTAT FINAL</h2>
+                <div style="font-size:11pt; color:#1e293b; font-weight:700; margin-top:5px;">
+                    ${daysKO.size} jour(s) d'intempérie(s) identifié(s) sur ${totalDays} jour(s) analysé(s).
                 </div>
+                <div style="font-size:8pt; color:#64748b; margin-top:4px;">Station : ${stationMeteo}</div>
             </div>
             </div>`;
             html += syncHtml;
@@ -894,23 +892,24 @@ Voici les données brutes :`;
             const forceHeat = dataObj.forceHeat;
             const forceFroze = dataObj.forceFroze;
 
-            const commonHead = (title) => `<div class="btp-doc-head">
-                <div style="width:230px;">${imgL}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
-                <div style="flex-grow:1;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;">
-                    <div style="border: 2px solid #2563eb; padding: 5px 15px; border-radius: 6px; background: #f0f9ff; margin-bottom:5px;">
-                        <h1 style="color:#2563eb;font-size:1.4rem;margin:0;font-weight:900;text-transform:uppercase;">${title}</h1>
+            const commonHead = (title, subtitle = '') => `<div class="btp-doc-head">
+                <div style="min-width:160px; max-width:200px;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex-grow:1; text-align:center; padding: 0 15px;">
+                    <div class="btp-main-title-box">
+                        <h1>${title}</h1>
+                        ${subtitle ? `<div class="btp-subtitle">${subtitle}</div>` : ''}
                     </div>
-                    <div style="font-weight:bold;font-size:1.2rem;color:#1e293b;">${date}</div>
-                    ${stationMeteo ? `<div style="font-size:0.8rem;color:#64748b;margin-top:4px;">Poste : <strong>${stationMeteo}</strong></div>` : ''}
+                    <div style="font-weight:bold; font-size:10pt; color:#1e293b; margin-top:4px;">${date}</div>
+                    ${stationMeteo ? `<div style="font-size:8pt; color:#64748b; margin-top:2px;">Poste : <strong>${stationMeteo}</strong></div>` : ''}
                 </div>
-                <div style="width:230px;text-align:right;">${imgR}<div style="font-size:0.75rem;line-height:1.2;margin-top:5px;color:#1e293b;">${cli}</div></div>
+                <div style="min-width:160px; max-width:200px; text-align:right;">${imgR}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${cli}</div></div>
             </div>`;
 
             // PARTIE 1 : SYNTHÈSE & RÉSUMÉ
-            let part1 = `<div class="btp-doc-section">` + commonHead("RELEVÉ D'INTEMPÉRIES");
+            let part1 = `<div class="btp-doc-section">` + commonHead("RELEVÉ D'INTEMPÉRIES", `${projectName}`);
 
             // 1. Synthèse Décisionnelle
-            part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">1. SYNTHÈSE DÉCISIONNELLE</h3><table class="btp-table-decision"><thead><tr><th style="width:200px;">Métiers / Corps d'état</th>`;
+            part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">1. SYNTHÈSE DÉCISIONNELLE</h3><table class="btp-table-decision"><thead><tr><th style="width:200px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Métiers / Corps d'état</th>`;
             const ruleCols = [];
             rules.forEach(r => {
                 let k = r.var;
@@ -921,7 +920,7 @@ Voici les données brutes :`;
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
                 const res = calculateKoV96(r, dData, soilVal, forceHeat, forceFroze);
                 ruleCols.push({ desc, res, lots: r.lots || [] });
-                part1 += `<th>${desc}</th>`;
+                part1 += `<th style="background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${desc}</th>`;
             });
             part1 += `</tr></thead><tbody>`;
             if (sortedActiveTrades.length === 0) {
@@ -952,32 +951,33 @@ Voici les données brutes :`;
             const vsAll = dData.map(d => d.vv).filter(v => v !== null);
 
             let sumH = ""; let sumR = "";
-            if (annexCols.temp) { sumH += "<th>T. Min</th><th>T. Max</th>"; sumR += `<td>${tsAll.length ? Math.min(...tsAll).toFixed(1) : '--'}°</td><td>${tsAll.length ? Math.max(...tsAll).toFixed(1) : '--'}°</td>`; }
-            if (annexCols.rain) { sumH += "<th>Pluie Tot.</th>"; sumR += `<td>${rsAll.reduce((a, b) => a + b, 0).toFixed(1)} mm</td>`; }
-            if (annexCols.snow) { sumH += "<th>Neige Tot.</th>"; sumR += `<td>${ssAll.reduce((a, b) => a + b, 0).toFixed(1)} cm</td>`; }
-            if (annexCols.windAvgPdf) { sumH += "<th>Vent Moy. Max</th>"; sumR += `<td>${asAll.length ? Math.max(...asAll).toFixed(1) : 0} km/h</td>`; }
-            if (annexCols.windG) { sumH += "<th>Rafale Max</th>"; sumR += `<td>${gsAll.length ? Math.max(...gsAll).toFixed(1) : 0} km/h</td>`; }
-            if (annexCols.humi) { sumH += "<th>Hum. Max</th>"; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
-            if (annexCols.vis) { sumH += "<th>Vis. Min</th>"; sumR += `<td>${vsAll.length ? (Math.min(...vsAll) / 1000).toFixed(1) : '--'} km</td>`; }
-            if (annexCols.soil) { sumH += "<th>Hum. Sol</th>"; sumR += `<td>${soilVal || '--'}%</td>`; }
+            const thStyle = 'background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;';
+            if (annexCols.temp) { sumH += `<th style="${thStyle}">T. Min</th><th style="${thStyle}">T. Max</th>`; sumR += `<td>${tsAll.length ? Math.min(...tsAll).toFixed(1) : '--'}°</td><td>${tsAll.length ? Math.max(...tsAll).toFixed(1) : '--'}°</td>`; }
+            if (annexCols.rain) { sumH += `<th style="${thStyle}">Pluie Tot.</th>`; sumR += `<td>${rsAll.reduce((a, b) => a + b, 0).toFixed(1)} mm</td>`; }
+            if (annexCols.snow) { sumH += `<th style="${thStyle}">Neige Tot.</th>`; sumR += `<td>${ssAll.reduce((a, b) => a + b, 0).toFixed(1)} cm</td>`; }
+            if (annexCols.windAvgPdf) { sumH += `<th style="${thStyle}">Vent Moy. Max</th>`; sumR += `<td>${asAll.length ? Math.max(...asAll).toFixed(1) : 0} km/h</td>`; }
+            if (annexCols.windG) { sumH += `<th style="${thStyle}">Rafale Max</th>`; sumR += `<td>${gsAll.length ? Math.max(...gsAll).toFixed(1) : 0} km/h</td>`; }
+            if (annexCols.humi) { sumH += `<th style="${thStyle}">Hum. Max</th>`; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
+            if (annexCols.vis) { sumH += `<th style="${thStyle}">Vis. Min</th>`; sumR += `<td>${vsAll.length ? (Math.min(...vsAll) / 1000).toFixed(1) : '--'} km</td>`; }
+            if (annexCols.soil) { sumH += `<th style="${thStyle}">Hum. Sol</th>`; sumR += `<td>${soilVal || '--'}%</td>`; }
 
             part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">2. RÉSUMÉ DU JOUR – ${date}</h3><table class="btp-table-period"><thead><tr>${sumH}</tr></thead><tbody><tr>${sumR}</tr></tbody></table></div>`;
             part1 += `</div>`; // Fin section 1
 
             // PARTIE 2 : ANNEXES & GRAPHES
-            let part2 = `<div class="btp-doc-section">` + commonHead("ANNEXES MÉTEOROLOGIQUES");
+            let part2 = `<div class="btp-doc-section">` + commonHead("ANNEXES MÉTÉOROLOGIQUES", `DONNÉES HORAIRES DÉTAILLÉES`);
 
             // 3. Annexe Horaire + Graphique (dans le même bloc pour rester sur la même page)
             part2 += `<div class="btp-annexe-block">`;
             part2 += `<h3 class="btp-section-title">3. DONNÉES HORAIRES – ${date}</h3>`;
-            part2 += `<table class="btp-table-hourly"><thead><tr><th>Heure</th>`;
-            if (annexCols.temp) part2 += "<th>T°C</th>";
-            if (annexCols.rain) part2 += "<th>Pluie</th>";
-            if (annexCols.snow) part2 += "<th>Neige</th>";
-            if (annexCols.windAvgPdf) part2 += "<th>V.Moy</th>";
-            if (annexCols.windG) part2 += "<th>Raf.</th>";
-            if (annexCols.humi) part2 += "<th>Hum.</th>";
-            if (annexCols.vis) part2 += "<th>Vis.</th>";
+            part2 += `<table class="btp-table-hourly"><thead><tr><th style="background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Heure</th>`;
+            if (annexCols.temp) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">T°C</th>";
+            if (annexCols.rain) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Pluie</th>";
+            if (annexCols.snow) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Neige</th>";
+            if (annexCols.windAvgPdf) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">V.Moy</th>";
+            if (annexCols.windG) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Raf.</th>";
+            if (annexCols.humi) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Hum.</th>";
+            if (annexCols.vis) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Vis.</th>";
             part2 += `</tr></thead><tbody>`;
             dData.forEach(r => {
                 part2 += `<tr class="btp-stripe"><td>${r.h}h</td>`;
@@ -1227,6 +1227,240 @@ Voici les données brutes :`;
     const copyMailBody = () => {
         const body = generateMailBody();
         navigator.clipboard.writeText(body).then(() => alert("Rapport copié ! Vous pouvez le coller dans votre mail (Ctrl+V)."));
+    };
+
+    // CSS autonome pour l'export PDF/impression — harmonisé avec l'Attestation intempéries
+    const getBtpPrintStyles = () => `
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            * { box-sizing: border-box; }
+            body {
+                margin: 0; padding: 0;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 9pt;
+                color: #1e293b;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .btp-doc-section {
+                width: 210mm;
+                min-height: 296mm;
+                padding: 12mm 14mm;
+                box-sizing: border-box;
+                position: relative;
+                page-break-after: always;
+                background: white;
+            }
+            .btp-doc-section:last-child { page-break-after: auto; }
+
+            /* En-tête du document */
+            .btp-doc-head {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 1px solid #e2e8f0;
+                padding-bottom: 10px;
+                margin-bottom: 10px;
+                width: 100%;
+            }
+
+            /* Boîte titre principal */
+            .btp-main-title-box {
+                border: 2px solid #000;
+                padding: 6px 10px;
+                text-align: center;
+                margin-bottom: 8px;
+                width: 100%;
+            }
+            .btp-main-title-box h1 {
+                font-size: 13pt;
+                font-weight: 800;
+                color: #003366;
+                margin: 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .btp-main-title-box .btp-subtitle {
+                font-size: 9pt;
+                color: #003366;
+                font-weight: 800;
+                border-top: 1px solid #000;
+                padding-top: 2px;
+                margin-top: 2px;
+                text-transform: uppercase;
+            }
+
+            /* En-tête de section coloré (harmonisé Attestation) */
+            .btp-section-title {
+                background: #1e293b !important;
+                color: white !important;
+                padding: 5px 10px;
+                font-weight: bold;
+                font-size: 9pt;
+                margin-top: 12px;
+                margin-bottom: 5px;
+                text-transform: uppercase;
+                border-left: 5px solid #003366;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            /* Bande info période/station */
+            .btp-info-band {
+                display: flex;
+                justify-content: space-between;
+                font-size: 8.5pt;
+                margin-bottom: 8px;
+                background: #f8fafc;
+                padding: 5px 10px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            /* Tableaux */
+            table { width: 100%; border-collapse: collapse; }
+
+            .btp-table-decision {
+                font-size: 8pt;
+                line-height: 1.1;
+                border: 1px solid #000;
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .btp-table-decision th {
+                background: #1e293b !important;
+                color: white !important;
+                padding: 3px 4px;
+                border: 1px solid #000;
+                text-align: center;
+                font-size: 7.5pt;
+                text-transform: uppercase;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .btp-table-decision td {
+                padding: 3px 4px;
+                border: 1px solid #ccc;
+                text-align: center;
+            }
+            .btp-table-decision tr:nth-child(even) td { background: #f8fafc !important; }
+
+            .btp-table-period {
+                font-size: 8pt;
+                border: 1px solid #000;
+                border-collapse: collapse;
+            }
+            .btp-table-period th {
+                background: #1e293b !important;
+                color: white !important;
+                padding: 3px 6px;
+                border: 1px solid #000;
+                text-align: center;
+                font-size: 7.5pt;
+                text-transform: uppercase;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .btp-table-period td { padding: 3px 6px; border: 1px solid #ccc; text-align: center; }
+            .btp-table-period tr:nth-child(even) td { background: #f8fafc !important; }
+
+            .btp-table-hourly {
+                font-size: 7.5pt;
+                border: 1px solid #000;
+                border-collapse: collapse;
+            }
+            .btp-table-hourly th {
+                background: #1e293b !important;
+                color: white !important;
+                padding: 2px 4px;
+                border: 1px solid #000;
+                text-align: center;
+                font-size: 7pt;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .btp-table-hourly td { padding: 2px 4px; border: 1px solid #ddd; text-align: center; }
+            .btp-stripe:nth-child(even) td { background: #f8fafc !important; }
+
+            /* Tags statut */
+            .btp-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 7pt; text-transform: uppercase; }
+            .btp-tag-ko { background: #fee2e2 !important; color: #991b1b !important; border: 1px solid #fca5a5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .btp-tag-ok { background: #dcfce7 !important; color: #166534 !important; border: 1px solid #86efac; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+            /* Cellules vides */
+            .btp-cell-empty { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .btp-cell-white { background: white !important; }
+
+            /* Bloc résultat final encadré */
+            .btp-result-box {
+                margin-top: 15px;
+                padding: 12px 20px;
+                border: 2px solid #003366;
+                background: #f0f9ff !important;
+                text-align: center;
+                border-radius: 6px;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .btp-result-box h2 {
+                font-size: 12pt;
+                font-weight: 900;
+                color: #003366;
+                text-transform: uppercase;
+                margin: 0 0 5px 0;
+            }
+
+            /* Graphique */
+            .btp-chart-block-small { height: 130px; width: 100%; }
+            .btp-annexe-block { page-break-inside: avoid; }
+            .btp-keep-together { page-break-inside: avoid; }
+
+            /* Infos chantier */
+            .btp-info-table td { border: none !important; padding: 3px 0; font-size: 8pt; }
+        </style>
+    `;
+
+    const handlePrint = () => {
+        let contentHtml = reportOutput;
+
+        // Convertir tous les graphiques (canvas) en images pour une impression fiable
+        const canvases = document.querySelectorAll('.btp-preview canvas');
+        canvases.forEach(canvas => {
+            try {
+                const imgUrl = canvas.toDataURL('image/png');
+                const canvasId = canvas.id;
+                const placeholder = `<canvas id="${canvasId}"></canvas>`;
+                const imgTag = `<img src="${imgUrl}" style="width:100%; height:auto; display:block; max-height:130px;" />`;
+                contentHtml = contentHtml.replace(placeholder, imgTag);
+            } catch (e) {
+                console.error("[BTP] Erreur conversion canvas pour impression:", e);
+            }
+        });
+
+        const printWindow = window.open('', '_blank', 'width=1100,height=900');
+        if (!printWindow) {
+            alert("Le bloqueur de fenêtres empêche l'ouverture de l'aperçu avant impression.");
+            return;
+        }
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Rapport BTP - ${projectName}</title>
+                    ${getBtpPrintStyles()}
+                </head>
+                <body>
+                    ${contentHtml}
+                </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.scrollTo(0, 0);
+            printWindow.print();
+        }, 800);
     };
 
     const exportWord = () => {
@@ -1666,7 +1900,7 @@ Voici les données brutes :`;
 
                     <label className="btp-print-option"><input type="checkbox" checked={checkPeriod} onChange={(e) => setCheckPeriod(e.target.checked)} /> Ajouter page synthèse globale</label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                        <button className="btp-btn btp-btn-print" onClick={() => window.print()}>🖨️ PDF / IMPRIMER</button>
+                        <button className="btp-btn btp-btn-print" onClick={handlePrint}>🖨️ PDF / IMPRIMER</button>
                         <button className="btp-btn btp-btn-word" onClick={exportWord}>📝 EXPORT WORD</button>
                         <button className="btp-btn btp-btn-mail" onClick={sendMail}>📧 ENVOYER MAIL</button>
                         <button className="btp-btn btp-btn-copy" onClick={copyMailBody}>📋 COPIER TEXTE</button>
@@ -1687,7 +1921,6 @@ Voici les données brutes :`;
                         </div>
                     </div>
                 </div>
-
                 <div className="btp-preview">
                     <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} />
                 </div>
