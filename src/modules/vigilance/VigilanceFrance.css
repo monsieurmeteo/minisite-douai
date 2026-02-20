@@ -619,7 +619,9 @@
     .phenomenon-sidebar {
         width: 100%;
     }
-}/* --- TEXT LIST SECTION --- */
+}
+
+/* --- TEXT LIST SECTION --- */
 .vigilance-text-list-section {
     margin-top: 30px;
     width: 100%;
@@ -690,4 +692,56 @@
     border: 1px solid #bbf7d0;
     border-radius: 10px;
     margin-top: 10px;
+}
+
+/* --- SHARE CARD --- */
+.share-card {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+}
+
+.share-desc {
+    font-size: 0.85rem;
+    color: #475569;
+    margin-bottom: 12px;
+}
+
+.share-link-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.share-input {
+    flex: 1;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+    outline: none;
+}
+
+.copy-btn {
+    background: #3453a2;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.copy-btn:hover {
+    background: #2a4282;
+}
+
+.share-note {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin: 0;
 }

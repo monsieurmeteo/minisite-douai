@@ -1,0 +1,32 @@
+name: Vigilance Map Capture
+
+on:
+  schedule:
+    # Toutes les 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Permet de le lancer manuellement
+
+jobs:
+  capture-vigilance:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Install Puppeteer dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgbm-dev
+        
+      - name: Run Vigilance Capture Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/capture_vigilance.mjs
