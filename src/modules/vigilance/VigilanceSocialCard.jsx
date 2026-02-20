@@ -10,9 +10,13 @@ const OFFICIAL_COLORS = {
 };
 
 const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms }) => {
-    // 1. Calcul du niveau max et phénomènes actifs
-    const activeVigilance = vigilanceData.filter(d => d.period === period);
-    const maxLevel = Math.max(...activeVigilance.map(d => d.level || 1));
+    // 1. Calcul du niveau max et phénomènes actifs (Exclure Andorre et les codes globaux)
+    const activeVigilance = vigilanceData.filter(d =>
+        d.period === period &&
+        d.dep_code &&
+        !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim())
+    );
+    const maxLevel = Math.max(...activeVigilance.map(d => d.level || 1), 1);
 
     // Trouver les phénomènes en vigilance (>= 2) globalement avec décompte
     const activePhenomsList = phenoms.map(p => {

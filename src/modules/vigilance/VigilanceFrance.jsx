@@ -110,7 +110,11 @@ const VigilanceFrance = () => {
         const counts = {};
         PHENOMENONS.forEach(p => {
             counts[p.id] = vigilanceData
-                .filter(d => d.period === period)
+                .filter(d =>
+                    d.period === period &&
+                    d.dep_code &&
+                    !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim())
+                )
                 .map(d => d.risks?.find(r => r.id === p.id)?.level || 1)
                 .filter(lvl => lvl >= 2).length;
         });
@@ -130,7 +134,11 @@ const VigilanceFrance = () => {
     const generatedBulletin = useMemo(() => {
         if (!vigilanceData.length || !geoData) return "";
 
-        const currentVigi = vigilanceData.filter(d => d.period === period && d.dep_code !== "FRA");
+        const currentVigi = vigilanceData.filter(d =>
+            d.period === period &&
+            d.dep_code &&
+            !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim())
+        );
         const depNames = {};
         geoData.features.forEach(f => {
             depNames[f.properties.code] = f.properties.nom;
@@ -608,7 +616,7 @@ const VigilanceFrance = () => {
                 <VigilanceSocialCard
                     geoData={geoData}
                     vigilanceData={vigilanceData}
-                    period={1}
+                    period={period}
                     lastUpdate={globalLastUpdate}
                     phenoms={PHENOMENONS}
                 />
