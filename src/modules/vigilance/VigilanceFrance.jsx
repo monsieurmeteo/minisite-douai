@@ -50,6 +50,11 @@ const VigilanceFrance = () => {
     }, []);
 
     useEffect(() => {
+        const dateLabel = new Date(new Date().getTime() + (period * 86400000)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        document.title = `Vigilance ${period === 0 ? 'Aujourd\'hui' : 'Demain'} (${dateLabel}) - Monsieur Météo`;
+    }, [period]);
+
+    useEffect(() => {
         if (selectedDep) fetchLocalDeptData(selectedDep);
     }, [selectedDep]);
 
@@ -228,7 +233,7 @@ const VigilanceFrance = () => {
                             <img src="https://upload.wikimedia.org/wikipedia/fr/c/c3/Logo_R%C3%A9publique_Fran%C3%A7aise.svg" alt="RF" className="rf-logo" />
                             <div className="mf-logo-square">METEO<br />FRANCE</div>
                             <div className="title-section">
-                                <h1>Vigilance météorologique et crues {period === 0 ? 'Aujourd\'hui' : 'Demain'}</h1>
+                                <h1>Vigilance météorologique et crues - {period === 0 ? 'Aujourd\'hui' : 'Demain'} {new Date(new Date().getTime() + (period * 86400000)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h1>
                                 <p>
                                     {globalLastUpdate ?
                                         `Données actualisées le ${globalLastUpdate.toLocaleDateString('fr-FR')} à ${globalLastUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`

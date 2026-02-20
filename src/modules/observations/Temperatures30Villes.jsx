@@ -172,6 +172,9 @@ export default function Temperatures30Villes() {
     };
 
     useEffect(() => {
+        const modeLabels = { temp_min: 'Températures Min', rain: 'Précipitations', wind: 'Rafales Max' };
+        const dayLabel = useYesterday ? 'Hier' : 'Aujourd\'hui';
+        document.title = `${modeLabels[viewMode]} ${dayLabel} - Monsieur Météo`;
         fetchData(viewMode, useYesterday);
     }, [viewMode, useYesterday]);
 
@@ -233,9 +236,9 @@ export default function Temperatures30Villes() {
                         {viewMode === 'wind' && <Wind size={24} className="icon-pulse text-gray-500" style={{ color: '#64748b', marginRight: '8px' }} />}
 
                         <span>
-                            {viewMode === 'temp_min' && 'Températures Minimales (30 Villes)'}
-                            {viewMode === 'rain' && 'Précipitations 24h (30 Villes)'}
-                            {viewMode === 'wind' && 'Rafales Max 24h (30 Villes)'}
+                            {viewMode === 'temp_min' && `Températures Minimales - ${useYesterday ? 'Hier' : 'Aujourd\'hui'} ${new Date(new Date().getTime() - (useYesterday ? 86400000 : 0)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`}
+                            {viewMode === 'rain' && `Précipitations 24h - ${useYesterday ? 'Hier' : 'Aujourd\'hui'} ${new Date(new Date().getTime() - (useYesterday ? 86400000 : 0)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`}
+                            {viewMode === 'wind' && `Rafales Max 24h - ${useYesterday ? 'Hier' : 'Aujourd\'hui'} ${new Date(new Date().getTime() - (useYesterday ? 86400000 : 0)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`}
                         </span>
                     </h1>
                     <p className="subtitle">
@@ -309,7 +312,7 @@ export default function Temperatures30Villes() {
                                         ({city.dept})
                                     </td>
                                     <td className={`value-cell-simple ${getValueClass(city.value)}`}>
-                                        {city.value !== null ? (viewMode === 'wind' ? Math.round(city.value) : city.value.toFixed(1)) : '-'}
+                                        {city.value !== null ? (viewMode === 'wind' ? Math.round(city.value) : city.value.toFixed(1)) : (viewMode === 'rain' ? '0.0' : '-')}
                                     </td>
                                 </tr>
                             ))
