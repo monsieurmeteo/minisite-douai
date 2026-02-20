@@ -1,130 +1,126 @@
-/**
- * 📸 CAPTURE + UPLOAD AUTOMATIQUE VIGILANCE FRANCE
- * 
- * Ce script:
- * 1. Capture un screenshot de la carte de vigilance (SVG)
- * 2. L'upload vers Supabase Storage
- * 3. L'image sera accessible via un lien permanent pour partage
- * 
- * Usage: node scripts/capture_vigilance.mjs
- */
-
+import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEMP_DIR = path.join(__dirname, '..', 'temp');
+// Charge les variables d'environnement
+dotenv.config({ path: '.env.local' });
 
-// Supabase config
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ubdevaemtwbzxksjlhjg.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(
+    process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-if (!SUPABASE_KEY) {
-    console.error("❌ SUPABASE_SERVICE_ROLE_KEY est manquant");
-    process.exit(1);
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Configuration
 const CONFIG = {
-    baseUrl: 'http://localhost:5173',
-    prodUrl: 'https://minisite-douai.vercel.app',
-    viewport: { width: 1200, height: 1000 },
+    baseUrl: process.env.VITE_APP_URL || 'https://minisite-douai.vercel.app',
+    viewport: { width: 1200, height: 1500 },
     storageBucket: 'vigilance-captures',
     fileName: 'vigilance_france_latest.png'
 };
 
-async function captureAndUpload() {
-    console.log(`\n📸 CAPTURE VIGILANCE FRANCE\n`);
+const TEMP_DIR = './temp_captures';
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-    if (!fs.existsSync(TEMP_DIR)) {
-        fs.mkdirSync(TEMP_DIR, { recursive: true });
-    }
+async function captureAndUpload() {
+    console.log('\n📸 CAPTURE VIGILANCE FRANCE (TWO VERSIONS)\n');
 
     const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        headless: "new",
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
     });
 
     try {
         const page = await browser.newPage();
         await page.setViewport(CONFIG.viewport);
 
-        // Essayer d'abord localhost, sinon prod
-        let baseUrl = CONFIG.baseUrl;
-        try {
-            await page.goto(baseUrl, { timeout: 3000 });
-        } catch {
-            console.log('⚠️ Localhost non disponible, tentative sur prod...');
-            baseUrl = CONFIG.prodUrl;
-        }
-
-        const targetUrl = `${baseUrl}/vigilance`;
+        const targetUrl = `${CONFIG.baseUrl}/vigilance`;
         console.log(`🌐 Chargement: ${targetUrl}`);
 
         await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        // Attendre que le bloc complet soit présent
-        console.log(`⏳ Attente du rendu complet...`);
-        await page.waitForSelector('#vigilance-capture-full', { timeout: 15000 });
-
-        // Cacher les éléments marqués "no-capture" (boutons, onglets, partage)
-        await page.addStyleTag({ content: '.no-capture { display: none !important; }' });
-
-        // Petit délai supplémentaire pour être sûr que tout est prêt
-        await new Promise(r => setTimeout(r, 4000));
-
-        const filePath = path.join(TEMP_DIR, CONFIG.fileName);
-
-        // Screenshot du conteneur complet (Header + Map + Sidebar)
-        const captureArea = await page.$('#vigilance-capture-full');
-
-        if (captureArea) {
-            await captureArea.screenshot({
-                path: filePath,
-                type: 'png',
-                omitBackground: false
-            });
-            console.log('✅ Capture complète effectuée');
-        } else {
-            throw new Error('Élément #vigilance-capture-full non trouvé');
+        // Attendre que la carte sociale soit prête
+        console.log(`⏳ Attente du conteneur de capture...`);
+        try {
+            await page.waitForSelector('#vigilance-social-card', { timeout: 15000 });
+            console.log(`✅ Conteneur #vigilance-social-card détecté`);
+        } catch (e) {
+            console.log(`❌ Conteneur #vigilance-social-card non trouvé, tentative avec .social-capture-container...`);
+            await page.waitForSelector('.social-capture-container', { timeout: 5000 });
         }
 
-        // Upload vers Supabase Storage
-        console.log(`☁️ Upload vers Supabase Storage (${CONFIG.storageBucket})...`);
-        const fileBuffer = fs.readFileSync(filePath);
+        // Injection CSS de base
+        const baseStyle = `
+            .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside { display: none !important; }
+            .social-capture-container { 
+                display: block !important; 
+                position: fixed !important; 
+                top: 0 !important; 
+                left: 0 !important; 
+                width: 1200px !important; 
+                height: 1500px !important; 
+                z-index: 999999 !important; 
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            body, html { 
+                background: white !important; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                overflow: hidden !important; 
+                width: 1200px !important; 
+                height: 1500px !important;
+            }
+        `;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        await page.addStyleTag({ content: baseStyle });
+
+        // --- VERSION 1: SANS TITRE (Lien existant) ---
+        console.log('🖼️ Capture Version 1: SANS TITRE...');
+        await page.addStyleTag({
+            content: '.social-fb-header { display: none !important; } .social-fb-body { padding-top: 0 !important; } .social-fb-map-area { margin-top: -100px !important; }'
+        });
+
+        // Petit délai pour le rendu
+        await new Promise(r => setTimeout(r, 2000));
+
+        const filePath1 = path.join(TEMP_DIR, CONFIG.fileName);
+        await page.screenshot({ path: filePath1, fullPage: true });
+
+        const fileBuffer1 = fs.readFileSync(filePath1);
+        await supabase.storage
             .from(CONFIG.storageBucket)
-            .upload(CONFIG.fileName, fileBuffer, {
+            .upload(CONFIG.fileName, fileBuffer1, {
                 contentType: 'image/png',
                 upsert: true,
-                cacheControl: '60' // Cache court de 1 minute
+                cacheControl: '60'
             });
+        console.log(`✅ Version 1 uploadée: ${CONFIG.fileName}`);
 
-        if (uploadError) {
-            if (uploadError.message.includes('not found')) {
-                console.log(`📦 Création du bucket "${CONFIG.storageBucket}"...`);
-                await supabase.storage.createBucket(CONFIG.storageBucket, { public: true });
-                const { error: retryError } = await supabase.storage
-                    .from(CONFIG.storageBucket)
-                    .upload(CONFIG.fileName, fileBuffer, { contentType: 'image/png', upsert: true, cacheControl: '60' });
-                if (retryError) throw retryError;
-            } else {
-                throw uploadError;
-            }
-        }
+        // --- VERSION 2: AVEC TITRE (Nouveau lien social) ---
+        console.log('🖼️ Capture Version 2: AVEC TITRE...');
+        const socialFileName = 'vigilance_france_latest_social.png';
 
-        const { data: urlData } = supabase.storage
+        // On ré-affiche le header
+        await page.addStyleTag({ content: '.social-fb-header { display: flex !important; }' });
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const filePath2 = path.join(TEMP_DIR, socialFileName);
+        await page.screenshot({ path: filePath2, fullPage: true });
+
+        const fileBuffer2 = fs.readFileSync(filePath2);
+        await supabase.storage
             .from(CONFIG.storageBucket)
-            .getPublicUrl(CONFIG.fileName);
+            .upload(socialFileName, fileBuffer2, {
+                contentType: 'image/png',
+                upsert: true,
+                cacheControl: '60'
+            });
+        console.log(`✅ Version 2 uploadée: ${socialFileName}`);
 
-        console.log(`\n✅ CAPTURE ET UPLOAD RÉUSSIS!`);
-        console.log(`   🔗 URL permanente: ${urlData.publicUrl}\n`);
+        console.log(`\n✅ TOUTES LES CAPTURES RÉUSSIES!\n`);
 
     } catch (error) {
         console.error(`❌ Erreur:`, error.message);
