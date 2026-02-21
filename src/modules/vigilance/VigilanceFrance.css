@@ -1062,12 +1062,10 @@
 
 /* 🏷️ NOUVEAU PIED DE PAGE PHÉNOMÈNES */
 .social-phenoms-footer-alt {
-    padding: 0px 30px 15px 30px;
-    background: transparent;
-    /* Fond transparent pour voir la carte derrière si besoin */
-    border: none;
-    margin-top: -100px;
-    /* Remontée de 60px à 100px pour un effet plus marqué */
+    padding: 30px;
+    background: #ffffff;
+    border-top: 2px solid #f1f5f9;
+    margin-top: 0;
     position: relative;
     z-index: 100;
 }
@@ -1091,13 +1089,13 @@
 
 .status-pill-new {
     background: #ffffff;
-    border: 3px solid #e2e8f0;
-    padding: 12px 25px;
+    border: 2px solid #e2e8f0;
+    padding: 10px 20px;
     border-radius: 50px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    gap: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .status-pill-new.lvl-4 {
@@ -1116,9 +1114,14 @@
 }
 
 .status-pill-new .pill-text {
-    font-size: 1.4rem;
-    font-weight: 900;
+    font-size: 1.2rem;
+    font-weight: 800;
     color: #1e293b;
+}
+
+.status-pill-new .pill-count {
+    color: #64748b;
+    font-weight: 700;
 }
 
 /* 📅 DATE MAJ BAS GAUCHE */

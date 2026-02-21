@@ -11,21 +11,43 @@ const OFFICIAL_COLORS = {
 
 const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms }) => {
     // 1. Calcul du niveau max et phénomènes actifs (Exclure Andorre et les codes globaux)
-    const activeVigilance = vigilanceData.filter(d =>
-        d.period === period &&
-        d.dep_code &&
-        !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim())
-    );
+    // On s'assure de n'avoir qu'un seul enregistrement par département (le plus récent) pour éviter les doublons dans les comptes
+    const activeVigilanceMap = new Map();
+    vigilanceData.forEach(d => {
+        const depCode = d.dep_code?.toString().trim();
+        if (d.period === period && depCode && !['FRA', '99', 'METRO', '00'].includes(depCode)) {
+            const existing = activeVigilanceMap.get(depCode);
+            // On garde l'entrée la plus récente si doublons en base
+            if (!existing || new Date(d.last_update) > new Date(existing.last_update)) {
+                activeVigilanceMap.set(depCode, d);
+            }
+        }
+    });
+    const activeVigilance = Array.from(activeVigilanceMap.values());
     const maxLevel = Math.max(...activeVigilance.map(d => d.level || 1), 1);
 
     // Trouver les phénomènes en vigilance (>= 2) globalement avec décompte
-    const activePhenomsList = phenoms.map(p => {
+    // On distingue désormais chaque niveau (Rouge, Orange, Jaune) séparément pour un même phénomène
+    const activePhenomsList = [];
+    phenoms.forEach(p => {
         const levels = activeVigilance.map(d => d.risks?.find(r => r.id === p.id)?.level || 1);
-        const maxLvl = Math.max(...levels);
-        const count = levels.filter(lvl => lvl >= 2).length;
-        return { ...p, maxLvl, count };
-    }).filter(p => p.maxLvl >= 2)
-        .sort((a, b) => b.maxLvl - a.maxLvl); // Priorité aux plus hauts niveaux
+        [4, 3, 2].forEach(lvl => {
+            const count = levels.filter(l => l === lvl).length;
+            if (count > 0) {
+                activePhenomsList.push({
+                    ...p,
+                    maxLvl: lvl,
+                    count: count,
+                    uniqueKey: `${p.id}-${lvl}`
+                });
+            }
+        });
+    });
+    // Tri : d'abord par niveau (Rouge > Orange > Jaune), puis par ID de phénomène
+    activePhenomsList.sort((a, b) => {
+        if (b.maxLvl !== a.maxLvl) return b.maxLvl - a.maxLvl;
+        return parseInt(a.id) - parseInt(b.id);
+    });
 
     // Phénomène principal pour le titre
     const mainPhenomName = activePhenomsList.length > 0 ? activePhenomsList[0].name.toUpperCase() : "MÉTÉOROLOGIQUE";
@@ -113,15 +135,20 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                         </div>
                     </div>
 
-                    {/* 🏷️ PHÉNOMÈNES EN DESSOUS DE LA CARTE */}
+                    {/* 🏷️ PHÉNOMÈNES EN BAS (Footer de la carte) */}
                     <div className="social-phenoms-footer-alt">
                         <div className="phenoms-pills-row">
-                            {activePhenomsList.map(p => (
-                                <div key={p.id} className={`status-pill-new lvl-${p.maxLvl}`}>
-                                    <span className="pill-dot" style={{ backgroundColor: OFFICIAL_COLORS[p.maxLvl] }}></span>
-                                    <span className="pill-text">{p.name.toUpperCase()} ({p.count})</span>
-                                </div>
-                            ))}
+                            {activePhenomsList.map(p => {
+                                const colorName = p.maxLvl === 4 ? "ROUGE" : p.maxLvl === 3 ? "ORANGE" : "JAUNE";
+                                return (
+                                    <div key={p.uniqueKey} className={`status-pill-new lvl-${p.maxLvl}`}>
+                                        <span className="pill-dot" style={{ backgroundColor: OFFICIAL_COLORS[p.maxLvl] }}></span>
+                                        <span className="pill-text">
+                                            {p.name.toUpperCase()} {colorName} <span className="pill-count">({p.count})</span>
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
