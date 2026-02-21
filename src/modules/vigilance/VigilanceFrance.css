@@ -1442,18 +1442,39 @@
     gap: 12px;
 }
 
-.url-preview {
+.share-link-group {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.75rem;
-    color: #334155;
-    background: #ffffff;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #f1f5f9;
-    overflow: hidden;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.share-link-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #64748b;
+    margin: 0;
+    letter-spacing: 0.5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.share-link-title.color-blue {
+    color: #3453a2;
+}
+
+.share-link-box-modern.mini {
+    padding: 10px;
+    gap: 10px;
+}
+
+.share-link-box-modern.mini .url-preview {
+    padding: 6px 10px;
+}
+
+.share-link-box-modern.mini .view-btn,
+.share-link-box-modern.mini .copy-btn-modern {
+    height: 34px;
 }
 
 .url-preview span {

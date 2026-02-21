@@ -558,69 +558,128 @@ const VigilanceFrance = () => {
                         </div>
                         <p className="share-desc">Accédez aux images auto-générées pour vos publications :</p>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {/* VERSION SANS TITRE (Lien historique) */}
-                            <div className="share-link-box-modern">
-                                <div className="url-preview">
-                                    <LinkIcon size={14} />
-                                    <span>vigilance_france_latest.png (Carte Seule)</span>
-                                </div>
-                                <div className="action-buttons">
-                                    <a
-                                        href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_latest.png`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="view-btn"
-                                        title="Voir l'image"
-                                    >
-                                        <Eye size={16} />
-                                    </a>
-                                    <button
-                                        className="copy-btn-modern"
-                                        onClick={() => {
-                                            const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_latest.png`;
-                                            navigator.clipboard.writeText(url);
-                                            alert("Lien (Sans Titre) copié !");
-                                        }}
-                                        title="Copier le lien"
-                                    >
-                                        <FileText size={16} /> Copier
-                                    </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            {/* SECTION AUJOURD'HUI */}
+                            <div className="share-link-group">
+                                <h4 className="share-link-title">Aujourd'hui</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div className="share-link-box-modern mini">
+                                        <div className="url-preview">
+                                            <LinkIcon size={12} />
+                                            <span>vigilance_france_today.png (Carte Seule)</span>
+                                        </div>
+                                        <div className="action-buttons">
+                                            <a
+                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today.png`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="view-btn"
+                                            >
+                                                <Eye size={14} />
+                                            </a>
+                                            <button
+                                                className="copy-btn-modern"
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert("Lien Aujourd'hui copié !");
+                                                }}
+                                            >
+                                                <FileText size={14} /> Copier
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="share-link-box-modern mini">
+                                        <div className="url-preview">
+                                            <LinkIcon size={12} />
+                                            <span>vigilance_france_today_social.png (Social Title)</span>
+                                        </div>
+                                        <div className="action-buttons">
+                                            <a
+                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today_social.png`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="view-btn"
+                                            >
+                                                <Eye size={14} />
+                                            </a>
+                                            <button
+                                                className="copy-btn-modern"
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today_social.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert("Lien Social Aujourd'hui copié !");
+                                                }}
+                                            >
+                                                <FileText size={14} /> Copier
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* VERSION AVEC TITRE (Social Card) */}
-                            <div className="share-link-box-modern">
-                                <div className="url-preview">
-                                    <LinkIcon size={14} />
-                                    <span>vigilance_france_latest_social.png (Avec Titre)</span>
-                                </div>
-                                <div className="action-buttons">
-                                    <a
-                                        href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_latest_social.png`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="view-btn"
-                                        title="Voir l'image"
-                                    >
-                                        <Eye size={16} />
-                                    </a>
-                                    <button
-                                        className="copy-btn-modern"
-                                        style={{ background: '#3453a2' }}
-                                        onClick={() => {
-                                            const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_latest_social.png`;
-                                            navigator.clipboard.writeText(url);
-                                            alert("Lien (Avec Titre) copié !");
-                                        }}
-                                        title="Copier le lien"
-                                    >
-                                        <FileText size={16} /> Copier
-                                    </button>
+                            {/* SECTION DEMAIN */}
+                            <div className="share-link-group">
+                                <h4 className="share-link-title color-blue">Demain</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div className="share-link-box-modern mini">
+                                        <div className="url-preview">
+                                            <LinkIcon size={12} />
+                                            <span>vigilance_france_tomorrow.png (Carte Seule)</span>
+                                        </div>
+                                        <div className="action-buttons">
+                                            <a
+                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow.png`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="view-btn"
+                                            >
+                                                <Eye size={14} />
+                                            </a>
+                                            <button
+                                                className="copy-btn-modern"
+                                                style={{ background: '#3453a2' }}
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert("Lien Demain copié !");
+                                                }}
+                                            >
+                                                <FileText size={14} /> Copier
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="share-link-box-modern mini">
+                                        <div className="url-preview">
+                                            <LinkIcon size={12} />
+                                            <span>vigilance_france_tomorrow_social.png (Social Title)</span>
+                                        </div>
+                                        <div className="action-buttons">
+                                            <a
+                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow_social.png`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="view-btn"
+                                            >
+                                                <Eye size={14} />
+                                            </a>
+                                            <button
+                                                className="copy-btn-modern"
+                                                style={{ background: '#3453a2' }}
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow_social.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert("Lien Social Demain copié !");
+                                                }}
+                                            >
+                                                <FileText size={14} /> Copier
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <p className="share-note">Les images sont actualisées toutes les 30 minutes.</p>
+                        <p className="share-note">Les captures sont générées toutes les 30 minutes.</p>
                     </div>
                 </aside>
             </div>

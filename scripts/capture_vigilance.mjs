@@ -23,7 +23,7 @@ const TEMP_DIR = './temp_captures';
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
 async function captureAndUpload() {
-    console.log('\n📸 CAPTURE VIGILANCE FRANCE (TWO VERSIONS)\n');
+    console.log('\n📸 CAPTURE VIGILANCE FRANCE (TODAY & TOMORROW)\n');
 
     const browser = await puppeteer.launch({
         headless: "new",
@@ -34,91 +34,115 @@ async function captureAndUpload() {
         const page = await browser.newPage();
         await page.setViewport(CONFIG.viewport);
 
-        const targetUrl = `${CONFIG.baseUrl}/vigilance?period=1`;
-        console.log(`🌐 Chargement: ${targetUrl}`);
+        const periods = [
+            { id: 0, suffix: 'today' },
+            { id: 1, suffix: 'tomorrow' }
+        ];
 
-        await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        for (const p of periods) {
+            const targetUrl = `${CONFIG.baseUrl}/vigilance?period=${p.id}`;
+            console.log(`\n🌐 [PERIOD ${p.id}] Chargement: ${targetUrl}`);
 
-        // Attendre que la carte sociale soit prête
-        console.log(`⏳ Attente du conteneur de capture...`);
-        try {
-            await page.waitForSelector('#vigilance-social-card', { timeout: 15000 });
-            console.log(`✅ Conteneur #vigilance-social-card détecté`);
-        } catch (e) {
-            console.log(`❌ Conteneur #vigilance-social-card non trouvé, tentative avec .social-capture-container...`);
-            await page.waitForSelector('.social-capture-container', { timeout: 5000 });
+            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+            // Attendre que la carte sociale soit prête
+            console.log(`⏳ Attente du conteneur de capture...`);
+            try {
+                await page.waitForSelector('#vigilance-social-card', { timeout: 15000 });
+            } catch (e) {
+                await page.waitForSelector('.social-capture-container', { timeout: 5000 });
+            }
+
+            // Injection CSS de base
+            const baseStyle = `
+                .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside, .status-pill, .status-pill-new, .social-badges-overlay-bottom, .social-phenoms-footer-alt { display: none !important; }
+                .social-capture-container { 
+                    display: block !important; 
+                    position: fixed !important; 
+                    top: 0 !important; 
+                    left: 0 !important; 
+                    width: 1200px !important; 
+                    height: 1500px !important; 
+                    z-index: 999999 !important; 
+                    background: white !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                body, html { 
+                    background: white !important; 
+                    margin: 0 !important; 
+                    padding: 0 !important; 
+                    overflow: hidden !important; 
+                    width: 1200px !important; 
+                    height: 1500px !important;
+                }
+            `;
+            await page.addStyleTag({ content: baseStyle });
+
+            // --- VERSION 1: SANS TITRE ---
+            console.log(`🖼️ Capture [${p.suffix}] Version 1: SANS TITRE...`);
+            await page.addStyleTag({
+                content: '.social-fb-header { display: none !important; } .social-fb-body { padding-top: 0 !important; } .social-fb-map-area { margin-top: -100px !important; }'
+            });
+
+            await new Promise(r => setTimeout(r, 2000));
+            const fileName1 = `vigilance_france_${p.suffix}.png`;
+            const filePath1 = path.join(TEMP_DIR, fileName1);
+            await page.screenshot({ path: filePath1, fullPage: true });
+
+            const fileBuffer1 = fs.readFileSync(filePath1);
+            await supabase.storage
+                .from(CONFIG.storageBucket)
+                .upload(fileName1, fileBuffer1, {
+                    contentType: 'image/png',
+                    upsert: true,
+                    cacheControl: '60'
+                });
+
+            // Si c'est Demain, on met aussi à jour le lien "latest" (historique)
+            if (p.id === 1) {
+                await supabase.storage
+                    .from(CONFIG.storageBucket)
+                    .upload('vigilance_france_latest.png', fileBuffer1, {
+                        contentType: 'image/png',
+                        upsert: true,
+                        cacheControl: '60'
+                    });
+            }
+
+            // --- VERSION 2: AVEC TITRE ---
+            console.log(`🖼️ Capture [${p.suffix}] Version 2: AVEC TITRE...`);
+            const socialFileName = `vigilance_france_${p.suffix}_social.png`;
+
+            // On ré-affiche le header
+            await page.addStyleTag({ content: '.social-fb-header { display: flex !important; }' });
+            await new Promise(r => setTimeout(r, 1000));
+
+            const filePath2 = path.join(TEMP_DIR, socialFileName);
+            await page.screenshot({ path: filePath2, fullPage: true });
+
+            const fileBuffer2 = fs.readFileSync(filePath2);
+            await supabase.storage
+                .from(CONFIG.storageBucket)
+                .upload(socialFileName, fileBuffer2, {
+                    contentType: 'image/png',
+                    upsert: true,
+                    cacheControl: '60'
+                });
+
+            // Si c'est Demain, on met aussi à jour le lien "latest_social" (historique)
+            if (p.id === 1) {
+                await supabase.storage
+                    .from(CONFIG.storageBucket)
+                    .upload('vigilance_france_latest_social.png', fileBuffer2, {
+                        contentType: 'image/png',
+                        upsert: true,
+                        cacheControl: '60'
+                    });
+            }
+
+            console.log(`✅ [PERIOD ${p.id}] Uploads réussis`);
         }
-
-        // Injection CSS de base
-        const baseStyle = `
-            .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside, .status-pill, .status-pill-new, .social-badges-overlay-bottom, .social-phenoms-footer-alt { display: none !important; }
-            .social-capture-container { 
-                display: block !important; 
-                position: fixed !important; 
-                top: 0 !important; 
-                left: 0 !important; 
-                width: 1200px !important; 
-                height: 1500px !important; 
-                z-index: 999999 !important; 
-                background: white !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            body, html { 
-                background: white !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                overflow: hidden !important; 
-                width: 1200px !important; 
-                height: 1500px !important;
-            }
-        `;
-
-        await page.addStyleTag({ content: baseStyle });
-
-        // --- VERSION 1: SANS TITRE (Lien existant) ---
-        console.log('🖼️ Capture Version 1: SANS TITRE...');
-        await page.addStyleTag({
-            content: '.social-fb-header { display: none !important; } .social-fb-body { padding-top: 0 !important; } .social-fb-map-area { margin-top: -100px !important; }'
-        });
-
-        // Petit délai pour le rendu
-        await new Promise(r => setTimeout(r, 2000));
-
-        const filePath1 = path.join(TEMP_DIR, CONFIG.fileName);
-        await page.screenshot({ path: filePath1, fullPage: true });
-
-        const fileBuffer1 = fs.readFileSync(filePath1);
-        await supabase.storage
-            .from(CONFIG.storageBucket)
-            .upload(CONFIG.fileName, fileBuffer1, {
-                contentType: 'image/png',
-                upsert: true,
-                cacheControl: '60'
-            });
-        console.log(`✅ Version 1 uploadée: ${CONFIG.fileName}`);
-
-        // --- VERSION 2: AVEC TITRE (Nouveau lien social) ---
-        console.log('🖼️ Capture Version 2: AVEC TITRE...');
-        const socialFileName = 'vigilance_france_latest_social.png';
-
-        // On ré-affiche le header
-        await page.addStyleTag({ content: '.social-fb-header { display: flex !important; }' });
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        const filePath2 = path.join(TEMP_DIR, socialFileName);
-        await page.screenshot({ path: filePath2, fullPage: true });
-
-        const fileBuffer2 = fs.readFileSync(filePath2);
-        await supabase.storage
-            .from(CONFIG.storageBucket)
-            .upload(socialFileName, fileBuffer2, {
-                contentType: 'image/png',
-                upsert: true,
-                cacheControl: '60'
-            });
-        console.log(`✅ Version 2 uploadée: ${socialFileName}`);
 
         console.log(`\n✅ TOUTES LES CAPTURES RÉUSSIES!\n`);
 
