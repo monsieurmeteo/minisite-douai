@@ -10,14 +10,12 @@ const OFFICIAL_COLORS = {
 };
 
 const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms }) => {
-    // 1. Calcul du niveau max et phénomènes actifs (Exclure Andorre et les codes globaux)
-    // On s'assure de n'avoir qu'un seul enregistrement par département (le plus récent) pour éviter les doublons dans les comptes
+    // 1. Dédoublonnage des données (Garder uniquement l'entrée la plus récente par département)
     const activeVigilanceMap = new Map();
     vigilanceData.forEach(d => {
         const depCode = d.dep_code?.toString().trim();
         if (d.period === period && depCode && !['FRA', '99', 'METRO', '00'].includes(depCode)) {
             const existing = activeVigilanceMap.get(depCode);
-            // On garde l'entrée la plus récente si doublons en base
             if (!existing || new Date(d.last_update) > new Date(existing.last_update)) {
                 activeVigilanceMap.set(depCode, d);
             }
@@ -26,13 +24,16 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
     const activeVigilance = Array.from(activeVigilanceMap.values());
     const maxLevel = Math.max(...activeVigilance.map(d => d.level || 1), 1);
 
-    // Trouver les phénomènes en vigilance (>= 2) globalement avec décompte
-    // On distingue désormais chaque niveau (Rouge, Orange, Jaune) séparément pour un même phénomène
+    // 2. Calcul des phénomènes par niveau PRÉCIS
     const activePhenomsList = [];
     phenoms.forEach(p => {
-        const levels = activeVigilance.map(d => d.risks?.find(r => r.id === p.id)?.level || 1);
         [4, 3, 2].forEach(lvl => {
-            const count = levels.filter(l => l === lvl).length;
+            // On compte les départements où CE phénomène précis est à CE niveau précis
+            const count = activeVigilance.filter(d => {
+                const risk = d.risks?.find(r => r.id.toString() === p.id.toString());
+                return risk && parseInt(risk.level) === lvl;
+            }).length;
+
             if (count > 0) {
                 activePhenomsList.push({
                     ...p,
@@ -43,11 +44,9 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
             }
         });
     });
-    // Tri : d'abord par niveau (Rouge > Orange > Jaune), puis par ID de phénomène
-    activePhenomsList.sort((a, b) => {
-        if (b.maxLvl !== a.maxLvl) return b.maxLvl - a.maxLvl;
-        return parseInt(a.id) - parseInt(b.id);
-    });
+
+    // Tri par gravité (Rouge > Orange > Jaune)
+    activePhenomsList.sort((a, b) => b.maxLvl - a.maxLvl);
 
     // Phénomène principal pour le titre
     const mainPhenomName = activePhenomsList.length > 0 ? activePhenomsList[0].name.toUpperCase() : "MÉTÉOROLOGIQUE";
