@@ -134,22 +134,6 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                         </div>
                     </div>
 
-                    {/* 🏷️ PHÉNOMÈNES EN BAS (Footer de la carte) */}
-                    <div className="social-phenoms-footer-alt">
-                        <div className="phenoms-pills-row">
-                            {activePhenomsList.map(p => {
-                                const colorName = p.maxLvl === 4 ? "ROUGE" : p.maxLvl === 3 ? "ORANGE" : "JAUNE";
-                                return (
-                                    <div key={p.uniqueKey} className={`status-pill-new lvl-${p.maxLvl}`}>
-                                        <span className="pill-dot" style={{ backgroundColor: OFFICIAL_COLORS[p.maxLvl] }}></span>
-                                        <span className="pill-text">
-                                            {p.name.toUpperCase()} {colorName} <span className="pill-count">({p.count})</span>
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
