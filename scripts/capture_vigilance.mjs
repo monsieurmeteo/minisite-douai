@@ -51,7 +51,7 @@ async function captureAndUpload() {
 
         // Injection CSS de base
         const baseStyle = `
-            .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside { display: none !important; }
+            .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside, .status-pill, .status-pill-new, .social-badges-overlay-bottom, .social-phenoms-footer-alt { display: none !important; }
             .social-capture-container { 
                 display: block !important; 
                 position: fixed !important; 
