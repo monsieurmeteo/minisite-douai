@@ -40,7 +40,11 @@ const VigilanceFrance = () => {
     const [geoData, setGeoData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedDep, setSelectedDep] = useState(null);
-    const [period, setPeriod] = useState(0);
+    const [period, setPeriod] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const p = params.get('period');
+        return p !== null ? parseInt(p) : 0;
+    });
     const [selectedPhenom, setSelectedPhenom] = useState(null);
     const [localData, setLocalData] = useState({ stations: [], obs: [] });
     const [localLoading, setLocalLoading] = useState(false);
@@ -199,7 +203,16 @@ const VigilanceFrance = () => {
             sections.push(`🟡 Vigilance JAUNE – ${yellowParts.join(", ")}.`);
         }
 
-        return sections.join("\n\n").trim();
+        const now = new Date();
+        const targetDate = new Date(now);
+        if (period === 1) targetDate.setDate(now.getDate() + 1);
+        const dateStr = targetDate.toLocaleDateString('fr-FR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        }).toUpperCase();
+
+        const header = `📋 VIGILANCE MÉTÉOROLOGIQUE DU ${dateStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        return header + (sections.length > 0 ? sections.join("\n\n").trim() : "✅ RAS : Aucune vigilance particulière sur le territoire.");
     }, [vigilanceData, geoData, period]);
 
     const projection = useMemo(() => {
