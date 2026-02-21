@@ -34,7 +34,7 @@ async function captureAndUpload() {
         const page = await browser.newPage();
         await page.setViewport(CONFIG.viewport);
 
-        const targetUrl = `${CONFIG.baseUrl}/vigilance`;
+        const targetUrl = `${CONFIG.baseUrl}/vigilance?period=1`;
         console.log(`🌐 Chargement: ${targetUrl}`);
 
         await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
