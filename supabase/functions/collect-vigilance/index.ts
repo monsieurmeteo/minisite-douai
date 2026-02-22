@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
         });
         if (!mapRes.ok) throw new Error(`MF API Map Error: ${mapRes.status}`);
         const mapData = await mapRes.json();
+        console.log(`📊 Map Data Periods: ${mapData.product.periods.length}`);
 
         // 2. Fetch Bulletins
         const textRes = await fetch("https://public-api.meteofrance.fr/public/DPVigilance/v1/textesvigilance/encours", {
@@ -44,6 +45,7 @@ Deno.serve(async (req) => {
         if (mapData && mapData.product && mapData.product.periods) {
             mapData.product.periods.forEach((period: any, periodIdx: number) => {
                 if (!period.timelaps || !period.timelaps.domain_ids) return;
+                console.log(`📍 Period ${periodIdx} [${period.begin_validity_time} -> ${period.end_validity_time}]: ${period.timelaps.domain_ids.length} domains`);
                 const domains = period.timelaps.domain_ids;
                 const upsertData = domains.map((domain: any) => ({
                     dep_code: domain.domain_id,

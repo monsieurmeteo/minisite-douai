@@ -206,9 +206,14 @@ const VigilanceFrance = () => {
         const now = new Date();
         const targetDate = new Date(now);
         if (period === 1) targetDate.setDate(now.getDate() + 1);
-        const dateStr = targetDate.toLocaleDateString('fr-FR', {
-            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-        }).toUpperCase();
+
+        const dateStr = new Intl.DateTimeFormat('fr-FR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'Europe/Paris'
+        }).format(targetDate).toUpperCase();
 
         const header = `📋 VIGILANCE MÉTÉOROLOGIQUE DU ${dateStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 

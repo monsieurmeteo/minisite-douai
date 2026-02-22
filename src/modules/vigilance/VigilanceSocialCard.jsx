@@ -60,20 +60,38 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
         mapData[d.dep_code] = d.level;
     });
 
+    const getParisDate = (date) => {
+        return new Intl.DateTimeFormat('fr-FR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'Europe/Paris'
+        }).format(date);
+    };
+
+    // On cherche l'heure de début de validité dans les données pour être ultra-précis sur la date affichée
     const now = new Date();
-    const targetDate = new Date(now);
-    if (period === 1) targetDate.setDate(now.getDate() + 1);
+    const fallbackDate = new Date(now);
+    if (period === 1) fallbackDate.setDate(now.getDate() + 1);
 
-    const targetDateFullStr = targetDate.toLocaleDateString('fr-FR', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
+    const periodData = activeVigilance.length > 0 ? activeVigilance[0] : null;
+    const effectiveDate = periodData?.start_time ? new Date(periodData.start_time) : fallbackDate;
 
-    const dateStr = lastUpdate ? new Date(lastUpdate).toLocaleDateString('fr-FR', {
-        day: 'numeric', month: 'long', year: 'numeric'
-    }) : "";
-    const timeStr = lastUpdate ? new Date(lastUpdate).toLocaleTimeString('fr-FR', {
-        hour: '2-digit', minute: '2-digit'
-    }) : "";
+    const targetDateFullStr = getParisDate(effectiveDate);
+
+    const dateStr = lastUpdate ? new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Europe/Paris'
+    }).format(new Date(lastUpdate)) : "";
+
+    const timeStr = lastUpdate ? new Intl.DateTimeFormat('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Paris'
+    }).format(new Date(lastUpdate)) : "";
 
     const headerClass = maxLevel === 4 ? 'bg-red-deep' : maxLevel === 3 ? 'bg-orange-vibrant' : maxLevel === 2 ? 'bg-yellow-bright' : 'bg-green-safe';
 
