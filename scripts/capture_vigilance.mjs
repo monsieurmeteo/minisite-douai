@@ -4,13 +4,23 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
-// Charge les variables d'environnement
+// Charge les variables d'environnement (local ou GitHub Actions)
 dotenv.config({ path: '.env.local' });
 
-const supabase = createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Accepte VITE_SUPABASE_URL ou SUPABASE_URL (compatibilité GitHub Actions)
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Debug: afficher quelles variables sont disponibles
+console.log('🔑 VITE_SUPABASE_URL:', supabaseUrl ? '✅ défini' : '❌ manquant');
+console.log('🔑 SUPABASE_SERVICE_ROLE_KEY:', supabaseKey ? '✅ défini' : '❌ manquant');
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ Variables Supabase manquantes! Vérifiez les secrets GitHub.');
+    process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const CONFIG = {
     baseUrl: process.env.VITE_APP_URL || 'https://minisite-douai.vercel.app',
