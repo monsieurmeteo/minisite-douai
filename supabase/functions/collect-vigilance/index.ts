@@ -34,11 +34,18 @@ Deno.serve(async (req) => {
         console.log(`📊 Map Data Periods: ${mapData.product.periods.length}`);
 
         // 2. Fetch Bulletins
+        let textData: any = { product: { text_bloc_items: [] } };
         const textRes = await fetch("https://public-api.meteofrance.fr/public/DPVigilance/v1/textesvigilance/encours", {
             headers: fetchHeaders
         });
-        if (!textRes.ok) throw new Error(`MF API Text Error: ${textRes.status}`);
-        const textData = await textRes.json();
+
+        if (textRes.ok) {
+            textData = await textRes.json();
+        } else if (textRes.status === 404) {
+            console.log("ℹ️ Aucun bulletin texte disponible (404 est normal ici).");
+        } else {
+            console.warn(`⚠️ Erreur non-bloquante lors du fetch des textes: ${textRes.status}`);
+        }
 
         // --- Process Maps ---
         let allUpsertData = [];
