@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/archive-foudre",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/sync-vigilance",
+      "schedule": "*/15 * * * *"
     }
   ],
   "rewrites": [
