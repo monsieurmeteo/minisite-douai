@@ -39,6 +39,7 @@ const BtpManager = () => {
     const [startChantierDate, setStartChantierDate] = useState('');
     const [contractDuration, setContractDuration] = useState('');
     const [reportType, setReportType] = useState('Hebdomadaire');
+    const [contractDurationUnit, setContractDurationUnit] = useState('mois');
 
     const [displaySimple, setDisplaySimple] = useState(false);
     const [showCharts, setShowCharts] = useState(false);
@@ -229,6 +230,7 @@ Voici les données brutes :`;
         setProjectClient(p.project_client || meta.project_client || '');
         setStartChantierDate(p.start_chantier_date || meta.start_chantier_date || '');
         setContractDuration(p.contract_duration || meta.contract_duration || '');
+        setContractDurationUnit(p.contract_duration_unit || meta.contract_duration_unit || 'mois');
         setReportType(p.report_type || meta.report_type || 'Hebdomadaire');
         setEmitterPhone(p.emitter_phone || meta.emitter_phone || '06 83 90 91 60');
         setEmitterEmail(p.emitter_email || meta.emitter_email || 'patrick.marliere@wanadoo.fr');
@@ -325,6 +327,18 @@ Voici les données brutes :`;
             active_trades: activeTrades,
             rules: rules,
             annex_cols: annexCols,
+            report_type: reportType,
+            chantier_name: chantierName,
+            project_address: projectAddress,
+            contract_duration: contractDuration,
+            contract_duration_unit: contractDurationUnit,
+            start_chantier_date: startChantierDate,
+            project_client: projectClient,
+            client_address: clientAddress,
+            client_phone: clientPhone,
+            client_email_contact: clientEmail,
+            emitter_phone: emitterPhone,
+            emitter_email: emitterEmail,
             display_simple: displaySimple,
             show_charts: showCharts,
             check_period: checkPeriod,
@@ -967,7 +981,7 @@ Voici les données brutes :`;
                         <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Entreprise :</strong> ${projectClient || '--'}</td>
                     </tr>
                     <tr style="border:none;">
-                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Contrat :</strong> ${contractDuration || '--'}</td>
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Contrat :</strong> ${contractDuration || '--'} ${contractDuration ? contractDurationUnit : ''}</td>
                         <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Relevé :</strong> ${reportType || '--'}</td>
                     </tr>
                     <tr style="border:none;">
@@ -2224,10 +2238,17 @@ Voici les données brutes :`;
 
                             <div className="btp-form-group">
                                 <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Durée prévue du Chantier</label>
-                                <input value={contractDuration}
-                                    onChange={(e) => setContractDuration(e.target.value)}
-                                    placeholder="Ex: 12 mois, 24 mois..."
-                                    style={{ height: '52px', padding: '0 20px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%' }} />
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input value={contractDuration}
+                                        onChange={(e) => setContractDuration(e.target.value)}
+                                        placeholder="Ex: 12, 24..."
+                                        style={{ height: '52px', padding: '0 20px', borderRadius: '12px', border: '1px solid #e2e8f0', flex: 1 }} />
+                                    <select value={contractDurationUnit} onChange={(e) => setContractDurationUnit(e.target.value)} style={{ height: '52px', padding: '0 15px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', width: '120px' }}>
+                                        <option value="jours">jours</option>
+                                        <option value="semaines">semaines</option>
+                                        <option value="mois">mois</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
