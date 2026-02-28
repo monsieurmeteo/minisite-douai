@@ -383,17 +383,7 @@ Voici les données brutes :`;
                 let data = await weatherAPI.getDepartmentLatestHoraire(selectedDept);
 
                 // Fallback to local station list if database is empty for this department
-                if (data.length === 0) {
-                    console.log("[BTP] No stations in DB, using local fallback for dept:", selectedDept);
-                    const stationNamesData = await import('../../data/stationNames.json');
-                    const deptPrefix = (selectedDept === '2A' || selectedDept === '2B') ? '20' : selectedDept;
-                    const filtered = Object.entries(stationNamesData.default || stationNamesData)
-                        .filter(([id]) => id.startsWith(deptPrefix))
-                        .map(([id, name]) => ({ station_id: id, nom_station: name }));
-                    data = filtered;
-                }
-
-                setStations(data);
+                setStations(data || []);
                 const names = { ...stationNames };
                 const { geoService } = await import('../../services/geoService');
                 for (const s of data) {
@@ -1737,8 +1727,8 @@ Voici les données brutes :`;
         }
     };
 
-    const sortedTrades = [...TRADES_FULL].sort((a, b) => a.localeCompare(b, 'fr'));
-    const sortedActiveTrades = [...activeTrades].sort((a, b) => a.localeCompare(b, 'fr'));
+    const sortedTrades = Array.isArray(TRADES_FULL) ? [...TRADES_FULL].sort((a, b) => a.localeCompare(b, 'fr')) : [];
+    const sortedActiveTrades = Array.isArray(activeTrades) ? [...activeTrades].sort((a, b) => a.localeCompare(b, 'fr')) : [];
 
     return (
         <div className="btp-manager-container btp-manager-body">
@@ -1766,7 +1756,7 @@ Voici les données brutes :`;
                         <button className="btp-btn-config" onClick={() => checkAll('btp-tradesCheckboxes', false)}>Tout Décocher</button>
                     </div>
                     <div id="btp-tradesCheckboxes" style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #eee', padding: '10px' }}>
-                        {sortedTrades.map(t => (
+                        {sortedTrades?.map(t => (
                             <div key={t} className="btp-trade-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
                                     <input type="checkbox" value={t} defaultChecked={activeTrades.includes(t)} />
@@ -1795,7 +1785,7 @@ Voici les données brutes :`;
                         <button className="btp-btn-config" onClick={() => checkAll('btp-ruleTradesList', false)}>Aucun</button>
                     </div>
                     <div id="btp-ruleTradesList" key={ruleTradesModalTimestamp} style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                        {sortedActiveTrades.map(t => (<label key={t} className="btp-trade-item"><input type="checkbox" value={t} defaultChecked={currentRuleIndex >= 0 && rules[currentRuleIndex]?.lots?.includes(t)} /> {t}</label>))}
+                        {sortedActiveTrades?.map(t => (<label key={t} className="btp-trade-item"><input type="checkbox" value={t} defaultChecked={currentRuleIndex >= 0 && rules[currentRuleIndex]?.lots?.includes(t)} /> {t}</label>))}
                     </div>
                     <button className="btp-btn btp-btn-primary" onClick={closeRuleTradesModal} style={{ marginTop: '20px' }}>Valider</button>
                 </div>
@@ -1838,7 +1828,7 @@ Voici les données brutes :`;
             </div>
 
             <div className="btp-layout">
-                <div className="btp-no-print">
+                <div className="btp-no-print" style={{ overflowX: 'hidden' }}>
                     <h1 style={{ textAlign: 'center', marginBottom: '15px' }}>🌦️ Météo BTP <span style={{ fontSize: '0.9rem', fontWeight: 600, opacity: 0.5, background: '#e2e8f0', padding: '2px 8px', borderRadius: '4px', verticalAlign: 'middle' }}>PRO V10</span></h1>
 
 
@@ -1859,7 +1849,7 @@ Voici les données brutes :`;
                                     <select value={currentProjectId} onChange={(e) => handleProjectSelect(e.target.value)} style={{ flex: 1, fontWeight: 'bold', height: '42px', border: '2px solid #cbd5e1', borderRadius: '8px' }}>
                                         <option value="">{currentProjectId ? '--- SELECTIONNER UN PROJET ---' : '--- MODE NOUVEAU PROJET ---'}</option>
                                         <option value="DEMO_QUARTUS">📊 [DÉMO] QUARTUS - Officiel</option>
-                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        {projects?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                     <button className="btp-btn btp-btn-primary" onClick={resetToNew} style={{ width: 'auto', background: '#0ea5e9', height: '42px', padding: '0 15px' }} title="Nouveau projet vide">➕ Nouveau</button>
                                 </div>
@@ -2013,7 +2003,7 @@ Voici les données brutes :`;
                                                 setStationMeteo(finalDisplayName);
                                             }} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
                                                 <option value="">{loadingStations ? '⏳ Chargement...' : 'Choisir une station...'}</option>
-                                                {stations.map(s => {
+                                                {stations?.map(s => {
                                                     const name = stationNames[s.station_id] || s.nom_station || (s.station_id === s.id_station ? '' : s.nom_usuel);
                                                     const label = (name && name !== s.station_id) ? `${name} (${s.station_id})` : s.station_id;
                                                     return <option key={s.station_id} value={s.station_id}>{label}</option>
@@ -2061,11 +2051,15 @@ Voici les données brutes :`;
                                 </div>
 
                                 <div className="btp-days-grid" style={{ flex: 1, minHeight: '350px' }}>
-                                    {Object.entries(globalData).sort((a, b) => {
-                                        const [d1, m1, y1] = a[0].split('/').map(Number);
-                                        const [d2, m2, y2] = b[0].split('/').map(Number);
+                                    {Object.entries(globalData || {}).sort((a, b) => {
+                                        if (a[0] === '__metadata' || b[0] === '__metadata') return 0;
+                                        const partsA = a[0].split('/');
+                                        const partsB = b[0].split('/');
+                                        if (partsA.length < 3 || partsB.length < 3) return 0;
+                                        const [d1, m1, y1] = partsA.map(Number);
+                                        const [d2, m2, y2] = partsB.map(Number);
                                         return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
-                                    }).map(([date, data]) => (
+                                    }).filter(([date]) => date !== '__metadata').map(([date, data]) => (
                                         <div key={date} className="btp-day-card">
                                             <div className="btp-day-card-header">
                                                 <span>{date}</span>
@@ -2285,7 +2279,7 @@ Voici les données brutes :`;
                             <button className="btp-btn-quick" onClick={() => addRule('canicule')}>🔥<br />Canicule</button>
                         </div>
                         <div className="btp-rules-list">
-                            {rules.map((r, i) => (
+                            {rules?.map((r, i) => (
                                 <div key={i} className="btp-rule-card">
                                     <div className="btp-rule-header" onClick={() => setOpenRuleIdx(openRuleIdx === i ? -1 : i)}>
                                         <div>
@@ -2408,13 +2402,13 @@ Voici les données brutes :`;
                             </div>
                         </div>
                     </div>
-                </div>
+                </div >
 
                 <div className="btp-preview">
                     <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} />
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
