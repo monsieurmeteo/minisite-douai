@@ -221,7 +221,14 @@ Voici les données brutes :`;
         setTxCli(p.client_header || '');
         setEmailCli(p.client_email || '');
         setStationMeteo(p.station_name || '');
-        setSelectedStationId(p.station_id || '');
+        const sid = p.station_id || '';
+        setSelectedStationId(sid);
+        if (sid && sid.length >= 5) {
+            const depPrefix = sid.substring(0, 2);
+            setSelectedDept(depPrefix);
+        } else if (p.selected_dept) {
+            setSelectedDept(p.selected_dept);
+        }
 
         setProjectAddress(p.project_address || meta.project_address || '');
         setClientAddress(p.client_address || meta.client_address || '');
@@ -280,7 +287,7 @@ Voici les données brutes :`;
         setChantierName('');
         setTxEnt('400 rue Paul Lafargue\n59283 RAIMBEAUCOURT');
         setTxCli('');
-        setEmailCli(''); setSelectedStationId(''); setStationMeteo('');
+        setEmailCli(''); setSelectedStationId(''); setSelectedDept(''); setStationMeteo('');
         setGlobalData({}); setStatus(''); setSoilData({}); setHeatData({}); setFrozeData({}); setFogData({});
         setProjectAddress(''); setClientAddress(''); setClientPhone(''); setClientEmail(''); setProjectClient(''); setStartChantierDate(''); setContractDuration(''); setReportType('Hebdomadaire');
         setActiveTrades([]); // Aucun métier sélectionné par défaut
@@ -320,6 +327,7 @@ Voici les données brutes :`;
             client_header: txCli,
             client_email: emailCli,
             station_id: selectedStationId,
+            selected_dept: selectedDept,
             station_name: stationMeteo,
             logo_left: logoL,
             logo_right: logoR,
@@ -692,6 +700,7 @@ Voici les données brutes :`;
             txCli,
             emailCli,
             station_id: selectedStationId,
+            selected_dept: selectedDept,
             station_name: stationMeteo,
             tradesFull: TRADES_FULL,
             activeTrades,

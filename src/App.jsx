@@ -26,6 +26,7 @@ import SupervisionMap from './modules/supervision/SupervisionMap';
 import ClimatologyDashboard from './modules/climatology/ClimatologyDashboard';
 import NationalRecordsMonitor from './modules/climatology/NationalRecordsMonitor';
 import Temperatures30Villes from './modules/observations/Temperatures30Villes';
+import WindGustMap from './modules/maps/WindGustMap';
 import { Menu } from 'lucide-react';
 import './App.css';
 
@@ -70,6 +71,7 @@ function App() {
           <Route path="/climatologie" element={<ClimatologyDashboard />} />
           <Route path="/supervision-records" element={<NationalRecordsMonitor />} />
           <Route path="/temperatures-30-villes" element={<Temperatures30Villes />} />
+          <Route path="/carte-rafales" element={<WindGustMap />} />
         </Routes>
       </main>
 

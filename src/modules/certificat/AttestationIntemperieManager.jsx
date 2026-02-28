@@ -18,6 +18,7 @@ const AttestationIntemperieManager = () => {
     const [companyLogo, setCompanyLogo] = useState('/logo.jpg');
 
     // --- États du dossier ---
+    const [projectName, setProjectName] = useState('');
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
     const [clientCity, setClientCity] = useState('');
@@ -119,7 +120,7 @@ const AttestationIntemperieManager = () => {
     // --- Mise à jour du rapport ---
     useEffect(() => {
         generateReport();
-    }, [globalData, docType, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion, stationMeteo]);
+    }, [globalData, docType, projectName, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion, stationMeteo]);
 
     // --- Monitoring Changes for Conclusion ---
     useEffect(() => {
@@ -472,14 +473,15 @@ const AttestationIntemperieManager = () => {
                         </div>
                     </div>
                 </div>
-                <div class="header-right" style="margin-right: 0; margin-top: 10px;">
-                    <div class="cert-client-box" style="text-align: left; min-width: 250px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
-                        <div class="cert-client-info" style="font-family: sans-serif;">
-                            <div style="font-size: 11pt; color: #0f172a; text-transform: uppercase; margin-bottom: 2px; font-weight: 900;">${clientName || '---'}</div>
-                            <div style="font-size: 9.5pt; color: #1e293b; line-height: 1.3;">${clientAddress || '---'}</div>
-                            <div style="font-size: 9.5pt; color: #1e293b;">${clientZip || ''} ${clientCity || ''}</div>
-                            <div style="margin-top: 8px; padding: 4px 10px; background: #003366; color: white; border-radius: 4px; display: inline-block;">
-                                <div style="font-size: 9pt; font-weight: 700;">Réf. ${refDossier}</div>
+                <div class="header-right" style="margin-right: 0; margin-top: 5px; flex: 1; display: flex; justify-content: flex-end;">
+                    <div class="cert-client-box" style="text-align: left; width: 100%; max-width: 350px; border: 2.5px solid #000; padding: 12px; background: #fff; box-shadow: 3px 3px 0px rgba(0,0,0,0.1);">
+                        <div class="cert-client-info" style="font-family: 'Arial Black', sans-serif;">
+                            <div style="font-size: 13pt; color: #003366; text-transform: uppercase; margin-bottom: 5px; font-weight: 900; border-bottom: 1.5px solid #000; padding-bottom: 5px; line-height: 1.1;">CLIENT : ${clientName || '---'}</div>
+                            ${projectName ? `<div style="font-size: 11pt; color: #003366; font-weight: 800; margin-bottom: 8px; text-transform: uppercase;">CHANTIER : ${projectName}</div>` : ''}
+                            <div style="font-size: 9.5pt; color: #1e293b; line-height: 1.3; font-family: Arial, sans-serif; font-weight: bold;">${clientAddress || '---'}</div>
+                            <div style="font-size: 9.5pt; color: #1e293b; font-family: Arial, sans-serif; font-weight: bold;">${clientZip || ''} ${clientCity || ''}</div>
+                            <div style="margin-top: 10px; padding: 5px 12px; background: #003366; color: white; border-radius: 4px; display: inline-block;">
+                                <div style="font-size: 9.5pt; font-weight: 900; letter-spacing: 0.5px;">RÉF. ${refDossier}</div>
                             </div>
                         </div>
                     </div>
@@ -1133,8 +1135,12 @@ const AttestationIntemperieManager = () => {
                     </div>
                     <div className="btp-form-grid">
                         <div className="btp-form-group">
-                            <label>Nom du Client / Chantier</label>
+                            <label>Nom du Client</label>
                             <input type="text" placeholder="Ex: Grégory Langlet" value={clientName} onChange={e => setClientName(e.target.value)} />
+                        </div>
+                        <div className="btp-form-group">
+                            <label>Nom du Chantier</label>
+                            <input type="text" placeholder="Ex: Résidence Les Chênes" value={projectName} onChange={e => setProjectName(e.target.value)} />
                         </div>
                         <div className="btp-form-group">
                             <label>Adresse du site</label>

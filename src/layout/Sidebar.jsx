@@ -136,6 +136,10 @@ export default function Sidebar({ isOpen, onClose }) {
           <Radio size={18} style={{ color: '#0ea5e9' }} />
           <span>Radar Pluie</span>
         </NavLink>
+        <NavLink to="/carte-rafales" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <MapIcon size={18} style={{ color: '#8b5cf6' }} />
+          <span>Carte des Rafales</span>
+        </NavLink>
         <NavLink to="/satellite" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Satellite size={18} style={{ color: '#60a5fa' }} />
           <span>Satellite Europe</span>
