@@ -19,7 +19,7 @@ const BtpManager = () => {
     ]);
     const [globalData, setGlobalData] = useState({});
     const [rules, setRules] = useState([]);
-    const [annexCols, setAnnexCols] = useState({ temp: true, rain: true, snow: true, windA: true, windG: true, humi: true, vis: true, soil: true, fog: true, windAvgPdf: false });
+    const [annexCols, setAnnexCols] = useState({ temp: true, rain: true, snow: true, windA: true, windG: true, humi: true, soil: true, fog: true, windAvgPdf: false });
     const [emitterName, setEmitterName] = useState('MÉTÉO CLIMAT PRO');
     const [txEnt, setTxEnt] = useState('400 rue Paul Lafargue\n59283 RAIMBEAUCOURT');
     const [txCli, setTxCli] = useState('');
@@ -84,7 +84,7 @@ const BtpManager = () => {
     const fileInputRef = useRef(null);
     const csvFileInputRef = useRef(null);
 
-    const colsLabels = { temp: "Température", rain: "Pluie", snow: "Neige", windA: "Vent Moyen", windG: "Rafales", humi: "Humidité Air", vis: "Visibilité (API)", soil: "Humidité Sol", fog: "Brouillard (Manuel)", windAvgPdf: "Vent Moyen (PDF)" };
+    const colsLabels = { temp: "Température", rain: "Pluie", snow: "Neige", windA: "Vent Moyen", windG: "Rafales", humi: "Humidité Air", soil: "Humidité Sol", fog: "Brouillard", windAvgPdf: "Vent Moyen (PDF)" };
 
     const AI_PROMPT = `Agis comme un expert en nettoyage de données.
 Je vais te coller ci-dessous des données météorologiques brutes, copiées verticalement depuis un site web.
@@ -986,15 +986,14 @@ Voici les données brutes :`;
                         </tr>
                     </thead>
                     <tbody>
-                        ${rules.map(r => {
+                        ${(rules || []).map(r => {
                 let k = r.var;
                 if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
                 if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
                 if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
-                if (r.var === 'vis') k = 'Visibilité (API)';
-                if (r.var === 'fog') k = 'Brouillard (Man.)';
+                if (r.var === 'fog') k = 'Brouillard';
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
-                let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
+                let unit = (r.var || "").includes('pluie') ? 'mm' : ((r.var || "").includes('neige') ? 'cm' : (((r.var || "").includes('temp') || (r.var || "").includes('heat')) ? '°C' : ((r.var || "").includes('soil') ? '%' : 'km/h')));
                 return `<tr><td style="text-align:left; font-weight:700; background:#f8fafc; padding-left:10px; padding:4px;">${k}</td><td style="font-weight:600; color:#1e293b; padding:4px;">${r.op} ${r.val}${unit}</td><td style="text-align:left; padding-left:10px; padding:4px;">${desc}</td></tr>`;
             }).join('')}
                     </tbody>
@@ -1005,14 +1004,18 @@ Voici les données brutes :`;
             <table class="btp-table-period" style="font-size: ${totalDays > 15 ? '0.7rem' : '0.8rem'}; page-break-inside: auto; border-collapse: collapse;">
                 <thead><tr><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Date</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">T. Min/Max</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Pluie</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Vent Max</th><th style="padding:4px; background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Statut</th></tr></thead><tbody>`;
 
-            Object.entries(globalData).sort((a, b) => {
-                const [d1, m1, y1] = a[0].split('/').map(Number);
-                const [d2, m2, y2] = b[0].split('/').map(Number);
+            Object.entries(globalData || {}).filter(([k]) => k !== '__metadata').sort((a, b) => {
+                const partsA = a[0].split('/');
+                const partsB = b[0].split('/');
+                if (partsA.length < 3 || partsB.length < 3) return 0;
+                const [d1, m1, y1] = partsA.map(Number);
+                const [d2, m2, y2] = partsB.map(Number);
                 return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
             }).forEach(([date, dataObj]) => {
-                const ts = dataObj.rows.map(d => d.temp).filter(v => v !== null);
-                const rs = dataObj.rows.reduce((a, b) => a + (b.rain || 0), 0);
-                const maxG = dataObj.rows.length > 0 ? Math.max(...dataObj.rows.map(d => d.w_gst || 0)) : 0;
+                const rows = dataObj?.rows || [];
+                const ts = rows.map(d => d.temp).filter(v => v !== null);
+                const rs = rows.reduce((a, b) => a + (b.rain || 0), 0);
+                const maxG = rows.length > 0 ? Math.max(...rows.map(d => d.w_gst || 0)) : 0;
                 totalRainPeriod += rs;
                 let dayIsKo = false;
                 rules.forEach(r => {
@@ -1034,12 +1037,15 @@ Voici les données brutes :`;
         }
 
         // --- RAPPORTS QUOTIDIENS ---
-        Object.entries(globalData).sort((a, b) => {
-            const [d1, m1, y1] = a[0].split('/').map(Number);
-            const [d2, m2, y2] = b[0].split('/').map(Number);
+        Object.entries(globalData || {}).filter(([k]) => k !== '__metadata').sort((a, b) => {
+            const partsA = a[0].split('/');
+            const partsB = b[0].split('/');
+            if (partsA.length < 3 || partsB.length < 3) return 0;
+            const [d1, m1, y1] = partsA.map(Number);
+            const [d2, m2, y2] = partsB.map(Number);
             return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
         }).forEach(([date, dataObj]) => {
-            const dData = dataObj.rows;
+            const dData = dataObj?.rows || [];
             const soilVal = dataObj.soil;
             const forceHeat = dataObj.forceHeat;
             const forceFroze = dataObj.forceFroze;
@@ -2290,7 +2296,6 @@ Voici les données brutes :`;
                             <button className="btp-btn-quick" onClick={() => addRule('soil')}>💧<br />Sol</button>
                             <button className="btp-btn-quick" onClick={() => addRule('heat')}>☀️<br />T° Élevée</button>
                             <button className="btp-btn-quick" onClick={() => addRule('fog')}>🌫️<br />Brouillard</button>
-                            <button className="btp-btn-quick" onClick={() => addRule('vis')}>👀<br />Visibilité (API)</button>
                             <button className="btp-btn-quick" onClick={() => addRule('canicule')}>🔥<br />Canicule</button>
                         </div>
                         <div className="btp-rules-list">
@@ -2299,7 +2304,7 @@ Voici les données brutes :`;
                                     <div className="btp-rule-header" onClick={() => setOpenRuleIdx(openRuleIdx === i ? -1 : i)}>
                                         <div>
                                             <div className="btp-rule-title">
-                                                {r.var === 'vis' ? 'Visibilité (brouillard)' : (colsLabels[r.var] || r.var)} {r.op} {r.val}
+                                                {(colsLabels[r.var] || r.var)} {r.op} {r.val}
                                             </div>
                                         </div>
                                         <div>✏️</div>
@@ -2313,8 +2318,7 @@ Voici les données brutes :`;
                                             <option value="vent_avg">Vent Moyen</option>
                                             <option value="neige">Neige</option>
                                             <option value="heat">T° Elevée</option>
-                                            <option value="vis">Visibilité (API)</option>
-                                            <option value="fog">Brouillard (Man.)</option>
+                                            <option value="fog">Brouillard</option>
                                             <option value="canicule">Canicule</option>
                                             <option value="soil">Humidité Sol</option>
                                         </select>
