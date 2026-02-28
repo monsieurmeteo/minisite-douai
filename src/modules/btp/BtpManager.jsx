@@ -1,13 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../../services/api';
+import { supabase, weatherAPI } from '../../services/api';
 import { meteoFrancePosteService } from '../../services/meteoFrancePosteService';
 import { DEPARTMENTS } from '../../data/departments';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import './BtpManager.css';
 
 const BtpManager = () => {
     const [projects, setProjects] = useState([]);
     const [currentProjectId, setCurrentProjectId] = useState('');
     const [projectName, setProjectName] = useState('Météo BTP');
+    const [chantierName, setChantierName] = useState('');
 
     // States for configuration
     const [activeTrades, setActiveTrades] = useState([]);
@@ -16,10 +19,15 @@ const BtpManager = () => {
     ]);
     const [globalData, setGlobalData] = useState({});
     const [rules, setRules] = useState([]);
-    const [annexCols, setAnnexCols] = useState({ temp: true, rain: true, snow: true, windA: true, windG: true, humi: true, vis: true, soil: true, windAvgPdf: false });
-    const [txEnt, setTxEnt] = useState('400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+    const [annexCols, setAnnexCols] = useState({ temp: true, rain: true, snow: true, windA: true, windG: true, humi: true, vis: true, soil: true, fog: true, windAvgPdf: false });
+    const [emitterName, setEmitterName] = useState('MÉTÉO CLIMAT PRO');
+    const [txEnt, setTxEnt] = useState('400 rue Paul Lafargue\n59283 RAIMBEAUCOURT');
     const [txCli, setTxCli] = useState('');
-    const [emailCli, setEmailCli] = useState('');
+    const [clientAddress, setClientAddress] = useState('');
+    const [clientPhone, setClientPhone] = useState('');
+    const [clientEmail, setClientEmail] = useState('');
+    const [emailCli, setEmailCli] = useState(''); // Direct send email
+    const [showEmitter, setShowEmitter] = useState(false);
     const [stationMeteo, setStationMeteo] = useState('');
     const [logoL, setLogoL] = useState('/logo_default.png');
     const [logoR, setLogoR] = useState('');
@@ -44,6 +52,7 @@ const BtpManager = () => {
     const [soilData, setSoilData] = useState({});
     const [heatData, setHeatData] = useState({});
     const [frozeData, setFrozeData] = useState({});
+    const [fogData, setFogData] = useState({});
     const [status, setStatus] = useState('');
 
     // UI Local state
@@ -60,6 +69,8 @@ const BtpManager = () => {
     const [emptyCellStyle, setEmptyCellStyle] = useState('gray');
     const [chartDesign, setChartDesign] = useState('architect');
     const [newTradeInput, setNewTradeInput] = useState('');
+    const [aiImportModalOpen, setAiImportModalOpen] = useState(false);
+    const [aiRawText, setAiRawText] = useState('');
 
     // MF Selection
     const [selectedDept, setSelectedDept] = useState('');
@@ -71,8 +82,9 @@ const BtpManager = () => {
 
     const chartRefs = useRef({});
     const fileInputRef = useRef(null);
+    const csvFileInputRef = useRef(null);
 
-    const colsLabels = { temp: "Température", rain: "Pluie", snow: "Neige", windA: "Vent Moyen", windG: "Rafales", humi: "Humidité Air", vis: "Visibilité (brouillard)", soil: "Humidité Sol", windAvgPdf: "Vent Moyen (PDF)" };
+    const colsLabels = { temp: "Température", rain: "Pluie", snow: "Neige", windA: "Vent Moyen", windG: "Rafales", humi: "Humidité Air", vis: "Visibilité (API)", soil: "Humidité Sol", fog: "Brouillard (Manuel)", windAvgPdf: "Vent Moyen (PDF)" };
 
     const AI_PROMPT = `Agis comme un expert en nettoyage de données.
 Je vais te coller ci-dessous des données météorologiques brutes, copiées verticalement depuis un site web.
@@ -114,7 +126,7 @@ Voici les données brutes :`;
 
     useEffect(() => {
         upd();
-    }, [globalData, rules, activeTrades, displaySimple, showCharts, checkPeriod, txEnt, txCli, logoL, logoR, annexCols, emptyCellStyle, chartDesign, projectName, projectAddress, projectClient, startChantierDate, contractDuration, reportType, emitterPhone, emitterEmail]);
+    }, [globalData, rules, activeTrades, displaySimple, showCharts, checkPeriod, emitterName, txEnt, txCli, clientAddress, clientPhone, clientEmail, logoL, logoR, annexCols, emptyCellStyle, chartDesign, projectName, chantierName, projectAddress, projectClient, startChantierDate, contractDuration, reportType, emitterPhone, emitterEmail]);
 
     // DB: Load Trades List
     const loadTrades = async () => {
@@ -168,7 +180,8 @@ Voici les données brutes :`;
         if (projId === 'DEMO_QUARTUS') {
             resetToNew();
             setProjectName('QUARTUS - Officiel (DÉMO)');
-            setTxEnt('QUARTUS\n400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+            setEmitterName('QUARTUS');
+            setTxEnt('400 rue Paul Lafargue\n59283 RAIMBEAUCOURT');
             setTxCli('Résidence Les Grands Chênes\n84140 AVIGNON');
 
             // Logos
@@ -201,19 +214,24 @@ Voici les données brutes :`;
         if (!p) return;
         setCurrentProjectId(p.id);
         setProjectName(p.name);
+        const meta = p.global_data?.__metadata || {};
+        setChantierName(p.chantier_name || meta.chantier_name || '');
         setTxEnt(p.company_header || '');
         setTxCli(p.client_header || '');
         setEmailCli(p.client_email || '');
         setStationMeteo(p.station_name || '');
         setSelectedStationId(p.station_id || '');
 
-        setProjectAddress(p.project_address || '');
-        setProjectClient(p.project_client || '');
-        setStartChantierDate(p.start_chantier_date || '');
-        setContractDuration(p.contract_duration || '');
-        setReportType(p.report_type || 'Hebdomadaire');
-        setEmitterPhone(p.emitter_phone || '06 83 90 91 60');
-        setEmitterEmail(p.emitter_email || 'p.marliere@wanadoo.fr');
+        setProjectAddress(p.project_address || meta.project_address || '');
+        setClientAddress(p.client_address || meta.client_address || '');
+        setClientPhone(p.client_phone || meta.client_phone || '');
+        setClientEmail(p.client_email_contact || meta.client_email_contact || '');
+        setProjectClient(p.project_client || meta.project_client || '');
+        setStartChantierDate(p.start_chantier_date || meta.start_chantier_date || '');
+        setContractDuration(p.contract_duration || meta.contract_duration || '');
+        setReportType(p.report_type || meta.report_type || 'Hebdomadaire');
+        setEmitterPhone(p.emitter_phone || meta.emitter_phone || '06 83 90 91 60');
+        setEmitterEmail(p.emitter_email || meta.emitter_email || 'patrick.marliere@wanadoo.fr');
 
         setLogoL(p.logo_left || '/logo_default.png');
         setLogoR(p.logo_right || '');
@@ -228,7 +246,7 @@ Voici les données brutes :`;
         if (p.snow_temp_limit !== undefined) setSnowTempLimit(p.snow_temp_limit);
         if (p.global_data) {
             setGlobalData(p.global_data);
-            const sD = {}; const hD = {}; const fD = {};
+            const sD = {}; const hD = {}; const fD = {}; const bD = {};
             let minD = null; let maxD = null;
 
             Object.entries(p.global_data).forEach(([d, v]) => {
@@ -244,23 +262,25 @@ Voici les données brutes :`;
                 if (v.soil) sD[d] = v.soil;
                 if (v.forceHeat) hD[d] = v.forceHeat;
                 if (v.forceFroze) fD[d] = v.forceFroze;
+                if (v.fog) bD[d] = v.fog;
             });
 
             if (minD) setStartDate(minD.toISOString().split('T')[0]);
             if (maxD) setEndDate(maxD.toISOString().split('T')[0]);
 
-            setSoilData(sD); setHeatData(hD); setFrozeData(fD);
+            setSoilData(sD); setHeatData(hD); setFrozeData(fD); setFogData(bD);
         }
     };
 
     const resetToNew = () => {
         setCurrentProjectId('');
         setProjectName('Météo BTP');
-        setTxEnt('400 rue Paul Larfargue\n59283 RAIMBEAUCOURT');
+        setChantierName('');
+        setTxEnt('400 rue Paul Lafargue\n59283 RAIMBEAUCOURT');
         setTxCli('');
         setEmailCli(''); setSelectedStationId(''); setStationMeteo('');
-        setGlobalData({}); setStatus(''); setSoilData({}); setHeatData({}); setFrozeData({});
-        setProjectAddress(''); setProjectClient(''); setStartChantierDate(''); setContractDuration(''); setReportType('Hebdomadaire');
+        setGlobalData({}); setStatus(''); setSoilData({}); setHeatData({}); setFrozeData({}); setFogData({});
+        setProjectAddress(''); setClientAddress(''); setClientPhone(''); setClientEmail(''); setProjectClient(''); setStartChantierDate(''); setContractDuration(''); setReportType('Hebdomadaire');
         setActiveTrades([]); // Aucun métier sélectionné par défaut
         setRules([]);
         setLogoL('/logo_default.png'); setLogoR('');
@@ -310,15 +330,22 @@ Voici les données brutes :`;
             check_period: checkPeriod,
             auto_snow: autoSnow,
             snow_temp_limit: snowTempLimit,
-            global_data: globalData,
-
-            project_address: projectAddress,
-            project_client: projectClient,
-            start_chantier_date: startChantierDate,
-            contract_duration: contractDuration,
-            report_type: reportType,
-            emitter_phone: emitterPhone,
-            emitter_email: emitterEmail,
+            global_data: {
+                ...globalData,
+                __metadata: {
+                    chantier_name: chantierName,
+                    project_address: projectAddress,
+                    client_address: clientAddress,
+                    client_phone: clientPhone,
+                    client_email_contact: clientEmail,
+                    project_client: projectClient,
+                    start_chantier_date: startChantierDate,
+                    contract_duration: contractDuration,
+                    report_type: reportType,
+                    emitter_phone: emitterPhone,
+                    emitter_email: emitterEmail
+                }
+            },
 
             updated_at: new Date()
         };
@@ -382,6 +409,121 @@ Voici les données brutes :`;
         getStations();
     }, [selectedDept]);
 
+    const handleCsvFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setStatus('⏳ Lecture du fichier CSV...');
+        const reader = new FileReader();
+
+        reader.onload = async (event) => {
+            try {
+                const content = event.target.result;
+                const lines = content.split('\n');
+                if (lines.length < 2) throw new Error("Fichier vide ou mal formaté");
+
+                // Headers: POSTE;DATE;RR;TN;TX;FXI
+                const dataLines = lines.slice(1).filter(l => l.trim().length > 0);
+
+                const days = {};
+                let firstDate = null;
+                let lastDate = null;
+                let stationId = '';
+
+                // On vérifie si les unités de vent sont en m/s ou km/h
+                // Si une valeur FXI > 40, on suppose que c'est du km/h
+                let maxFxiSeen = 0;
+                dataLines.forEach(line => {
+                    const cols = line.trim().split(';');
+                    if (cols.length >= 6) {
+                        const fxi = parseFloat(cols[5]?.replace(',', '.')) || 0;
+                        if (fxi > maxFxiSeen) maxFxiSeen = fxi;
+                    }
+                });
+                const windMultiplier = maxFxiSeen > 40 ? 1 : 3.6;
+                console.log(`[BTP CSV] Max FXI seen: ${maxFxiSeen}. Using multiplier: ${windMultiplier}`);
+
+                dataLines.forEach(line => {
+                    const cols = line.trim().split(';');
+                    if (cols.length < 6) return;
+
+                    const rawDate = cols[1]; // YYYYMMDD or YYYYMMDDHH
+                    if (!rawDate || (rawDate.length !== 8 && rawDate.length !== 10)) return;
+
+                    const year = parseInt(rawDate.substring(0, 4));
+                    const month = parseInt(rawDate.substring(4, 6));
+                    const day = parseInt(rawDate.substring(6, 8));
+                    const hour = rawDate.length === 10 ? parseInt(rawDate.substring(8, 10)) : 12;
+
+                    const dateObj = new Date(year, month - 1, day);
+                    if (!firstDate || dateObj < firstDate) firstDate = dateObj;
+                    if (!lastDate || dateObj > lastDate) lastDate = dateObj;
+
+                    const dateKey = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+
+                    stationId = cols[0];
+
+                    const rr = parseFloat(cols[2]?.replace(',', '.')) || 0;
+                    const tn = parseFloat(cols[3]?.replace(',', '.')) || 0;
+                    const tx = parseFloat(cols[4]?.replace(',', '.')) || 0;
+                    const fxi = parseFloat(cols[5]?.replace(',', '.')) || 0;
+
+                    if (!days[dateKey]) {
+                        days[dateKey] = {
+                            rows: [],
+                            soil: 0,
+                            forceHeat: false,
+                            forceFroze: false
+                        };
+                    }
+
+                    // T° à l'heure : moyenne de tn/tx si c'est vraiment de l'horaire précis tn=tx=t
+                    const temp = (tn + tx) / 2;
+
+                    days[dateKey].rows.push({
+                        h: hour,
+                        temp: temp,
+                        rain: rr,
+                        snow: 0,
+                        w_avg: fxi * windMultiplier, // On met la même chose car souvent seul FXI est dispo
+                        w_gst: fxi * windMultiplier,
+                        humi: 0,
+                        vv: null
+                    });
+                });
+
+                if (Object.keys(days).length === 0) throw new Error("Aucune donnée valide trouvée dans le fichier.");
+
+                // Apply auto snow & sort rows
+                Object.keys(days).forEach(dk => {
+                    days[dk].rows.sort((a, b) => a.h - b.h);
+                    days[dk].rows = days[dk].rows.map(r => {
+                        let sn = 0;
+                        if (autoSnow && r.rain > 0 && r.temp !== null && r.temp <= snowTempLimit) {
+                            sn = r.rain; r.rain = 0;
+                        }
+                        return { ...r, snow: sn };
+                    });
+                });
+
+                setGlobalData(days);
+                setSelectedStationId(stationId);
+                setStationMeteo(stationId); // On pourra le changer manuellement
+
+                // Sync dates UI
+                setStartDate(firstDate.toISOString().split('T')[0]);
+                setEndDate(lastDate.toISOString().split('T')[0]);
+
+                setStatus(`✅ ${Object.keys(days).length} jours importés avec succès depuis le fichier.`);
+            } catch (err) {
+                console.error(err);
+                setStatus('❌ Erreur Import : ' + err.message);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
     const handlePeriodImport = async () => {
         if (!selectedStationId) {
             setStatus('⚠️ Sélectionnez d\'abord une station');
@@ -396,8 +538,6 @@ Voici les données brutes :`;
         setGlobalData({}); // Reset current data
 
         try {
-            const { weatherAPI } = await import('../../services/api');
-
             // 1. Tenter l'historique horaire direct Supabase
             let history = await weatherAPI.getStationHourlyHistoryRange(selectedStationId, startDate, endDate);
 
@@ -426,32 +566,28 @@ Voici les données brutes :`;
 
             // 3. Si des jours manquent, tenter de les combler via Météo-France API (Archives / En direct)
             if (missingDays.length > 0) {
-                console.log(`[BTP] Il manque ${missingDays.length} jours (${missingDays.map(d => getLocalDateString(d)).join(', ')}). Tentative Météo France...`);
+                console.log(`[BTP] Il manque ${missingDays.length} jours. Tentative Météo France...`);
 
                 try {
-                    const { meteoFrancePosteService } = await import('../../services/meteoFrancePosteService');
-                    // On demande à l'API toute la plage pour être sûr (le service filtrera localement)
+                    // On utilise le service déjà importé en haut du fichier
                     const apiData = await meteoFrancePosteService.getStationHourlyHistory(selectedStationId, startDate, endDate);
 
                     if (apiData && apiData.length > 0) {
-                        // Fusion intelligente : on ne prend que ce qui n'est pas déjà dans history
                         const existingTimes = new Set(history.map(h => h.time.getTime()));
                         const newObs = apiData.filter(obs => !existingTimes.has(obs.time.getTime()));
                         history = [...history, ...newObs].sort((a, b) => a.time - b.time);
                         missingDays = checkMissingDays(history);
                     }
                 } catch (e) {
-                    console.warn("[BTP] Erreur lors du comblement via MF API:", e);
+                    console.warn("[BTP] Erreur comblement API:", e);
                 }
             }
 
-            // 4. Si encore vide ou incomplet, essayer le 6mn Supabase pour les jours restants
+            // 4. Si encore vide ou incomplet, essayer le 6mn Supabase
             if (missingDays.length > 0) {
-                console.log(`[BTP] Données horaires encore incomplètes pour ${missingDays.length} jours. Essai via données 6mn...`);
                 for (const day of missingDays) {
                     const dayData6mn = await weatherAPI.getStation6mnHistory(selectedStationId, day);
                     if (dayData6mn && dayData6mn.length > 0) {
-                        // Agrégation horaire
                         const dayHourly = dayData6mn.filter(h => h.time.getMinutes() === 0).map(hourlyItem => {
                             const endTime = hourlyItem.time.getTime();
                             const startTime = endTime - (60 * 60 * 1000);
@@ -512,13 +648,19 @@ Voici les données brutes :`;
                     rows: processedRows,
                     soil: safeFloat(soilData[date] || 0),
                     forceHeat: heatData[date] || false,
-                    forceFroze: frozeData[date] || false
+                    forceFroze: frozeData[date] || false,
+                    fog: fogData[date] || false
                 };
             });
 
-            setGlobalData(newGlobalData);
-            setStationMeteo(stationNames[selectedStationId] || selectedStationId);
-            setStatus(`✅ ${Object.keys(newGlobalData).length} jours importés avec succès.`);
+            if (Object.keys(newGlobalData).length === 0) {
+                setStatus('⚠️ Aucune donnée trouvée pour cette période/station.');
+            } else {
+                setGlobalData(newGlobalData);
+                const sNames = stationNames[selectedStationId] || selectedStationId;
+                setStationMeteo(`${sNames} (${selectedStationId})`);
+                setStatus(`✅ ${Object.keys(newGlobalData).length} jours importés avec succès.`);
+            }
 
         } catch (e) {
             console.error(e);
@@ -596,6 +738,7 @@ Voici les données brutes :`;
 
     const safeFloat = (valStr) => { if (!valStr) return 0; return parseFloat(String(valStr).replace(',', '.')); };
     const chk = (a, op, b) => {
+        if (a === null || a === undefined) return false;
         if (op == '<') return a < b; if (op == '<=') return a <= b; if (op == '>') return a > b; if (op == '>=') return a >= b; return false;
     };
 
@@ -611,14 +754,12 @@ Voici les données brutes :`;
         if (prop === 'soil') setSoilData(prev => ({ ...prev, [date]: val }));
         if (prop === 'forceHeat') setHeatData(prev => ({ ...prev, [date]: val }));
         if (prop === 'forceFroze') setFrozeData(prev => ({ ...prev, [date]: val }));
+        if (prop === 'fog') setFogData(prev => ({ ...prev, [date]: val }));
 
         setGlobalData(newData);
     };
 
     // AI Import Logic
-    const [aiImportModalOpen, setAiImportModalOpen] = useState(false);
-    const [aiRawText, setAiRawText] = useState('');
-
     const parseAiText = (txt) => {
         const lines = txt.split('\n').map(l => l.trim()).filter(l => l);
         const parsed = [];
@@ -698,7 +839,8 @@ Voici les données brutes :`;
                 rows: processedRows,
                 soil: safeFloat(soilData[dateKey] || 0),
                 forceHeat: heatData[dateKey] || false,
-                forceFroze: frozeData[dateKey] || false
+                forceFroze: frozeData[dateKey] || false,
+                fog: fogData[dateKey] || false
             }
         }));
 
@@ -707,11 +849,12 @@ Voici les données brutes :`;
         setStatus(`✅ Données manuelles importées pour le ${dateKey}`);
     };
 
-    const calculateKoV96 = (r, d, soilVal, forceHeat, forceFroze) => {
+    const calculateKoV96 = (r, d, soilVal, forceHeat, forceFroze, forceFog) => {
         if (r.var === 'canicule') return forceHeat === true ? "DÉCLARÉE" : false;
         if (r.var === 'soil') return chk(soilVal, r.op, safeFloat(r.val)) ? `${soilVal}%` : false;
         if (r.var === 'heat' && forceHeat) return "DÉCLARÉE";
         if (r.var === 'temp' && forceFroze && r.val <= 0) return "GELÉ";
+        if (r.var === 'fog' && forceFog) return "PRÉSENT";
 
         let k = r.var == 'vent_rafale' ? 'w_gst' : (r.var == 'vent_avg' ? 'w_avg' : (r.var == 'pluie' ? 'rain' : (r.var == 'neige' ? 'snow' : (r.var == 'humi_max' ? 'humi' : (r.var == 'vis' ? 'vv' : 'temp')))));
         let v1 = safeFloat(r.val);
@@ -770,14 +913,19 @@ Voici les données brutes :`;
     };
 
     const upd = () => {
-        const ent = `<strong>PATRICK MARLIERE</strong><br>${(txEnt || "").replace(/\n/g, '<br>')}`;
-        const emitterInfo = `<div style="font-size:0.7rem; color:#64748b; margin-top:2px;">
-            ${emitterPhone ? `<span>${emitterPhone}</span>` : ''}
-            ${emitterEmail ? `<span style="margin-left:8px;">${emitterEmail}</span>` : ''}
+        const ent = `<strong>${(emitterName || "").toUpperCase()}</strong><br>${(txEnt || "").replace(/\n/g, '<br>')}`;
+        const emitterInfo = `<div style="font-size:7.5pt; line-height:1.2; color:#1e293b; margin-top:2px;">
+            ${emitterPhone ? `<span>Tel : ${emitterPhone}</span>` : ''}
+            ${emitterEmail ? `<br><span>${emitterEmail}</span>` : ''}
         </div>`;
-        const cli = (txCli || "Chantier...").replace(/\n/g, '<br>');
-        const imgL = logoL ? `<img src="${logoL}" style="max-height:80px">` : '';
-        const imgR = logoR ? `<img src="${logoR}" style="max-height:80px">` : '';
+        const cliInfo = `<div style="font-size:7.5pt; line-height:1.2; color:#1e293b; margin-top:2px;">
+            <strong>${(projectClient || txCli || "").toUpperCase()}</strong>
+            ${clientAddress ? `<br>${clientAddress.replace(/\n/g, '<br>')}` : ''}
+            ${clientPhone ? `<br><span>Tel : ${clientPhone}</span>` : ''}
+            ${clientEmail ? `<br><span>${clientEmail}</span>` : ''}
+        </div>`;
+        const imgL = logoL ? `<img src="${logoL}" style="max-height:60px; display:block; margin-bottom:5px;">` : '';
+        const imgR = logoR ? `<img src="${logoR}" style="max-height:60px; display:block; margin-bottom:5px; margin-left:auto;">` : '';
         let html = '';
         let chartsHtml = '';
         const sortedActiveTrades = [...activeTrades].sort((a, b) => a.localeCompare(b, 'fr'));
@@ -795,15 +943,16 @@ Voici les données brutes :`;
             let syncHtml = `<div class="btp-doc-section">`;
 
             syncHtml += `<div class="btp-doc-head">
-                <div style="min-width:160px; max-width:200px;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
-                <div style="flex-grow:1; text-align:center; padding: 0 15px;">
+                <div style="flex: 0 0 220px; text-align: left;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:2px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex: 1; text-align:center; padding: 0 15px;">
                     <div class="btp-main-title-box">
                         <h1>RELEVÉ D'INTEMPÉRIES</h1>
+                        <div style="font-size: 11pt; font-weight: bold; color: #003366; margin-bottom: 5px; text-transform: uppercase;">CHANTIER : ${chantierName || projectName}</div>
                         <div class="btp-subtitle">BILAN PÉRIODIQUE</div>
                     </div>
                     <div style="font-weight:bold; font-size:9pt; color:#1e293b; margin-top:4px;">${totalDays} JOUR(S) ANALYSÉ(S)</div>
                 </div>
-                <div style="min-width:160px; max-width:200px; text-align:right;">${imgR}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${cli}</div></div>
+                <div style="flex: 0 0 220px; text-align:right;">${imgR}${cliInfo}</div>
             </div>`;
 
             // NEW: PROJECT INFO & RULES SUMMARY
@@ -812,16 +961,15 @@ Voici les données brutes :`;
                 <h3 style="margin-top:0; color:#1e293b; font-size:0.9rem; border-bottom:1px solid #f1f5f9; padding-bottom:5px; font-weight:800; text-transform:uppercase; margin-bottom:8px;">1. INFORMATIONS CHANTIER</h3>
                 <table style="width:100%; border:none; border-collapse: collapse;">
                     <tr style="border:none;">
-                        <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Nom :</strong> ${projectName}</td>
                         <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Démarrage :</strong> ${startChantierDate || '--'}</td>
+                        <td style="border:none; text-align:left; width:50%; padding:4px 0; font-size:0.8rem;"><strong>Entreprise :</strong> ${projectClient || '--'}</td>
                     </tr>
                     <tr style="border:none;">
-                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Entreprise :</strong> ${projectClient || '--'}</td>
                         <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem;"><strong>Contrat :</strong> ${contractDuration || '--'}</td>
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Relevé :</strong> ${reportType || '--'}</td>
                     </tr>
                     <tr style="border:none;">
-                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Adresse :</strong> ${projectAddress || '--'}</td>
-                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;"><strong>Relevé :</strong> ${reportType || '--'}</td>
+                        <td style="border:none; text-align:left; padding:4px 0; font-size:0.8rem; vertical-align: top;" colspan="2"><strong>Adresse :</strong> ${projectAddress || '--'}</td>
                     </tr>
                 </table>
 
@@ -840,7 +988,8 @@ Voici les données brutes :`;
                 if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
                 if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
                 if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
-                if (r.var === 'vis') k = 'Visibilité (brouillard)';
+                if (r.var === 'vis') k = 'Visibilité (API)';
+                if (r.var === 'fog') k = 'Brouillard (Man.)';
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
                 let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
                 return `<tr><td style="text-align:left; font-weight:700; background:#f8fafc; padding-left:10px; padding:4px;">${k}</td><td style="font-weight:600; color:#1e293b; padding:4px;">${r.op} ${r.val}${unit}</td><td style="text-align:left; padding-left:10px; padding:4px;">${desc}</td></tr>`;
@@ -864,7 +1013,7 @@ Voici les données brutes :`;
                 totalRainPeriod += rs;
                 let dayIsKo = false;
                 rules.forEach(r => {
-                    if (r.lots && r.lots.some(t => activeTrades.includes(t)) && calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze)) dayIsKo = true;
+                    if (r.lots && r.lots.some(t => activeTrades.includes(t)) && calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze, dataObj.fog)) dayIsKo = true;
                 });
                 if (dayIsKo) daysKO.add(date);
                 syncHtml += `<tr><td style="font-weight:700; padding:4px;">${date}</td><td style="padding:4px;">${ts.length ? Math.min(...ts).toFixed(1) + '°' : '--'} / ${ts.length ? Math.max(...ts).toFixed(1) + '°' : '--'}</td><td style="padding:4px;">${rs.toFixed(1)} mm</td><td style="padding:4px;">${maxG.toFixed(1)} km/h</td><td style="padding:4px;">${dayIsKo ? '<span class="btp-tag btp-tag-ko" style="padding:2px 6px; font-size:0.65rem;">INTEMPÉRIE</span>' : '<span class="btp-tag btp-tag-ok" style="padding:2px 6px; font-size:0.65rem;">RAS</span>'}</td></tr>`;
@@ -891,10 +1040,11 @@ Voici les données brutes :`;
             const soilVal = dataObj.soil;
             const forceHeat = dataObj.forceHeat;
             const forceFroze = dataObj.forceFroze;
+            const forceFog = dataObj.fog;
 
             const commonHead = (title, subtitle = '') => `<div class="btp-doc-head">
-                <div style="min-width:160px; max-width:200px;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${ent}${emitterInfo}</div></div>
-                <div style="flex-grow:1; text-align:center; padding: 0 15px;">
+                <div style="flex: 0 0 220px; text-align: left;">${imgL}<div style="font-size:7.5pt;line-height:1.3;margin-top:2px;color:#1e293b;">${ent}${emitterInfo}</div></div>
+                <div style="flex: 1; text-align:center; padding: 0 15px;">
                     <div class="btp-main-title-box">
                         <h1>${title}</h1>
                         ${subtitle ? `<div class="btp-subtitle">${subtitle}</div>` : ''}
@@ -902,7 +1052,7 @@ Voici les données brutes :`;
                     <div style="font-weight:bold; font-size:10pt; color:#1e293b; margin-top:4px;">${date}</div>
                     ${stationMeteo ? `<div style="font-size:8pt; color:#64748b; margin-top:2px;">Poste : <strong>${stationMeteo}</strong></div>` : ''}
                 </div>
-                <div style="min-width:160px; max-width:200px; text-align:right;">${imgR}<div style="font-size:7.5pt;line-height:1.3;margin-top:5px;color:#1e293b;">${cli}</div></div>
+                <div style="flex: 0 0 220px; text-align:right;">${imgR}${cliInfo}</div>
             </div>`;
 
             // PARTIE 1 : SYNTHÈSE & RÉSUMÉ
@@ -916,9 +1066,10 @@ Voici les données brutes :`;
                 if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
                 if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
                 if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
-                if (r.var === 'vis') k = 'Visibilité (brouillard)';
+                if (r.var === 'vis') k = 'Visibilité (API)';
+                if (r.var === 'fog') k = 'Brouillard (Man.)';
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
-                const res = calculateKoV96(r, dData, soilVal, forceHeat, forceFroze);
+                const res = calculateKoV96(r, dData, soilVal, forceHeat, forceFroze, forceFog);
                 ruleCols.push({ desc, res, lots: r.lots || [] });
                 part1 += `<th style="background-color:#1e293b !important; color:white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${desc}</th>`;
             });
@@ -960,6 +1111,7 @@ Voici les données brutes :`;
             if (annexCols.humi) { sumH += `<th style="${thStyle}">Hum. Max</th>`; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
             if (annexCols.vis) { sumH += `<th style="${thStyle}">Vis. Min</th>`; sumR += `<td>${vsAll.length ? (Math.min(...vsAll) / 1000).toFixed(1) : '--'} km</td>`; }
             if (annexCols.soil) { sumH += `<th style="${thStyle}">Hum. Sol</th>`; sumR += `<td>${soilVal || '--'}%</td>`; }
+            if (annexCols.fog) { sumH += `<th style="${thStyle}">Brouillard</th>`; sumR += `<td>${forceFog ? 'OUI' : 'NON'}</td>`; }
 
             part1 += `<div class="btp-keep-together"><h3 class="btp-section-title">2. RÉSUMÉ DU JOUR – ${date}</h3><table class="btp-table-period"><thead><tr>${sumH}</tr></thead><tbody><tr>${sumR}</tr></tbody></table></div>`;
             part1 += `</div>`; // Fin section 1
@@ -1193,35 +1345,71 @@ Voici les données brutes :`;
     const copyPrompt = () => { navigator.clipboard.writeText(AI_PROMPT).then(() => alert("Prompt copié !")); };
 
     const generateMailBody = () => {
-        const ent = txEnt || "Entreprise"; const cli = txCli || "Client";
-        let body = `Bonjour, \n\nVoici le relevé d'intempéries pour le chantier ${cli}.\nEntreprise : ${ent}\n\n`;
+        const ent = "MÉTÉO CLIMAT PRO";
+        const addr = "400 rue Paul Lafargue, 59283 RAIMBEAUCOURT";
+        const phone = "06 83 90 91 60";
+        const proj = projectName || "---";
+        const cliName = projectClient || txCli || "---";
+
+        let body = `Bonjour, \n\nVoici le relevé d'intempéries pour le chantier suivant :\n\n`;
+        body += `📍 CHANTIER : ${proj}\n`;
+        body += `📁 CLIENT : ${cliName}\n`;
+        body += `🏢 ÉMETTEUR : ${ent}\n`;
+        body += `   ${addr}\n`;
+        body += `   Tel : ${phone}\n\n`;
+        body += `--------------------------------------------------\n`;
+        body += `DÉTAIL DES RELEVÉS\n`;
+        body += `--------------------------------------------------\n`;
+
         let hasData = false;
         for (const [date, dataObj] of Object.entries(globalData)) {
-            hasData = true; body += `\n--- DATE : ${date} ---\n`;
-            let dayHasKo = false; const details = [];
+            hasData = true;
+            let dayHasKo = false;
+            const details = [];
             rules.forEach(r => {
                 const affectsActive = r.lots && r.lots.some(t => activeTrades.includes(t));
                 if (affectsActive) {
                     const res = calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze);
                     if (res) {
-                        dayHasKo = true; let k = r.var;
-                        if (r.var == 'vent_rafale') k = 'Rafale'; if (r.var == 'vent_avg') k = 'Vent Moy';
-                        if (r.var == 'temp') k = 'Temp'; if (r.var == 'pluie') k = 'Pluie';
+                        dayHasKo = true;
+                        let k = r.var;
+                        if (r.var == 'vent_rafale') k = 'Rafale';
+                        if (r.var == 'vent_avg') k = 'Vent Moy';
+                        if (r.var == 'temp') k = 'Temp';
+                        if (r.var == 'pluie') k = 'Pluie';
                         details.push(`- ${k} (${r.op} ${r.val}): ${res}`);
                     }
                 }
             });
-            if (dayHasKo) { body += `[!] INTEMPÉRIES CONSTATÉES\nCauses :\n${details.join('\n')}\n`; }
-            else { body += `[OK] RAS\n`; }
+
+            body += `\n--- DATE : ${date} ---\n`;
+            if (dayHasKo) {
+                body += `❌ [!] INTEMPÉRIES CONSTATÉES\nCauses :\n${details.join('\n')}\n`;
+            } else {
+                body += `✅ [OK] RAS\n`;
+            }
         }
-        if (!hasData) body += "Aucune donnée analysée.\n";
+
+        if (!hasData) {
+            body += "Aucune donnée analysée.\n";
+        } else {
+            body += `\n--------------------------------------------------\n`;
+            body += `*Rapport généré par Météo Climat Pro.*`;
+        }
+
         return body;
     };
 
     const sendMail = () => {
         const body = generateMailBody();
         const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
-        window.location.href = `mailto:${emailCli}?subject=Relevé Intempéries - ${txCli}&body=${encodedBody}`;
+        const subject = `Relevé Intempéries - ${chantierName || projectName || projectClient || 'Météo'}`;
+
+        // NOTE: Standard mailto does NOT support attachments.
+        // We warn the user to attach the PDF manually.
+        alert("⚠️ Le mail va s'ouvrir dans votre logiciel de messagerie.\n\nNote : Les navigateurs ne permettent pas de joindre automatiquement le PDF. N'oubliez pas d'attacher le fichier que vous venez de télécharger (Bouton IMPRIMER / PDF).");
+
+        window.location.href = `mailto:${emailCli}?subject=${encodeURIComponent(subject)}&body=${encodedBody}`;
     };
 
     const copyMailBody = () => {
@@ -1232,7 +1420,7 @@ Voici les données brutes :`;
     // CSS autonome pour l'export PDF/impression — harmonisé avec l'Attestation intempéries
     const getBtpPrintStyles = () => `
         <style>
-            @page { size: A4 portrait; margin: 0; }
+            @page { size: A4; margin: 0; }
             * { box-sizing: border-box; }
             body {
                 margin: 0; padding: 0;
@@ -1420,47 +1608,76 @@ Voici les données brutes :`;
     `;
 
     const handlePrint = () => {
-        let contentHtml = reportOutput;
-
-        // Convertir tous les graphiques (canvas) en images pour une impression fiable
-        const canvases = document.querySelectorAll('.btp-preview canvas');
-        canvases.forEach(canvas => {
-            try {
-                const imgUrl = canvas.toDataURL('image/png');
-                const canvasId = canvas.id;
-                const placeholder = `<canvas id="${canvasId}"></canvas>`;
-                const imgTag = `<img src="${imgUrl}" style="width:100%; height:auto; display:block; max-height:130px;" />`;
-                contentHtml = contentHtml.replace(placeholder, imgTag);
-            } catch (e) {
-                console.error("[BTP] Erreur conversion canvas pour impression:", e);
-            }
-        });
-
-        const printWindow = window.open('', '_blank', 'width=1100,height=900');
-        if (!printWindow) {
-            alert("Le bloqueur de fenêtres empêche l'ouverture de l'aperçu avant impression.");
+        if (!reportOutput || reportOutput.trim() === '') {
+            alert("Aucun rapport généré à imprimer.");
             return;
         }
 
-        printWindow.document.write(`
+        // 1. Créer une version "propre" du contenu pour l'impression
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = reportOutput;
+
+        // Remplacer chaque canvas par son image base64 (PNG pour conserver la transparence)
+        const canvases = document.querySelectorAll('.btp-preview canvas');
+        canvases.forEach(realCanvas => {
+            try {
+                const canvasId = realCanvas.id;
+                const tempCanvas = tempDiv.querySelector(`#${canvasId}`);
+                if (tempCanvas) {
+                    const imgUrl = realCanvas.toDataURL('image/png');
+                    const img = document.createElement('img');
+                    img.src = imgUrl;
+                    img.style.width = '100%';
+                    img.style.height = 'auto';
+                    img.style.display = 'block';
+                    img.style.maxHeight = '130px';
+                    tempCanvas.parentNode.replaceChild(img, tempCanvas);
+                }
+            } catch (e) {
+                console.error("[BTP] Erreur conversion graphique:", e);
+            }
+        });
+
+        const finalContent = tempDiv.innerHTML;
+
+        // 2. Ouvrir la fenêtre d'impression
+        const win = window.open('', '_blank', 'width=1100,height=900,menubar=no,toolbar=no,location=no,status=no');
+
+        if (!win) {
+            alert("L'aperçu avant impression a été bloqué par votre navigateur. Veuillez autoriser les fenêtres surgissantes (popups) pour ce site.");
+            return;
+        }
+
+        // 3. Écrire le document (immédiatement pour éviter la page vide)
+        win.document.write(`
+            <!DOCTYPE html>
             <html>
                 <head>
-                    <title>Rapport BTP - ${projectName}</title>
+                    <title>${projectName.replace(/"/g, '&quot;')}</title>
+                    <meta charset="utf-8">
                     ${getBtpPrintStyles()}
                 </head>
-                <body>
-                    ${contentHtml}
+                <body style="margin:0;padding:0;">
+                    <div id="print-content"></div>
+                    <script>
+                        // On attend que le contenu soit injecté et les images chargées
+                        setTimeout(() => {
+                            window.print();
+                        }, 1200);
+                    </script>
                 </body>
             </html>
         `);
+        win.document.close();
 
-        printWindow.document.close();
-
-        setTimeout(() => {
-            printWindow.focus();
-            printWindow.scrollTo(0, 0);
-            printWindow.print();
-        }, 800);
+        // Injecter le contenu séparément pour éviter les problèmes de gros strings/caractères spéciaux dans win.document.write
+        const contentTarget = win.document.getElementById('print-content');
+        if (contentTarget) {
+            contentTarget.innerHTML = finalContent;
+        } else {
+            // Fallback si l'élément n'est pas encore là (peu probable après document.close())
+            win.document.body.innerHTML = finalContent;
+        }
     };
 
     const exportWord = () => {
@@ -1471,7 +1688,7 @@ Voici les données brutes :`;
         const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
         const dlAnchorElem = document.createElement('a');
         dlAnchorElem.setAttribute("href", source);
-        dlAnchorElem.setAttribute("download", `Releve_BTP_${projectName.replace(/\s+/g, '_')}.doc`);
+        dlAnchorElem.setAttribute("download", `${projectName.replace(/\s+/g, '_')}.doc`);
         dlAnchorElem.click();
     };
 
@@ -1622,7 +1839,8 @@ Voici les données brutes :`;
 
             <div className="btp-layout">
                 <div className="btp-no-print">
-                    <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>🌦️ Météo BTP <span style={{ fontSize: '1rem', fontWeight: 400, opacity: 0.6 }}>V101 (Gold Master)</span></h1>
+                    <h1 style={{ textAlign: 'center', marginBottom: '15px' }}>🌦️ Météo BTP <span style={{ fontSize: '0.9rem', fontWeight: 600, opacity: 0.5, background: '#e2e8f0', padding: '2px 8px', borderRadius: '4px', verticalAlign: 'middle' }}>PRO V10</span></h1>
+
 
                     <div className="btp-panel" style={{ border: '2px solid var(--primary)', padding: '12px' }}>
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1637,8 +1855,11 @@ Voici les données brutes :`;
                                 <button className="btp-btn btp-btn-primary" onClick={resetToNew} style={{ width: 'auto', background: '#0ea5e9', height: '42px', padding: '0 15px', whiteSpace: 'nowrap' }} title="Nouveau projet vide">➕ Nouveau</button>
                             </div>
 
-                            {/* BLOC 2 : Nom du projet (Centre) */}
-                            <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Nom du projet..." style={{ flex: '1 1 200px', height: '42px', fontSize: '1.1rem', fontWeight: '500' }} />
+                            {/* BLOC 2 : Nom du projet / Dossier (Centre) */}
+                            <div style={{ flex: '1 1 200px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 'bold' }}>📁 Nom du Dossier / Projet</label>
+                                <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Nom du dossier..." style={{ width: '100%', height: '38px', fontSize: '0.95rem', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0 10px' }} />
+                            </div>
 
                             {/* BLOC 3 : Actions de Sauvegarde */}
                             <div style={{ display: 'flex', gap: '5px' }}>
@@ -1654,128 +1875,382 @@ Voici les données brutes :`;
                                     (projectName !== 'Météo BTP') && <button className="btp-btn-config" onClick={resetToNew} style={{ height: '42px' }}>❌ Annuler</button>
                                 )}
                             </div>
-
                         </div>
                     </div>
 
-                    <div className="btp-panel">
-                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">1</div><span className="btp-panel-title">Données & Période</span></div></div>
+                    {/* SECTION ÉMETTEUR MASQUABLE (PARAMÈTRES PRO) - POSITIONNÉE EN HAUT CAR STATIQUE */}
+                    <div style={{ marginBottom: '20px', padding: '0 10px' }}>
+                        <button
+                            onClick={() => setShowEmitter(!showEmitter)}
+                            style={{
+                                width: '100%',
+                                padding: '15px 20px',
+                                background: showEmitter ? '#1e293b' : '#ffffff',
+                                color: showEmitter ? '#ffffff' : '#475569',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '12px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '1.2rem' }}>🎨</span>
+                                <span style={{ fontWeight: '800', fontSize: '0.9rem', letterSpacing: '0.5px' }}>PARAMÈTRES DE VOTRE ENTREPRISE (ÉMETTEUR)</span>
+                            </div>
+                            <span style={{
+                                fontSize: '0.8rem',
+                                background: showEmitter ? 'rgba(255,255,255,0.1)' : '#f1f5f9',
+                                padding: '4px 10px',
+                                borderRadius: '20px',
+                                fontWeight: '700'
+                            }}>
+                                {showEmitter ? 'MASQUER RÉGLAGES' : 'Cliquer pour modifier'}
+                            </span>
+                        </button>
 
-                        <div style={{ background: '#f0f9ff', padding: '15px', borderRadius: '10px', border: '1px solid #bae6fd', marginBottom: '15px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                <span style={{ fontSize: '1.2rem' }}>🌡️</span>
-                                <span style={{ fontWeight: 'bold', color: '#1e40af', fontSize: '0.9rem' }}>Sélection Météo-France</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-                                <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} style={{ flex: 1 }}>
-                                    <option value="">Département...</option>
-                                    {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
-                                </select>
-                                <select value={selectedStationId} disabled={!selectedDept || loadingStations} onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    setSelectedStationId(newVal);
-                                    const name = stationNames[newVal] || stations.find(s => s.station_id === newVal)?.nom_usuel || newVal;
-                                    setStationMeteo(name);
-                                }} style={{ flex: 2 }}>
-                                    <option value="">{loadingStations ? 'Chargement...' : 'Choisir station...'}</option>
-                                    {stations.map(s => <option key={s.station_id} value={s.station_id}>{stationNames[s.station_id] || s.station_id}</option>)}
-                                </select>
-                            </div>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.8rem', display: 'block' }}>Du</label>
-                                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%' }} />
+                        {showEmitter && (
+                            <div style={{
+                                background: '#ffffff',
+                                padding: '30px',
+                                borderRadius: '0 0 16px 16px',
+                                border: '1px solid #e2e8f0',
+                                borderTop: 'none',
+                                boxShadow: 'inset 0 10px 15px -10px rgba(0,0,0,0.05)',
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 2fr',
+                                gap: '40px'
+                            }}>
+                                <div>
+                                    <div className="btp-logo-zone"
+                                        style={{
+                                            width: '100%',
+                                            height: '140px',
+                                            marginBottom: '20px',
+                                            background: '#fff',
+                                            borderRadius: '12px',
+                                            border: '2px solid #3b82f6'
+                                        }}
+                                        onClick={() => document.getElementById('inL').click()}>
+                                        {logoL ? <img src={logoL} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '10px' }} /> : <div style={{ textAlign: 'center' }}>+ Votre Logo</div>}
+                                        <input type="file" id="inL" hidden onChange={(e) => ldImg(e, setLogoL)} />
+                                    </div>
+                                    <div className="btp-form-group">
+                                        <label style={{ fontWeight: '800' }}>Votre Entreprise</label>
+                                        <input value={emitterName}
+                                            onChange={(e) => setEmitterName(e.target.value)}
+                                            placeholder="MÉTÉO CLIMAT PRO"
+                                            style={{ padding: '14px', fontSize: '1rem', border: '1px solid #3b82f6' }} />
+                                    </div>
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.8rem', display: 'block' }}>Au</label>
-                                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%' }} />
-                                </div>
-                                <button className="btp-btn btp-btn-primary" onClick={handlePeriodImport} style={{ flex: 1, marginTop: '18px' }}>📥 Récupérer Relevés</button>
-                            </div>
-                            <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                                <button className="btp-btn-help" onClick={() => setAiImportModalOpen(true)} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>📋 Import Manuel (Format "Prompt")</button>
-                            </div>
-                        </div>
-
-                        <div style={{ marginTop: '10px', display: 'flex', gap: '15px', alignItems: 'center' }}>
-                            <label><input type="checkbox" checked={autoSnow} onChange={(e) => { setAutoSnow(e.target.checked); }} /> Déduire neige automatiquement (T° &lt; {snowTempLimit}°C)</label>
-                            <input type="number" value={snowTempLimit} onChange={(e) => setSnowTempLimit(parseFloat(e.target.value))} style={{ width: '60px', padding: '2px', marginLeft: '-10px' }} />
-                        </div>
-                        <div dangerouslySetInnerHTML={{ __html: status }} style={{ marginTop: '10px', marginBottom: '10px' }} />
-
-                        {Object.keys(globalData).length > 0 && (
-                            <div className="btp-days-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
-                                {Object.entries(globalData).sort((a, b) => {
-                                    // Sort by date d/m/y
-                                    const [d1, m1, y1] = a[0].split('/').map(Number);
-                                    const [d2, m2, y2] = b[0].split('/').map(Number);
-                                    return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
-                                }).map(([date, data]) => (
-                                    <div key={date} style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px', background: 'white', fontSize: '0.9rem' }}>
-                                        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{date}</div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span>Hum. Sol (%):</span>
-                                                <input type="number" value={data.soil || ''} onChange={(e) => updateDayProp(date, 'soil', parseFloat(e.target.value))} style={{ width: '50px', padding: '2px' }} />
-                                            </label>
-                                            <label><input type="checkbox" checked={data.forceHeat || false} onChange={(e) => updateDayProp(date, 'forceHeat', e.target.checked)} /> Canicule</label>
-                                            <label><input type="checkbox" checked={data.forceFroze || false} onChange={(e) => updateDayProp(date, 'forceFroze', e.target.checked)} /> Gelé</label>
+                                <div>
+                                    <div className="btp-form-group">
+                                        <label style={{ fontWeight: '800' }}>Votre Adresse complète</label>
+                                        <textarea value={txEnt}
+                                            onChange={(e) => setTxEnt(e.target.value)}
+                                            placeholder="Rue, CP, Ville..."
+                                            style={{ height: '90px', padding: '14px', fontSize: '1rem', lineHeight: '1.5' }} />
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '20px' }}>
+                                        <div className="btp-form-group">
+                                            <label style={{ fontWeight: '800' }}>Votre Tel</label>
+                                            <input value={emitterPhone}
+                                                onChange={(e) => setEmitterPhone(e.target.value)}
+                                                placeholder="06..."
+                                                style={{ padding: '14px', fontSize: '1rem', border: '1px solid #3b82f6' }} />
+                                        </div>
+                                        <div className="btp-form-group">
+                                            <label style={{ fontWeight: '800' }}>Votre Email pro</label>
+                                            <input value={emitterEmail}
+                                                onChange={(e) => setEmitterEmail(e.target.value)}
+                                                placeholder="pro@exemple.com"
+                                                style={{ padding: '14px', fontSize: '1rem', border: '1px solid #3b82f6' }} />
                                         </div>
                                     </div>
-                                ))}
+                                </div>
                             </div>
                         )}
                     </div>
 
                     <div className="btp-panel">
-                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">2</div><span className="btp-panel-title">En-tête & Client</span></div></div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div className="btp-logo-zone" onClick={() => document.getElementById('inL').click()}>{logoL ? <img src={logoL} /> : '+ Logo Ent.'}<input type="file" id="inL" hidden onChange={(e) => ldImg(e, setLogoL)} /></div>
-                            <div className="btp-logo-zone" onClick={() => document.getElementById('inR').click()}>{logoR ? <img src={logoR} /> : '+ Logo Cli.'}<input type="file" id="inR" hidden onChange={(e) => ldImg(e, setLogoR)} /></div>
-                        </div>
-                        <textarea value={txEnt} onChange={(e) => setTxEnt(e.target.value)} placeholder="Entreprise émettrice..." style={{ height: '60px', marginTop: '10px' }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <input value={emitterPhone} onChange={(e) => setEmitterPhone(e.target.value)} placeholder="Téléphone émetteur" />
-                            <input value={emitterEmail} onChange={(e) => setEmitterEmail(e.target.value)} placeholder="Email émetteur" />
-                        </div>
-                        <div style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                            <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#64748b', marginBottom: '8px' }}>DÉTAILS CLIENT / CHANTIER</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                <div className="btp-form-group">
-                                    <label>Entreprise (Client)</label>
-                                    <input value={projectClient} onChange={(e) => setProjectClient(e.target.value)} placeholder="Ex: IDEC AGRO" />
-                                </div>
-                                <div className="btp-form-group">
-                                    <label>Type de relevé</label>
-                                    <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={{ margin: 0 }}>
-                                        <option value="Quotidien">Quotidien</option>
-                                        <option value="Hebdomadaire">Hebdomadaire</option>
-                                        <option value="Mensuel">Mensuel</option>
-                                        <option value="Journalier">Journalier</option>
-                                    </select>
+                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">1</div><span className="btp-panel-title">Données & Période</span></div></div>
+
+                        <div style={{ display: 'flex', gap: '25px', alignItems: 'stretch' }}>
+                            <div style={{ flex: '0 0 380px' }}>
+                                <div style={{ background: '#f0f9ff', padding: '20px', borderRadius: '12px', border: '1px solid #bae6fd', marginBottom: '15px', height: '100%', boxSizing: 'border-box' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>🌡️</span>
+                                        <span style={{ fontWeight: '800', color: '#1e40af', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Station & Période</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <div className="btp-form-group" style={{ margin: 0 }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Département</label>
+                                            <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
+                                                <option value="">Sélectionner...</option>
+                                                {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="btp-form-group" style={{ margin: 0 }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Station Météo</label>
+                                            <select value={selectedStationId} disabled={!selectedDept || loadingStations} onChange={(e) => {
+                                                const newVal = e.target.value;
+                                                setSelectedStationId(newVal);
+                                                const name = stationNames[newVal] || stations.find(s => s.station_id === newVal)?.nom_usuel || newVal;
+                                                const finalDisplayName = (name === newVal) ? name : `${name} (${newVal})`;
+                                                setStationMeteo(finalDisplayName);
+                                            }} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
+                                                <option value="">{loadingStations ? '⏳ Chargement...' : 'Choisir une station...'}</option>
+                                                {stations.map(s => {
+                                                    const name = stationNames[s.station_id] || s.nom_station || (s.station_id === s.id_station ? '' : s.nom_usuel);
+                                                    const label = (name && name !== s.station_id) ? `${name} (${s.station_id})` : s.station_id;
+                                                    return <option key={s.station_id} value={s.station_id}>{label}</option>
+                                                })}
+                                            </select>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>Date Début</label>
+                                                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>Date Fin</label>
+                                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
+                                            </div>
+                                        </div>
+
+                                        <button className="btp-btn btp-btn-primary" onClick={handlePeriodImport} style={{ width: '100%', height: '48px', fontSize: '1rem', background: '#3b82f6', marginTop: '5px' }}>
+                                            📥 RÉCUPÉRER RELEVÉS
+                                        </button>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '5px' }}>
+                                            <button className="btp-btn-help" onClick={() => setAiImportModalOpen(true)} style={{ fontSize: '0.75rem', padding: '8px' }}>🤖 Import IA</button>
+                                            <button className="btp-btn-help" onClick={() => csvFileInputRef.current.click()} style={{ fontSize: '0.75rem', padding: '8px' }}>📁 Import CSV</button>
+                                        </div>
+                                        <input type="file" ref={csvFileInputRef} hidden accept=".csv" onChange={handleCsvFileUpload} />
+
+                                        <div style={{ marginTop: '5px', borderTop: '1px solid #bae6fd', paddingTop: '10px' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                <input type="checkbox" checked={autoSnow} onChange={(e) => { setAutoSnow(e.target.checked); }} />
+                                                <span>Défaut neige auto. (T° &le;</span>
+                                                <input type="number" value={snowTempLimit} onChange={(e) => setSnowTempLimit(parseFloat(e.target.value))} style={{ width: '45px', padding: '2px', textAlign: 'center' }} />
+                                                <span>°C)</span>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <textarea value={projectAddress} onChange={(e) => setProjectAddress(e.target.value)} placeholder="Adresse du chantier..." style={{ height: '60px', marginTop: '10px' }} />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                                <div className="btp-form-group">
-                                    <label>Date Démarrage</label>
-                                    <input type="date" value={startChantierDate} onChange={(e) => setStartChantierDate(e.target.value)} />
+
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                    <div dangerouslySetInnerHTML={{ __html: status }} style={{ fontSize: '0.9rem', fontWeight: '600' }} />
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                                        {Object.keys(globalData).length > 0 ? `📊 ${Object.keys(globalData).length} jours chargés` : 'Aucune donnée'}
+                                    </div>
                                 </div>
-                                <div className="btp-form-group">
-                                    <label>Durée Contrat</label>
-                                    <input value={contractDuration} onChange={(e) => setContractDuration(e.target.value)} placeholder="ex: 8 mois" />
+
+                                <div className="btp-days-grid" style={{ flex: 1, minHeight: '350px' }}>
+                                    {Object.entries(globalData).sort((a, b) => {
+                                        const [d1, m1, y1] = a[0].split('/').map(Number);
+                                        const [d2, m2, y2] = b[0].split('/').map(Number);
+                                        return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+                                    }).map(([date, data]) => (
+                                        <div key={date} className="btp-day-card">
+                                            <div className="btp-day-card-header">
+                                                <span>{date}</span>
+                                                <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>MANUEL</span>
+                                            </div>
+                                            <div className="btp-day-card-content">
+                                                <div className="btp-form-group-row">
+                                                    <label>Humidité Sol (%)</label>
+                                                    <input type="number"
+                                                        value={data.soil || ''}
+                                                        onChange={(e) => updateDayProp(date, 'soil', parseFloat(e.target.value))}
+                                                        placeholder="0" />
+                                                </div>
+
+                                                <div className="btp-day-card-switches">
+                                                    <label className="btp-switch-label">
+                                                        <input type="checkbox" checked={data.fog || false} onChange={(e) => updateDayProp(date, 'fog', e.target.checked)} />
+                                                        <span>🌫️ Brouillard</span>
+                                                    </label>
+                                                    <label className="btp-switch-label">
+                                                        <input type="checkbox" checked={data.forceHeat || false} onChange={(e) => updateDayProp(date, 'forceHeat', e.target.checked)} />
+                                                        <span>🔥 Canicule</span>
+                                                    </label>
+                                                    <label className="btp-switch-label">
+                                                        <input type="checkbox" checked={data.forceFroze || false} onChange={(e) => updateDayProp(date, 'forceFroze', e.target.checked)} />
+                                                        <span>❄️ Gelé</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {Object.keys(globalData).length === 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '15px' }}>
+                                            <div style={{ fontSize: '3rem' }}>📁</div>
+                                            <div style={{ fontWeight: '600' }}>Les relevés apparaîtront ici après import</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
-                        <textarea value={txCli} onChange={(e) => setTxCli(e.target.value)} placeholder="En-tête libre (chantier)..." style={{ height: '60px', marginTop: '10px' }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <input value={emailCli} onChange={(e) => setEmailCli(e.target.value)} placeholder="Email client (envoi direct)" />
-                            <input value={stationMeteo} onChange={(e) => setStationMeteo(e.target.value)} placeholder="Station de référence" />
+                    </div>
+
+                    <div className="btp-panel" style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}>
+                        <div className="btp-panel-head" style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <div className="btp-step-num">2</div>
+                                <span className="btp-panel-title">Client & Chantier</span>
+                            </div>
+                        </div>
+
+                        {/* CARTE 1 – IDENTITÉ CLIENT */}
+                        <div style={{ background: '#ffffff', padding: '30px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>👤</span>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Identité Client</h3>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '30px', marginBottom: '25px' }}>
+                                <div style={{ flex: '0 0 25%' }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>Logo Client</label>
+                                    <div className="btp-logo-zone"
+                                        style={{ width: '100%', height: '120px', background: '#f8fafc', borderRadius: '12px', border: '2px dashed #cbd5e1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => document.getElementById('inR').click()}>
+                                        {logoR ? <img src={logoR} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '12px' }} /> : (
+                                            <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>+ Ajouter Logo</div>
+                                        )}
+                                        <input type="file" id="inR" hidden onChange={(e) => ldImg(e, setLogoR)} />
+                                    </div>
+                                </div>
+                                <div style={{ flex: '1' }}>
+                                    <div className="btp-form-group">
+                                        <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Entreprise Cliente</label>
+                                        <input value={projectClient}
+                                            onChange={(e) => setProjectClient(e.target.value)}
+                                            placeholder="Ex: GSE, IDEC AGRO, EIFFAGE..."
+                                            style={{ height: '52px', padding: '0 20px', fontSize: '1.1rem', fontWeight: '700', borderRadius: '12px', border: '1px solid #e2e8f0' }} />
+                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>Le nom commercial affiché en haut du rapport.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="btp-form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Adresse complète du Client (Siège social)</label>
+                                <textarea value={clientAddress}
+                                    onChange={(e) => setClientAddress(e.target.value)}
+                                    placeholder="Numéro et nom de rue&#10;Code Postal - VILLE"
+                                    style={{ minHeight: '100px', padding: '18px', fontSize: '1rem', lineHeight: '1.6', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fcfcfc' }} />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                                <div className="btp-form-group">
+                                    <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Téléphone Client</label>
+                                    <input value={clientPhone}
+                                        onChange={(e) => setClientPhone(e.target.value)}
+                                        placeholder="Ex: 01 23 45 67 89"
+                                        style={{ height: '50px', padding: '0 20px', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Email de Contact</label>
+                                    <input value={clientEmail}
+                                        onChange={(e) => setClientEmail(e.target.value)}
+                                        placeholder="Ex: contact@client.com"
+                                        style={{ height: '50px', padding: '0 20px', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* CARTE 2 – INFORMATIONS DU CHANTIER */}
+                        <div style={{ background: '#ffffff', padding: '30px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>📍</span>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Détails du Chantier</h3>
+                            </div>
+
+                            <div className="btp-form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ color: '#1e40af', fontWeight: '800', fontSize: '0.85rem' }}>Nom du CHANTIER (Titre du rapport)</label>
+                                <input value={chantierName}
+                                    onChange={(e) => setChantierName(e.target.value)}
+                                    placeholder="Ex: Résidence Les Cyprès, Extension Usine..."
+                                    style={{ height: '52px', padding: '0 20px', fontSize: '1.1rem', fontWeight: '700', borderRadius: '12px', border: '2px solid #dbeafe' }} />
+                                <div style={{ fontSize: '11px', color: '#1e40af', marginTop: '6px', fontWeight: '600' }}>ℹ️ C'est le nom qui sera écrit en gros sur le PDF.</div>
+                            </div>
+
+                            <div className="btp-form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ color: '#1e40af', fontWeight: '800', fontSize: '0.85rem' }}>Lieu précis du CHANTIER</label>
+                                <textarea value={projectAddress}
+                                    onChange={(e) => setProjectAddress(e.target.value)}
+                                    placeholder="Indiquez ici l'adresse exacte du chantier..."
+                                    style={{ minHeight: '80px', padding: '18px', fontSize: '1rem', borderRadius: '12px', border: '2px solid #dbeafe' }} />
+                                <div style={{ fontSize: '11px', color: '#1e40af', marginTop: '6px', fontWeight: '600' }}>ℹ️ Cette adresse apparaîtra dans le bloc "Localisation" de vos rapports.</div>
+                            </div>
+
+                            <div className="btp-form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Période de Relevé</label>
+                                <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={{ height: '52px', padding: '0 15px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', width: '100%' }}>
+                                    <option value="Journalier">Journalier</option>
+                                    <option value="Quotidien">Quotidien (Semaine)</option>
+                                    <option value="Hebdomadaire">Hebdomadaire</option>
+                                    <option value="Mensuel">Mensuel</option>
+                                </select>
+                            </div>
+
+                            <div className="btp-form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Date de Démarrage</label>
+                                <input type="date" value={startChantierDate}
+                                    onChange={(e) => setStartChantierDate(e.target.value)}
+                                    style={{ height: '52px', padding: '0 15px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%' }} />
+                            </div>
+
+                            <div className="btp-form-group">
+                                <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>Durée prévue du Chantier</label>
+                                <input value={contractDuration}
+                                    onChange={(e) => setContractDuration(e.target.value)}
+                                    placeholder="Ex: 12 mois, 24 mois..."
+                                    style={{ height: '52px', padding: '0 20px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%' }} />
+                            </div>
+                        </div>
+
+                        {/* CARTE 3 – RÉGLAGES ENVOI */}
+                        <div style={{ background: '#f8fafc', padding: '30px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', marginBottom: '30px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>📧</span>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Réglages d'Envoi & Station</h3>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                                <div className="btp-form-group">
+                                    <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>🚀 Destinataire Mail (Par défaut)</label>
+                                    <input value={emailCli}
+                                        onChange={(e) => setEmailCli(e.target.value)}
+                                        placeholder="destinataire@client.com"
+                                        style={{ height: '50px', padding: '0 20px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff' }} />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>L'adresse utilisée par défaut pour envoyer le rapport.</div>
+                                </div>
+                                <div className="btp-form-group">
+                                    <label style={{ color: '#64748b', fontWeight: '800', fontSize: '0.85rem' }}>📡 Station de Référence</label>
+                                    <input value={stationMeteo}
+                                        onChange={(e) => setStationMeteo(e.target.value)}
+                                        placeholder="Nom de la station (Douai, Lille...)"
+                                        style={{ height: '50px', padding: '0 20px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff' }} />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>Le nom de la station météo affiché officiellement.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div className="btp-panel">
-                        <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">3</div><span className="btp-panel-title">Règles & Conditions</span></div><button className="btp-btn-config" onClick={() => setTradesModalOpen(true)}>⚙️ Métiers</button></div>
+                        <div className="btp-panel-head">
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <div className="btp-step-num">3</div>
+                                <span className="btp-panel-title">Règles & Conditions</span>
+                            </div>
+                            <button className="btp-btn-config" onClick={() => setTradesModalOpen(true)}>⚙️ Métiers</button>
+                        </div>
                         <button className="btp-btn btp-btn-add-main" onClick={() => addRule()}>➕ AJOUTER RÈGLE</button>
                         <div className="btp-options-bar">
                             <label><input type="checkbox" checked={displaySimple} onChange={(e) => setDisplaySimple(e.target.checked)} /> 👁️ Mode Simplifié</label>
@@ -1796,7 +2271,8 @@ Voici les données brutes :`;
                             <button className="btp-btn-quick" onClick={() => addRule('neige')}>☃️<br />Neige</button>
                             <button className="btp-btn-quick" onClick={() => addRule('soil')}>💧<br />Sol</button>
                             <button className="btp-btn-quick" onClick={() => addRule('heat')}>☀️<br />T° Élevée</button>
-                            <button className="btp-btn-quick" onClick={() => addRule('vis')}>🌫️<br />Visibilité (brouillard)</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('fog')}>🌫️<br />Brouillard</button>
+                            <button className="btp-btn-quick" onClick={() => addRule('vis')}>👀<br />Visibilité (API)</button>
                             <button className="btp-btn-quick" onClick={() => addRule('canicule')}>🔥<br />Canicule</button>
                         </div>
                         <div className="btp-rules-list">
@@ -1819,7 +2295,8 @@ Voici les données brutes :`;
                                             <option value="vent_avg">Vent Moyen</option>
                                             <option value="neige">Neige</option>
                                             <option value="heat">T° Elevée</option>
-                                            <option value="vis">Visibilité (brouillard)</option>
+                                            <option value="vis">Visibilité (API)</option>
+                                            <option value="fog">Brouillard (Man.)</option>
                                             <option value="canicule">Canicule</option>
                                             <option value="soil">Humidité Sol</option>
                                         </select>
@@ -1898,29 +2375,32 @@ Voici les données brutes :`;
                         </div>
                     </div>
 
-                    <label className="btp-print-option"><input type="checkbox" checked={checkPeriod} onChange={(e) => setCheckPeriod(e.target.checked)} /> Ajouter page synthèse globale</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                        <button className="btp-btn btp-btn-print" onClick={handlePrint}>🖨️ PDF / IMPRIMER</button>
-                        <button className="btp-btn btp-btn-word" onClick={exportWord}>📝 EXPORT WORD</button>
-                        <button className="btp-btn btp-btn-mail" onClick={sendMail}>📧 ENVOYER MAIL</button>
-                        <button className="btp-btn btp-btn-copy" onClick={copyMailBody}>📋 COPIER TEXTE</button>
-                    </div>
+                    <div className="btp-panel" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px' }}>
+                        <label className="btp-print-option" style={{ marginBottom: '15px' }}><input type="checkbox" checked={checkPeriod} onChange={(e) => setCheckPeriod(e.target.checked)} /> Ajouter page synthèse globale</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <button className="btp-btn btp-btn-print" onClick={handlePrint} style={{ background: '#0f172a', margin: 0 }}>🖨️ IMPRIMER (PDF)</button>
+                            <button className="btp-btn btp-btn-word" onClick={exportWord} style={{ background: '#2b579a', margin: 0 }}>📝 EXPORT WORD</button>
+                            <button className="btp-btn btp-btn-mail" onClick={sendMail} style={{ margin: 0 }}>📧 ENVOYER MAIL</button>
+                            <button className="btp-btn btp-btn-copy" onClick={copyMailBody} style={{ margin: 0 }}>📋 COPIER TEXTE</button>
+                        </div>
 
-                    <div style={{ marginTop: '20px', borderTop: '2px dashed #e2e8f0', paddingTop: '15px' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '1rem' }}>Style des Graphiques</div>
-                        <div className="btp-design-selector">
-                            <label className={chartDesign === 'architect' ? 'active' : ''}>
-                                <input type="radio" name="chartStyle" value="architect" checked={chartDesign === 'architect'} onChange={() => setChartDesign('architect')} /> 🏢 Architecte
-                            </label>
-                            <label className={chartDesign === 'vibrant' ? 'active' : ''}>
-                                <input type="radio" name="chartStyle" value="vibrant" checked={chartDesign === 'vibrant'} onChange={() => setChartDesign('vibrant')} /> 🌈 Vibrant
-                            </label>
-                            <label className={chartDesign === 'minimal' ? 'active' : ''}>
-                                <input type="radio" name="chartStyle" value="minimal" checked={chartDesign === 'minimal'} onChange={() => setChartDesign('minimal')} /> ❄️ Minimal
-                            </label>
+                        <div style={{ marginTop: '20px', borderTop: '2px dashed #e2e8f0', paddingTop: '15px' }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '1rem' }}>Style des Graphiques</div>
+                            <div className="btp-design-selector">
+                                <label className={chartDesign === 'architect' ? 'active' : ''}>
+                                    <input type="radio" name="chartStyle" value="architect" checked={chartDesign === 'architect'} onChange={() => setChartDesign('architect')} /> 🏢 Architecte
+                                </label>
+                                <label className={chartDesign === 'vibrant' ? 'active' : ''}>
+                                    <input type="radio" name="chartStyle" value="vibrant" checked={chartDesign === 'vibrant'} onChange={() => setChartDesign('vibrant')} /> 🌈 Vibrant
+                                </label>
+                                <label className={chartDesign === 'minimal' ? 'active' : ''}>
+                                    <input type="radio" name="chartStyle" value="minimal" checked={chartDesign === 'minimal'} onChange={() => setChartDesign('minimal')} /> ❄️ Minimal
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
+
                 <div className="btp-preview">
                     <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} />
                 </div>
