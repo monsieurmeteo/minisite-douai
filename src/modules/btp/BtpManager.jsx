@@ -1842,37 +1842,47 @@ Voici les données brutes :`;
                     <h1 style={{ textAlign: 'center', marginBottom: '15px' }}>🌦️ Météo BTP <span style={{ fontSize: '0.9rem', fontWeight: 600, opacity: 0.5, background: '#e2e8f0', padding: '2px 8px', borderRadius: '4px', verticalAlign: 'middle' }}>PRO V10</span></h1>
 
 
-                    <div className="btp-panel" style={{ border: '2px solid var(--primary)', padding: '12px' }}>
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div className="btp-panel" style={{ border: '2px solid var(--primary)', padding: '20px', borderRadius: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div className="btp-step-num" style={{ background: 'var(--primary)' }}>📁</div>
+                                <span className="btp-panel-title">DOSSIER & PROJET</span>
+                            </div>
+                            <div dangerouslySetInnerHTML={{ __html: status }} style={{ fontSize: '0.95rem', fontWeight: '700' }} />
+                        </div>
 
-                            {/* BLOC 1 : Sélection et Gestion Client */}
-                            <div style={{ display: 'flex', gap: '5px', flex: '1 1 350px' }}>
-                                <select value={currentProjectId} onChange={(e) => handleProjectSelect(e.target.value)} style={{ flex: 1, fontWeight: 'bold', height: '42px', border: '2px solid #ddd' }}>
-                                    <option value="">{currentProjectId ? '--- SELECTIONNER UN PROJET ---' : '--- MODE NOUVEAU PROJET ---'}</option>
-                                    <option value="DEMO_QUARTUS">📊 [DÉMO] QUARTUS - Officiel</option>
-                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                                <button className="btp-btn btp-btn-primary" onClick={resetToNew} style={{ width: 'auto', background: '#0ea5e9', height: '42px', padding: '0 15px', whiteSpace: 'nowrap' }} title="Nouveau projet vide">➕ Nouveau</button>
+                        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            {/* BLOC 1 : Sélection */}
+                            <div style={{ flex: '1 1 300px' }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', fontWeight: '800' }}>Charger un Dossier existant</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <select value={currentProjectId} onChange={(e) => handleProjectSelect(e.target.value)} style={{ flex: 1, fontWeight: 'bold', height: '42px', border: '2px solid #cbd5e1', borderRadius: '8px' }}>
+                                        <option value="">{currentProjectId ? '--- SELECTIONNER UN PROJET ---' : '--- MODE NOUVEAU PROJET ---'}</option>
+                                        <option value="DEMO_QUARTUS">📊 [DÉMO] QUARTUS - Officiel</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                    <button className="btp-btn btp-btn-primary" onClick={resetToNew} style={{ width: 'auto', background: '#0ea5e9', height: '42px', padding: '0 15px' }} title="Nouveau projet vide">➕ Nouveau</button>
+                                </div>
                             </div>
 
-                            {/* BLOC 2 : Nom du projet / Dossier (Centre) */}
+                            {/* BLOC 2 : Nom */}
                             <div style={{ flex: '1 1 200px' }}>
-                                <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 'bold' }}>📁 Nom du Dossier / Projet</label>
-                                <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Nom du dossier..." style={{ width: '100%', height: '38px', fontSize: '0.95rem', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0 10px' }} />
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', fontWeight: '800' }}>Nom du Dossier / Projet</label>
+                                <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Nom du dossier..." style={{ width: '100%', height: '42px', fontSize: '0.95rem', fontWeight: 'bold', border: '2px solid #cbd5e1', borderRadius: '8px', padding: '0 12px' }} />
                             </div>
 
-                            {/* BLOC 3 : Actions de Sauvegarde */}
-                            <div style={{ display: 'flex', gap: '5px' }}>
-                                <button className="btp-btn btp-btn-save" onClick={saveProject} style={{ height: '42px', minWidth: '140px', background: '#7c3aed' }}>
+                            {/* BLOC 3 : Actions */}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btp-btn btp-btn-save" onClick={saveProject} style={{ height: '42px', minWidth: '150px', background: '#7c3aed', borderRadius: '8px' }}>
                                     💾 ENREGISTRER
                                 </button>
                                 {currentProjectId ? (
                                     <>
-                                        <button className="btp-btn-config" onClick={duplicateProject} style={{ height: '42px', whiteSpace: 'nowrap' }}>📂 CLONER</button>
-                                        <button className="btp-btn-del" onClick={deleteProject} style={{ height: '42px', padding: '0 12px', background: '#ef4444', color: 'white', border: 'none', margin: 0 }}>🗑️</button>
+                                        <button className="btp-btn-config" onClick={duplicateProject} style={{ height: '42px', padding: '0 15px', borderRadius: '8px' }}>📂 CLONER</button>
+                                        <button className="btp-btn-del" onClick={deleteProject} style={{ height: '42px', padding: '0 15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}>🗑️</button>
                                     </>
                                 ) : (
-                                    (projectName !== 'Météo BTP') && <button className="btp-btn-config" onClick={resetToNew} style={{ height: '42px' }}>❌ Annuler</button>
+                                    (projectName !== 'Météo BTP') && <button className="btp-btn-config" onClick={resetToNew} style={{ height: '42px', borderRadius: '8px' }}>❌ Annuler</button>
                                 )}
                             </div>
                         </div>
@@ -2043,10 +2053,9 @@ Voici les données brutes :`;
                                 </div>
                             </div>
 
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                    <div dangerouslySetInnerHTML={{ __html: status }} style={{ fontSize: '0.9rem', fontWeight: '600' }} />
-                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingLeft: '20px', borderLeft: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
                                         {Object.keys(globalData).length > 0 ? `📊 ${Object.keys(globalData).length} jours chargés` : 'Aucune donnée'}
                                     </div>
                                 </div>
