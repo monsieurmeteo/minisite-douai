@@ -327,7 +327,6 @@ Voici les données brutes :`;
             client_header: txCli,
             client_email: emailCli,
             station_id: selectedStationId,
-            selected_dept: selectedDept,
             station_name: stationMeteo,
             logo_left: logoL,
             logo_right: logoR,
@@ -335,18 +334,6 @@ Voici les données brutes :`;
             active_trades: activeTrades,
             rules: rules,
             annex_cols: annexCols,
-            report_type: reportType,
-            chantier_name: chantierName,
-            project_address: projectAddress,
-            contract_duration: contractDuration,
-            contract_duration_unit: contractDurationUnit,
-            start_chantier_date: startChantierDate,
-            project_client: projectClient,
-            client_address: clientAddress,
-            client_phone: clientPhone,
-            client_email_contact: clientEmail,
-            emitter_phone: emitterPhone,
-            emitter_email: emitterEmail,
             display_simple: displaySimple,
             show_charts: showCharts,
             check_period: checkPeriod,
@@ -365,7 +352,9 @@ Voici les données brutes :`;
                     contract_duration: contractDuration,
                     report_type: reportType,
                     emitter_phone: emitterPhone,
-                    emitter_email: emitterEmail
+                    emitter_email: emitterEmail,
+                    contract_duration_unit: contractDurationUnit,
+                    selected_dept: selectedDept
                 }
             },
 
