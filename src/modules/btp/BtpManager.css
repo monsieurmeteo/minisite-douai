@@ -22,11 +22,19 @@
 
 .btp-layout {
     display: grid;
-    grid-template-columns: minmax(900px, 1.2fr) 1fr;
-    gap: 30px;
-    max-width: 3000px;
-    margin: 0 auto;
+    grid-template-columns: 1fr 600px;
+    /* Panneau gauche flexible, Rapport à droite (plus compact) */
+    gap: 25px;
+    max-width: 100%;
+    margin: 0;
     align-items: start;
+}
+
+@media (min-width: 1600px) {
+    .btp-layout {
+        grid-template-columns: 1fr 800px;
+        /* Plus d'espace pour le rapport sur grand écran */
+    }
 }
 
 .btp-panel {
@@ -896,7 +904,6 @@
         line-height: 1.4 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        color-adjust: exact !important;
     }
 
     /* ===== MASQUER ÉLÉMENTS NON-IMPRIMABLES ===== */
@@ -1210,7 +1217,7 @@ canvas {
 /* Daily Cards Grid */
 .btp-days-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 15px;
     max-height: 500px;
     overflow-y: auto;

@@ -2046,7 +2046,10 @@ Voici les données brutes :`;
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingLeft: '20px', borderLeft: '1px solid #e2e8f0' }}>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
                                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
-                                        {Object.keys(globalData).length > 0 ? `📊 ${Object.keys(globalData).length} jours chargés` : 'Aucune donnée'}
+                                        {(() => {
+                                            const daysCount = Object.keys(globalData || {}).filter(k => k !== '__metadata').length;
+                                            return daysCount > 0 ? `📊 ${daysCount} jours chargés` : 'Aucun relevé';
+                                        })()}
                                     </div>
                                 </div>
 
@@ -2091,10 +2094,14 @@ Voici les données brutes :`;
                                             </div>
                                         </div>
                                     ))}
-                                    {Object.keys(globalData).length === 0 && (
+                                    {Object.keys(globalData || {}).filter(k => k !== '__metadata').length === 0 && (
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '15px' }}>
-                                            <div style={{ fontSize: '3rem' }}>📁</div>
-                                            <div style={{ fontWeight: '600' }}>Les relevés apparaîtront ici après import</div>
+                                            <div style={{ fontSize: '3rem' }}>📥</div>
+                                            <div style={{ fontWeight: '600', textAlign: 'center' }}>
+                                                Sélectionnez une période et cliquez sur<br />
+                                                <span style={{ color: '#3b82f6' }}>"RÉCUPÉRER RELEVÉS"</span><br />
+                                                pour éditer l'humidité et le brouillard.
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -2404,8 +2411,8 @@ Voici les données brutes :`;
                     </div>
                 </div >
 
-                <div className="btp-preview">
-                    <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} />
+                <div className="btp-preview" style={{ background: '#cbd5e1', padding: '20px', borderRadius: '12px', minHeight: '100vh', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)' }}>
+                    <div id="btp-out-report" dangerouslySetInnerHTML={{ __html: reportOutput }} style={{ background: 'white', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', margin: '0 auto' }} />
                 </div>
             </div >
         </div >
