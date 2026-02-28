@@ -382,7 +382,20 @@ Voici les données brutes :`;
                 const { weatherAPI } = await import('../../services/api');
                 let data = await weatherAPI.getDepartmentLatestHoraire(selectedDept);
 
-                // Fallback to local station list if database is empty for this department
+                if (!data || data.length === 0) {
+                    console.log("[BTP] No stations in DB, using local fallback for dept:", selectedDept);
+                    try {
+                        const stationNamesData = await import('../../data/stationNames.json');
+                        const deptPrefix = (selectedDept === '2A' || selectedDept === '2B') ? '20' : selectedDept;
+                        const filtered = Object.entries(stationNamesData.default || stationNamesData)
+                            .filter(([id]) => id.startsWith(deptPrefix))
+                            .map(([id, name]) => ({ station_id: id, nom_station: name }));
+                        data = filtered;
+                    } catch (err) {
+                        console.error("[BTP] Error loading local station fallback:", err);
+                        data = [];
+                    }
+                }
                 setStations(data || []);
                 const names = { ...stationNames };
                 const { geoService } = await import('../../services/geoService');
@@ -1978,73 +1991,67 @@ Voici les données brutes :`;
                     <div className="btp-panel">
                         <div className="btp-panel-head"><div style={{ display: 'flex', alignItems: 'center' }}><div className="btp-step-num">1</div><span className="btp-panel-title">Données & Période</span></div></div>
 
-                        <div style={{ display: 'flex', gap: '25px', alignItems: 'stretch' }}>
-                            <div style={{ flex: '0 0 380px' }}>
-                                <div style={{ background: '#f0f9ff', padding: '20px', borderRadius: '12px', border: '1px solid #bae6fd', marginBottom: '15px', height: '100%', boxSizing: 'border-box' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
-                                        <span style={{ fontSize: '1.2rem' }}>🌡️</span>
-                                        <span style={{ fontWeight: '800', color: '#1e40af', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Station & Période</span>
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                        <div className="btp-form-group" style={{ margin: 0 }}>
-                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Département</label>
-                                            <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
-                                                <option value="">Sélectionner...</option>
-                                                {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="btp-form-group" style={{ margin: 0 }}>
-                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Station Météo</label>
-                                            <select value={selectedStationId} disabled={!selectedDept || loadingStations} onChange={(e) => {
-                                                const newVal = e.target.value;
-                                                setSelectedStationId(newVal);
-                                                const name = stationNames[newVal] || stations.find(s => s.station_id === newVal)?.nom_usuel || newVal;
-                                                const finalDisplayName = (name === newVal) ? name : `${name} (${newVal})`;
-                                                setStationMeteo(finalDisplayName);
-                                            }} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
-                                                <option value="">{loadingStations ? '⏳ Chargement...' : 'Choisir une station...'}</option>
-                                                {stations?.map(s => {
-                                                    const name = stationNames[s.station_id] || s.nom_station || (s.station_id === s.id_station ? '' : s.nom_usuel);
-                                                    const label = (name && name !== s.station_id) ? `${name} (${s.station_id})` : s.station_id;
-                                                    return <option key={s.station_id} value={s.station_id}>{label}</option>
-                                                })}
-                                            </select>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>Date Début</label>
-                                                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>Date Fin</label>
-                                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
-                                            </div>
-                                        </div>
-
-                                        <button className="btp-btn btp-btn-primary" onClick={handlePeriodImport} style={{ width: '100%', height: '48px', fontSize: '1rem', background: '#3b82f6', marginTop: '5px' }}>
-                                            📥 RÉCUPÉRER RELEVÉS
-                                        </button>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '5px' }}>
-                                            <button className="btp-btn-help" onClick={() => setAiImportModalOpen(true)} style={{ fontSize: '0.75rem', padding: '8px' }}>🤖 Import IA</button>
-                                            <button className="btp-btn-help" onClick={() => csvFileInputRef.current.click()} style={{ fontSize: '0.75rem', padding: '8px' }}>📁 Import CSV</button>
-                                        </div>
-                                        <input type="file" ref={csvFileInputRef} hidden accept=".csv" onChange={handleCsvFileUpload} />
-
-                                        <div style={{ marginTop: '5px', borderTop: '1px solid #bae6fd', paddingTop: '10px' }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>
-                                                <input type="checkbox" checked={autoSnow} onChange={(e) => { setAutoSnow(e.target.checked); }} />
-                                                <span>Défaut neige auto. (T° &le;</span>
-                                                <input type="number" value={snowTempLimit} onChange={(e) => setSnowTempLimit(parseFloat(e.target.value))} style={{ width: '45px', padding: '2px', textAlign: 'center' }} />
-                                                <span>°C)</span>
-                                            </label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div className="btp-params-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', background: '#f0f9ff', padding: '20px', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                                <div className="btp-form-group" style={{ margin: 0 }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Département</label>
+                                    <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
+                                        <option value="">Sélectionner...</option>
+                                        {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="btp-form-group" style={{ margin: 0 }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Station Météo</label>
+                                    <select value={selectedStationId} disabled={!selectedDept || loadingStations} onChange={(e) => {
+                                        const newVal = e.target.value;
+                                        setSelectedStationId(newVal);
+                                        const name = stationNames[newVal] || stations.find(s => s.station_id === newVal)?.nom_usuel || newVal;
+                                        const finalDisplayName = (name === newVal) ? name : `${name} (${newVal})`;
+                                        setStationMeteo(finalDisplayName);
+                                    }} style={{ width: '100%', height: '42px', fontWeight: '600' }}>
+                                        <option value="">{loadingStations ? '⏳ Chargement...' : 'Choisir une station...'}</option>
+                                        {stations?.map(s => {
+                                            const name = stationNames[s.station_id] || s.nom_station || (s.station_id === s.id_station ? '' : s.nom_usuel);
+                                            const label = (name && name !== s.station_id) ? `${name} (${s.station_id})` : s.station_id;
+                                            return <option key={s.station_id} value={s.station_id}>{label}</option>
+                                        })}
+                                    </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>Période (Du / Au)</label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
+                                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%', height: '42px' }} />
                                         </div>
                                     </div>
                                 </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
+                                    <button className="btp-btn btp-btn-primary" onClick={handlePeriodImport} style={{ width: '100%', height: '48px', fontSize: '1rem', background: '#3b82f6', margin: 0 }}>
+                                        📥 RÉCUPÉRER RELEVÉS
+                                    </button>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <button className="btp-btn-help" onClick={() => setAiImportModalOpen(true)} style={{ flex: 1, fontSize: '0.75rem', padding: '8px' }}>🤖 Import IA</button>
+                                    <button className="btp-btn-help" onClick={() => csvFileInputRef.current.click()} style={{ flex: 1, fontSize: '0.75rem', padding: '8px' }}>📁 Import CSV</button>
+                                    <input type="file" ref={csvFileInputRef} hidden accept=".csv" onChange={handleCsvFileUpload} />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>
+                                        <input type="checkbox" checked={autoSnow} onChange={(e) => { setAutoSnow(e.target.checked); }} />
+                                        <span>Défaut neige auto. (T° &le;</span>
+                                        <input type="number" value={snowTempLimit} onChange={(e) => setSnowTempLimit(parseFloat(e.target.value))} style={{ width: '45px', padding: '2px', textAlign: 'center' }} />
+                                        <span>°C)</span>
+                                    </label>
+                                </div>
                             </div>
 
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingLeft: '20px', borderLeft: '1px solid #e2e8f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>📋</span>
+                                        <span style={{ fontWeight: '800', color: '#1e40af', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Modifier Relevés (Humidité, Brouillard...)</span>
+                                    </div>
                                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
                                         {(() => {
                                             const daysCount = Object.keys(globalData || {}).filter(k => k !== '__metadata').length;
@@ -2069,26 +2076,27 @@ Voici les données brutes :`;
                                                 <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>MANUEL</span>
                                             </div>
                                             <div className="btp-day-card-content">
-                                                <div className="btp-form-group-row">
-                                                    <label>Humidité Sol (%)</label>
+                                                <div className="btp-form-group-row" style={{ background: '#f0fdf4', padding: '8px', borderRadius: '8px', border: '1px solid #dcfce7', marginBottom: '12px' }}>
+                                                    <label style={{ color: '#166534', fontWeight: '800' }}>💧 Humidité Sol (%)</label>
                                                     <input type="number"
                                                         value={data.soil || ''}
                                                         onChange={(e) => updateDayProp(date, 'soil', parseFloat(e.target.value))}
+                                                        style={{ width: '80px', height: '32px', border: '2px solid #16a34a', borderRadius: '6px', textAlign: 'center', fontWeight: 'bold' }}
                                                         placeholder="0" />
                                                 </div>
 
                                                 <div className="btp-day-card-switches">
-                                                    <label className="btp-switch-label">
+                                                    <label className="btp-switch-label" style={{ color: '#1d4ed8' }}>
                                                         <input type="checkbox" checked={data.fog || false} onChange={(e) => updateDayProp(date, 'fog', e.target.checked)} />
                                                         <span>🌫️ Brouillard</span>
                                                     </label>
-                                                    <label className="btp-switch-label">
+                                                    <label className="btp-switch-label" style={{ color: '#b45309' }}>
                                                         <input type="checkbox" checked={data.forceHeat || false} onChange={(e) => updateDayProp(date, 'forceHeat', e.target.checked)} />
                                                         <span>🔥 Canicule</span>
                                                     </label>
-                                                    <label className="btp-switch-label">
+                                                    <label className="btp-switch-label" style={{ color: '#334155' }}>
                                                         <input type="checkbox" checked={data.forceFroze || false} onChange={(e) => updateDayProp(date, 'forceFroze', e.target.checked)} />
-                                                        <span>❄️ Gelé</span>
+                                                        <span>❄️ Sol Gelé</span>
                                                     </label>
                                                 </div>
                                             </div>
