@@ -22,9 +22,9 @@
 
 .btp-layout {
     display: grid;
-    grid-template-columns: 500px 1fr;
+    grid-template-columns: minmax(900px, 1.2fr) 1fr;
     gap: 30px;
-    max-width: 1900px;
+    max-width: 3000px;
     margin: 0 auto;
     align-items: start;
 }
@@ -1205,4 +1205,101 @@ canvas {
 
 .btp-cell-white {
     background-color: #ffffff !important;
+}
+
+/* Daily Cards Grid */
+.btp-days-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 15px;
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    border: 1px inset rgba(0, 0, 0, 0.05);
+}
+
+.btp-day-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btp-day-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.btp-day-card-header {
+    background: #f8fafc;
+    padding: 12px 15px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+}
+
+.btp-day-card-content {
+    padding: 15px;
+}
+
+.btp-form-group-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.btp-form-group-row label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 0;
+}
+
+.btp-form-group-row input {
+    width: 70px !important;
+    padding: 6px !important;
+    text-align: center;
+    margin-bottom: 0 !important;
+    font-weight: 700;
+}
+
+.btp-day-card-switches {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    background: #f8fafc;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.btp-switch-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.btp-switch-label:hover {
+    background: #f1f5f9;
+}
+
+.btp-switch-label input {
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 !important;
+    cursor: pointer;
 }
