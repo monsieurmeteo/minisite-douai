@@ -1075,8 +1075,7 @@ Voici les données brutes :`;
                 if (r.var === 'vent_rafale') k = 'Rafale'; if (r.var === 'vent_avg') k = 'V. Moy';
                 if (r.var === 'temp') k = 'Temp'; if (r.var === 'pluie') k = 'Pluie';
                 if (r.var === 'neige') k = 'Neige'; if (r.var === 'soil') k = 'Hum. Sol';
-                if (r.var === 'vis') k = 'Visibilité (API)';
-                if (r.var === 'fog') k = 'Brouillard (Man.)';
+                if (r.var === 'fog') k = 'Brouillard';
                 let desc = r.desc || `${k} ${r.op} ${r.val}`;
                 const res = calculateKoV96(r, dData, soilVal, forceHeat, forceFroze, forceFog);
                 ruleCols.push({ desc, res, lots: r.lots || [] });
@@ -1301,7 +1300,6 @@ Voici les données brutes :`;
         else if (t === 'neige') { n.op = ">="; n.val = 1; n.var = "neige"; }
         else if (t === 'soil') { n.op = ">="; n.val = 20; n.var = "soil"; }
         else if (t === 'heat') { n.op = ">="; n.val = 35; n.var = "heat"; }
-        else if (t === 'vis') { n.op = "<="; n.val = 1000; n.var = "vis"; }
         else if (t === 'canicule') { n.var = "canicule"; n.type = "cond1"; n.val = "Déclarée"; n.op = "=="; }
 
         setRules(prev => [...prev, n]);
@@ -2079,7 +2077,6 @@ Voici les données brutes :`;
                                         <div key={date} className="btp-day-card">
                                             <div className="btp-day-card-header">
                                                 <span>{date}</span>
-                                                <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>MANUEL</span>
                                             </div>
                                             <div className="btp-day-card-content">
                                                 <div className="btp-form-group-row" style={{ background: '#f0fdf4', padding: '8px', borderRadius: '8px', border: '1px solid #dcfce7', marginBottom: '12px' }}>
