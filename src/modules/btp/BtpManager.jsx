@@ -859,13 +859,12 @@ Voici les données brutes :`;
         if (r.var === 'temp' && forceFroze && r.val <= 0) return "GELÉ";
         if (r.var === 'fog' && forceFog) return "PRÉSENT";
 
-        let k = r.var == 'vent_rafale' ? 'w_gst' : (r.var == 'vent_avg' ? 'w_avg' : (r.var == 'pluie' ? 'rain' : (r.var == 'neige' ? 'snow' : (r.var == 'humi_max' ? 'humi' : (r.var == 'vis' ? 'vv' : 'temp')))));
+        let k = r.var == 'vent_rafale' ? 'w_gst' : (r.var == 'vent_avg' ? 'w_avg' : (r.var == 'pluie' ? 'rain' : (r.var == 'neige' ? 'snow' : (r.var == 'humi_max' ? 'humi' : 'temp'))));
         let v1 = safeFloat(r.val);
         if (r.var === 'heat') k = 'temp';
-        let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : (r.var === 'vis' ? 'm' : 'km/h'))));
+        let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : 'km/h')));
 
         const formatVal = (val, h) => {
-            if (r.var === 'vis') return `${(val / 1000).toFixed(1)}km (à ${h}h)`;
             return `${val}${unit} (à ${h}h)`;
         };
 
@@ -1107,7 +1106,6 @@ Voici les données brutes :`;
             const gsAll = dData.map(d => d.w_gst || 0);
             const asAll = dData.map(d => d.w_avg || 0);
             const hsAll = dData.map(d => d.humi || 0);
-            const vsAll = dData.map(d => d.vv).filter(v => v !== null);
 
             let sumH = ""; let sumR = "";
             const thStyle = 'background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;';
@@ -1117,7 +1115,6 @@ Voici les données brutes :`;
             if (annexCols.windAvgPdf) { sumH += `<th style="${thStyle}">Vent Moy. Max</th>`; sumR += `<td>${asAll.length ? Math.max(...asAll).toFixed(1) : 0} km/h</td>`; }
             if (annexCols.windG) { sumH += `<th style="${thStyle}">Rafale Max</th>`; sumR += `<td>${gsAll.length ? Math.max(...gsAll).toFixed(1) : 0} km/h</td>`; }
             if (annexCols.humi) { sumH += `<th style="${thStyle}">Hum. Max</th>`; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
-            if (annexCols.vis) { sumH += `<th style="${thStyle}">Vis. Min</th>`; sumR += `<td>${vsAll.length ? (Math.min(...vsAll) / 1000).toFixed(1) : '--'} km</td>`; }
             if (annexCols.soil) { sumH += `<th style="${thStyle}">Hum. Sol</th>`; sumR += `<td>${soilVal || '--'}%</td>`; }
             if (annexCols.fog) { sumH += `<th style="${thStyle}">Brouillard</th>`; sumR += `<td>${forceFog ? 'OUI' : 'NON'}</td>`; }
 
@@ -1137,7 +1134,6 @@ Voici les données brutes :`;
             if (annexCols.windAvgPdf) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">V.Moy</th>";
             if (annexCols.windG) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Raf.</th>";
             if (annexCols.humi) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Hum.</th>";
-            if (annexCols.vis) part2 += "<th style=\"background-color:#1e293b !important; color:white !important; padding:4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\">Vis.</th>";
             part2 += `</tr></thead><tbody>`;
             dData.forEach(r => {
                 part2 += `<tr class="btp-stripe"><td>${r.h}h</td>`;
@@ -1147,7 +1143,6 @@ Voici les données brutes :`;
                 if (annexCols.windAvgPdf) part2 += `<td>${parseFloat(r.w_avg || 0).toFixed(1)}</td>`;
                 if (annexCols.windG) part2 += `<td>${parseFloat(r.w_gst || 0).toFixed(1)}</td>`;
                 if (annexCols.humi) part2 += `<td>${Math.round(r.humi || 0)}%</td>`;
-                if (annexCols.vis) part2 += `<td>${r.vv !== null && r.vv !== undefined ? (r.vv / 1000).toFixed(1) : '--'}</td>`;
                 part2 += `</tr>`;
             });
             part2 += `</tbody></table>`;
