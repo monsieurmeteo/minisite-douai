@@ -20,7 +20,7 @@ jobs:
           cache: 'npm'
           
       - name: Install dependencies
-        run: npm install
+        run: npm install && npm install puppeteer
         
       - name: Install Playwright/Puppeteer dependencies
         run: sudo apt-get update && sudo apt-get install -y libgbm-dev

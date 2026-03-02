@@ -211,28 +211,18 @@ export const weatherAPI = {
             if (worldMap[deptCode]) searchCode = worldMap[deptCode];
 
             const { data, error } = await supabase
-                .from('observations_6mn')
-                .select('*')
-                .like('station_id', `${searchCode}%`)
-                .order('timestamp', { ascending: false })
-                .limit(500); // Increased limit due to density
+                .from('stations')
+                .select('id, name')
+                .like('id', `${searchCode}%`)
+                .order('name', { ascending: true });
 
             if (error) throw error;
 
-            const grouped = {};
-            data.forEach(obs => {
-                if (!grouped[obs.station_id]) {
-                    grouped[obs.station_id] = [];
-                }
-                if (grouped[obs.station_id].length < 10) {
-                    grouped[obs.station_id].push(obs);
-                }
-            });
-
-            return Object.entries(grouped).map(([id, history]) => ({
-                station_id: id,
-                latest: history[0],
-                history: history
+            return data.map(station => ({
+                station_id: station.id,
+                name: station.name,
+                latest: null, // latest observation not strictly needed for the dropdown
+                history: []
             }));
         } catch (e) {
             console.error("[API] getDepartmentLatest error:", e);

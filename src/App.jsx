@@ -27,6 +27,9 @@ import ClimatologyDashboard from './modules/climatology/ClimatologyDashboard';
 import NationalRecordsMonitor from './modules/climatology/NationalRecordsMonitor';
 import Temperatures30Villes from './modules/observations/Temperatures30Villes';
 import WindGustMap from './modules/maps/WindGustMap';
+import RainfallMap from './modules/maps/RainfallMap';
+import TemperatureMap from './modules/maps/TemperatureMap';
+import MonthlyMapsHub from './modules/maps/MonthlyMapsHub';
 import { Menu } from 'lucide-react';
 import './App.css';
 
@@ -72,6 +75,9 @@ function App() {
           <Route path="/supervision-records" element={<NationalRecordsMonitor />} />
           <Route path="/temperatures-30-villes" element={<Temperatures30Villes />} />
           <Route path="/carte-rafales" element={<WindGustMap />} />
+          <Route path="/carte-pluie" element={<RainfallMap />} />
+          <Route path="/carte-temperatures" element={<TemperatureMap />} />
+          <Route path="/cartes-mensuelles" element={<MonthlyMapsHub />} />
         </Routes>
       </main>
 

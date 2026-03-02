@@ -22,7 +22,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install && npm install puppeteer
 
       # ── ÉTAPE 1 : Appel de l'Edge Function Supabase ──────────────────────────
       - name: 🌩️ Collect Vigilance from Météo-France API

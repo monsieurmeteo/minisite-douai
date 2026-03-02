@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText
+  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3
 } from 'lucide-react';
 import clsx from 'clsx';
 import { DEPARTMENTS } from '../data/departments';
@@ -110,7 +110,7 @@ export default function Sidebar({ isOpen, onClose }) {
               <option value="">{loadingStations ? 'Chargement...' : 'Choisir une station...'}</option>
               {stations.map(s => (
                 <option key={s.station_id} value={s.station_id}>
-                  {stationNames[s.station_id] || s.station_id} ({s.station_id})
+                  {stationNames[s.station_id] || s.name || s.station_id} ({s.station_id})
                 </option>
               ))}
             </select>
@@ -139,6 +139,18 @@ export default function Sidebar({ isOpen, onClose }) {
         <NavLink to="/carte-rafales" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <MapIcon size={18} style={{ color: '#8b5cf6' }} />
           <span>Carte des Rafales</span>
+        </NavLink>
+        <NavLink to="/carte-pluie" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Droplets size={18} style={{ color: '#0ea5e9' }} />
+          <span>Carte des Pluies</span>
+        </NavLink>
+        <NavLink to="/carte-temperatures" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Thermometer size={18} style={{ color: '#ef4444' }} />
+          <span>Carte Températures</span>
+        </NavLink>
+        <NavLink to="/cartes-mensuelles" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <BarChart3 size={18} style={{ color: '#f59e0b' }} />
+          <span>Cartes Mensuelles</span>
         </NavLink>
         <NavLink to="/satellite" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Satellite size={18} style={{ color: '#60a5fa' }} />

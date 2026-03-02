@@ -321,6 +321,29 @@ Voici les données brutes :`;
     };
 
     const saveProject = async () => {
+        // Champs qui existent comme colonnes directes dans la table btp_projects
+        const directColumns = {
+            project_address: projectAddress,
+            project_client: projectClient,
+            start_chantier_date: startChantierDate,
+            contract_duration: contractDuration,
+            report_type: reportType,
+            emitter_phone: emitterPhone,
+            emitter_email: emitterEmail,
+        };
+
+        // Champs supplémentaires stockés uniquement dans global_data.__metadata
+        const extraMeta = {
+            chantier_name: chantierName,
+            client_address: clientAddress,
+            client_phone: clientPhone,
+            client_email_contact: clientEmail,
+            contract_duration_unit: contractDurationUnit,
+            selected_dept: selectedDept
+        };
+
+        const allMetadata = { ...directColumns, ...extraMeta };
+
         const payload = {
             name: projectName,
             company_header: txEnt,
@@ -339,23 +362,11 @@ Voici les données brutes :`;
             check_period: checkPeriod,
             auto_snow: autoSnow,
             snow_temp_limit: snowTempLimit,
+            // Colonnes directes dans la table btp_projects
+            ...directColumns,
             global_data: {
                 ...globalData,
-                __metadata: {
-                    chantier_name: chantierName,
-                    project_address: projectAddress,
-                    client_address: clientAddress,
-                    client_phone: clientPhone,
-                    client_email_contact: clientEmail,
-                    project_client: projectClient,
-                    start_chantier_date: startChantierDate,
-                    contract_duration: contractDuration,
-                    report_type: reportType,
-                    emitter_phone: emitterPhone,
-                    emitter_email: emitterEmail,
-                    contract_duration_unit: contractDurationUnit,
-                    selected_dept: selectedDept
-                }
+                __metadata: allMetadata
             },
 
             updated_at: new Date()
@@ -520,6 +531,9 @@ Voici les données brutes :`;
                     });
                 });
 
+                // Préserver __metadata lors de l'import CSV
+                const prevMeta = globalData?.__metadata;
+                if (prevMeta) days.__metadata = prevMeta;
                 setGlobalData(days);
                 setSelectedStationId(stationId);
                 setStationMeteo(stationId); // On pourra le changer manuellement
@@ -549,6 +563,7 @@ Voici les données brutes :`;
         }
 
         setStatus('Récupération des données...');
+        const prevMetadata = globalData?.__metadata || {};
         setGlobalData({}); // Reset current data
 
         try {
@@ -713,6 +728,8 @@ Voici les données brutes :`;
             if (Object.keys(newGlobalData).length === 0) {
                 setStatus('⚠️ Aucune donnée trouvée pour cette période/station.');
             } else {
+                // Préserver __metadata lors de l'écrasement de globalData
+                newGlobalData.__metadata = prevMetadata;
                 setGlobalData(newGlobalData);
                 const sNames = stationNames[selectedStationId] || selectedStationId;
                 setStationMeteo(`${sNames} (${selectedStationId})`);

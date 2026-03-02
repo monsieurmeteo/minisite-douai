@@ -2,62 +2,120 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { geoConicConformal, geoPath } from "d3-geo";
 import { supabase } from "../../services/api";
-import { meteoCollector } from "../../services/meteoFranceCollector";
-import { Download, RefreshCw, AlertCircle, Wind, Calendar, ChevronLeft, ChevronRight, ChevronDown, Info } from "lucide-react";
+import { Download, RefreshCw, Thermometer, Calendar, ChevronLeft, ChevronRight, ChevronDown, Info } from "lucide-react";
 import html2canvas from "html2canvas";
-import { format, isValid, subDays, addDays } from "date-fns";
+import { format, subDays, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import stationNamesData from "../../data/stationNames.json";
 import stationsMetadata from "../../data/stationsMetadata.json";
 import stationsListData from "../../data/stations_list.json";
 import { Delaunay } from "d3-delaunay";
 
-// Échelle de couleurs officielle (60 -> 180 km/h) extraite de l'image de référence
-const WIND_SCALE = [
-    { min: 0, max: 60, color: '#ffffe0', label: '< 60' },
-    { min: 60, max: 70, color: '#fef0b9', label: '60 - 70' },
-    { min: 70, max: 80, color: '#fde492', label: '70 - 80' },
-    { min: 80, max: 90, color: '#fccb70', label: '80 - 90' },
-    { min: 90, max: 100, color: '#fbaf53', label: '90 - 100' },
-    { min: 100, max: 110, color: '#f88e36', label: '100 - 110' },
-    { min: 110, max: 120, color: '#f26829', label: '110 - 120' },
-    { min: 120, max: 130, color: '#e23b30', label: '120 - 130' },
-    { min: 130, max: 140, color: '#c61d5f', label: '130 - 140' },
-    { min: 140, max: 150, color: '#a02c91', label: '140 - 150' },
-    { min: 150, max: 160, color: '#802eaf', label: '150 - 160' },
-    { min: 160, max: 170, color: '#9d66e5', label: '160 - 170' },
-    { min: 170, max: 180, color: '#c39cf5', label: '170 - 180' },
-    { min: 180, max: Infinity, color: '#e6d8ff', label: '> 180' },
+// Échelle de couleurs officielle pour les températures (extraite de la légende fournie : -12 à 46°C)
+const TEMP_SCALE = [
+    { min: -Infinity, max: -12, color: '#1a1a6e', label: '< -12' },
+    { min: -12, max: -10, color: '#23239e', label: '-12 / -10' },
+    { min: -10, max: -8, color: '#2b2bcf', label: '-10 / -8' },
+    { min: -8, max: -6, color: '#3366e6', label: '-8 / -6' },
+    { min: -6, max: -4, color: '#4d8cf0', label: '-6 / -4' },
+    { min: -4, max: -2, color: '#66b3f5', label: '-4 / -2' },
+    { min: -2, max: 0, color: '#80d4fc', label: '-2 / 0' },
+    { min: 0, max: 2, color: '#99e6ff', label: '0 / 2' },
+    { min: 2, max: 4, color: '#b3f0ff', label: '2 / 4' },
+    { min: 4, max: 6, color: '#ccffcc', label: '4 / 6' },
+    { min: 6, max: 8, color: '#a3e6a3', label: '6 / 8' },
+    { min: 8, max: 10, color: '#7acc7a', label: '8 / 10' },
+    { min: 10, max: 12, color: '#52b352', label: '10 / 12' },
+    { min: 12, max: 14, color: '#339933', label: '12 / 14' },
+    { min: 14, max: 16, color: '#669900', label: '14 / 16' },
+    { min: 16, max: 18, color: '#99b300', label: '16 / 18' },
+    { min: 18, max: 20, color: '#cccc00', label: '18 / 20' },
+    { min: 20, max: 22, color: '#e6cc00', label: '20 / 22' },
+    { min: 22, max: 24, color: '#ffcc00', label: '22 / 24' },
+    { min: 24, max: 26, color: '#ffaa00', label: '24 / 26' },
+    { min: 26, max: 28, color: '#ff8800', label: '26 / 28' },
+    { min: 28, max: 30, color: '#ff6600', label: '28 / 30' },
+    { min: 30, max: 32, color: '#ff4400', label: '30 / 32' },
+    { min: 32, max: 34, color: '#ff1a1a', label: '32 / 34' },
+    { min: 34, max: 36, color: '#e60000', label: '34 / 36' },
+    { min: 36, max: 38, color: '#cc0033', label: '36 / 38' },
+    { min: 38, max: 40, color: '#b30059', label: '38 / 40' },
+    { min: 40, max: 42, color: '#cc00cc', label: '40 / 42' },
+    { min: 42, max: 44, color: '#e066e0', label: '42 / 44' },
+    { min: 44, max: 46, color: '#f0b3f0', label: '44 / 46' },
+    { min: 46, max: Infinity, color: '#f5d9f5', label: '> 46' },
 ];
 
-const getWindColor = (value) => {
-    if (value === null || value === undefined || value < 30) return '#ffffff';
-    const range = WIND_SCALE.find(r => value >= r.min && value < r.max);
-    return range ? range.color : '#e6d8ff';
+const getTempColor = (value, scale = TEMP_SCALE) => {
+    if (value === null || value === undefined) return '#e2e8f0';
+    const range = scale.find(r => value >= r.min && value < r.max);
+    return range ? range.color : '#f5d9f5';
 };
 
-const WindGustMap = () => {
+// Échelle alternative Météo-France "Modèle" (légende officielle -24 à 45°C)
+const TEMP_SCALE_MF = [
+    { min: -Infinity, max: -24, color: '#2a004f', label: '< -24' },
+    { min: -24, max: -22, color: '#3d006b', label: '-24/-22' },
+    { min: -22, max: -20, color: '#4a0082', label: '-22/-20' },
+    { min: -20, max: -18, color: '#2d0099', label: '-20/-18' },
+    { min: -18, max: -15, color: '#1500b3', label: '-18/-15' },
+    { min: -15, max: -14, color: '#0000cd', label: '-15/-14' },
+    { min: -14, max: -12, color: '#0019e6', label: '-14/-12' },
+    { min: -12, max: -10, color: '#0040ff', label: '-12/-10' },
+    { min: -10, max: -8, color: '#0066ff', label: '-10/-8' },
+    { min: -8, max: -6, color: '#0099ff', label: '-8/-6' },
+    { min: -6, max: -4, color: '#00bbff', label: '-6/-4' },
+    { min: -4, max: -2, color: '#00ddff', label: '-4/-2' },
+    { min: -2, max: 0, color: '#55eeff', label: '-2/0' },
+    { min: 0, max: 2, color: '#99ffff', label: '0/2' },
+    { min: 2, max: 4, color: '#bbffe8', label: '2/4' },
+    { min: 4, max: 6, color: '#ccffcc', label: '4/6' },
+    { min: 6, max: 8, color: '#80e680', label: '6/8' },
+    { min: 8, max: 10, color: '#4dcc4d', label: '8/10' },
+    { min: 10, max: 12, color: '#33b333', label: '10/12' },
+    { min: 12, max: 14, color: '#339900', label: '12/14' },
+    { min: 14, max: 16, color: '#66aa00', label: '14/16' },
+    { min: 16, max: 18, color: '#99bb00', label: '16/18' },
+    { min: 18, max: 20, color: '#cccc00', label: '18/20' },
+    { min: 20, max: 22, color: '#ffe600', label: '20/22' },
+    { min: 22, max: 24, color: '#ffcc00', label: '22/24' },
+    { min: 24, max: 26, color: '#ffaa00', label: '24/26' },
+    { min: 26, max: 28, color: '#ff8800', label: '26/28' },
+    { min: 28, max: 30, color: '#ff6600', label: '28/30' },
+    { min: 30, max: 32, color: '#ff3300', label: '30/32' },
+    { min: 32, max: 34, color: '#e60000', label: '32/34' },
+    { min: 34, max: 36, color: '#cc0033', label: '34/36' },
+    { min: 36, max: 38, color: '#cc0066', label: '36/38' },
+    { min: 38, max: 40, color: '#dd0099', label: '38/40' },
+    { min: 40, max: 42, color: '#ee00cc', label: '40/42' },
+    { min: 42, max: 44, color: '#ff66dd', label: '42/44' },
+    { min: 44, max: Infinity, color: '#ff99ee', label: '> 44' },
+];
+
+const TemperatureMap = () => {
     const navigate = useNavigate();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [geoData, setGeoData] = useState(null);
     const [regionsGeoData, setRegionsGeoData] = useState(null);
-    const [deptData, setDeptData] = useState({}); // code -> maxGust
-    const [stations, setStations] = useState([]); // Stations avec coordonnées et valeurs
+    const [stations, setStations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isRealTime, setIsRealTime] = useState(true);
-    const [mapTitle, setMapTitle] = useState("Rafales de vent maximales");
+    const [mapTitle, setMapTitle] = useState("Températures minimales");
     const [showLabels, setShowLabels] = useState(true);
     const [showRegions, setShowRegions] = useState(true);
     const [isSmooth, setIsSmooth] = useState(true);
     const [selectedRegionName, setSelectedRegionName] = useState("France");
+    const [tempMode, setTempMode] = useState("tn"); // "tn" = min, "tx" = max
     const [hoveredStation, setHoveredStation] = useState(null);
+    const [useAltScale, setUseAltScale] = useState(false);
     const mapContainerRef = useRef(null);
+
+    const activeTempScale = useAltScale ? TEMP_SCALE_MF : TEMP_SCALE;
 
     const WIDTH = 1000;
     const HEIGHT = 900;
 
-    // Créer un lookup des coordonnées statique
     const stationsLookup = useMemo(() => {
         const map = {};
         if (stationsListData && stationsListData.features) {
@@ -75,42 +133,36 @@ const WindGustMap = () => {
 
     // Charger le GeoJSON des départements et des régions au montage
     useEffect(() => {
-        // Départements
         fetch("https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson")
             .then(res => res.json())
-            .then(data => {
-                console.log("[Diagnostic] GéoData Départements chargée:", data.features.length);
-                setGeoData(data);
-            })
+            .then(data => setGeoData(data))
             .catch(err => console.error("Erreur GeoJSON Dépt:", err));
 
-        // Régions
         fetch("https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions-version-simplifiee.geojson")
             .then(res => res.json())
-            .then(data => {
-                console.log("[Diagnostic] GéoData Régions chargée:", data.features.length);
-                setRegionsGeoData(data);
-            })
+            .then(data => setRegionsGeoData(data))
             .catch(err => console.error("Erreur GeoJSON Régions:", err));
     }, []);
 
-    // Déterminer si on est en temps réel
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         setIsRealTime(selectedDate === today);
     }, [selectedDate]);
+
+    // Auto-update title when mode changes
+    useEffect(() => {
+        setMapTitle(tempMode === "tn" ? "Températures minimales" : "Températures maximales");
+    }, [tempMode]);
 
     const loadData = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            let gustMap = {};
             let stationList = [];
 
-            // Mise en œuvre du chargement paginé complet (boucle while hasMore) et du mode de secours Full Scan.
             try {
-                // 1. Tenter le mode RAPIDE avec pagination complète
+                // Pagination complète pour ne pas être bloqué à 1000 résultats
                 let allData = [];
                 let from = 0;
                 const batchSize = 1000;
@@ -134,9 +186,9 @@ const WindGustMap = () => {
                     }
                 }
 
-                // 2. Fallback vers le mode COMPLET si les données sont trop peu nombreuses (signe d'un résumé non généré)
-                if (allData.length < 300) { // On monte le seuil car on attend ~500 stations Radome strictes
-                    console.log(`[Diagnostic] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
+                // Fallback vers le mode COMPLET si données insuffisantes
+                if (allData.length < 300) {
+                    console.log(`[TemperatureMap] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
                     allData = [];
                     from = 0;
                     hasMore = true;
@@ -157,36 +209,35 @@ const WindGustMap = () => {
                 }
 
                 if (allData.length > 0) {
-                    console.log(`[Diagnostic] ${allData.length} stations traitées pour le ${selectedDate}`);
+                    console.log(`[TemperatureMap] ${allData.length} stations traitées pour le ${selectedDate}`);
 
-                    // Pour éviter les "taches" (micro-cellules Voronoi), on fusionne les stations
-                    // qui ont exactement les mêmes coordonnées.
                     const uniqueStations = new Map();
 
                     allData.forEach(s => {
-                        const gust = s.wind_gust_max;
-                        if (gust !== null && gust !== undefined && gust > 0) {
+                        const tempVal = tempMode === "tn" ? s.temp_min : s.temp_max;
+                        if (tempVal !== null && tempVal !== undefined && !isNaN(tempVal)) {
                             let sid = String(s.station_id);
                             if (sid.length === 7) sid = "0" + sid;
-
-                            const dept = sid.substring(0, 2);
-                            gustMap[dept] = Math.max(gustMap[dept] || 0, gust);
 
                             const meta = stationsLookup[sid];
                             const lat = meta?.lat || s.lat;
                             const lon = meta?.lon || s.lon;
 
                             if (lat && lon) {
-                                // Clé unique basée sur les coordonnées (précision 0.02 pour regrouper les postes urbains proches)
-                                // Cela élimine les "taches" dues à des stations trop rapprochées.
                                 const geoKey = `${(Math.round(lat * 50) / 50).toFixed(2)}_${(Math.round(lon * 50) / 50).toFixed(2)}`;
 
-                                if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < gust) {
+                                const existing = uniqueStations.get(geoKey);
+                                // Pour Tn on garde la plus basse, pour Tx la plus haute
+                                const shouldReplace = tempMode === "tn"
+                                    ? (!existing || tempVal < existing.value)
+                                    : (!existing || tempVal > existing.value);
+
+                                if (shouldReplace) {
                                     uniqueStations.set(geoKey, {
                                         id: sid,
                                         lat,
                                         lon,
-                                        value: gust,
+                                        value: tempVal,
                                         name: stationNamesData[sid] || meta?.name || s.station_name || sid
                                     });
                                 }
@@ -195,21 +246,20 @@ const WindGustMap = () => {
                     });
 
                     stationList = Array.from(uniqueStations.values());
-                    console.log(`[Diagnostic] ${stationList.length} stations uniques après regroupement.`);
+                    console.log(`[TemperatureMap] ${stationList.length} stations uniques après regroupement.`);
                 }
             } catch (err) {
-                console.error("[WindGustMap] Erreur critique de chargement:", err);
+                console.error("[TemperatureMap] Erreur critique de chargement:", err);
             }
 
-            setDeptData(gustMap);
-            // Trier par valeur décroissante pour le tableau
-            setStations(stationList.sort((a, b) => b.value - a.value));
+            // Tri : Tn par valeur croissante (les plus froides en premier), Tx par valeur décroissante
+            setStations(stationList.sort((a, b) => tempMode === "tn" ? a.value - b.value : b.value - a.value));
 
             if (stationList.length === 0) {
-                setError("Aucune rafale archivée pour cette date.");
+                setError("Aucune donnée de température archivée pour cette date.");
             }
         } catch (err) {
-            console.error("Erreur chargement données vent:", err);
+            console.error("Erreur chargement données température:", err);
             setError("Impossible de charger les données météo.");
         } finally {
             setLoading(false);
@@ -218,41 +268,30 @@ const WindGustMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime]);
+    }, [selectedDate, isRealTime, tempMode]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;
-
-        // Si une région est sélectionnée, on zoome dessus
         if (selectedRegionName !== "France" && regionsGeoData) {
             const regionFeature = regionsGeoData.features.find(f => f.properties.nom === selectedRegionName);
-            if (regionFeature) {
-                return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], regionFeature);
-            }
+            if (regionFeature) return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], regionFeature);
         }
-
-        // Sinon, vue par défaut sur la France
         return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], geoData);
     }, [geoData, regionsGeoData, selectedRegionName]);
 
     const pathGenerator = useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);
 
-    // Combiner les frontières pour le clip-path (France ou Région spécifique)
     const combinedPath = useMemo(() => {
         if (!geoData || !pathGenerator) return "";
-
         if (selectedRegionName !== "France" && regionsGeoData) {
             const regionFeature = regionsGeoData.features.find(f => f.properties.nom === selectedRegionName);
             if (regionFeature) return pathGenerator(regionFeature);
         }
-
         return geoData.features.map(f => pathGenerator(f)).join(" ");
     }, [geoData, regionsGeoData, selectedRegionName, pathGenerator]);
 
-    // Générer les cellules de Voronoi (Pour le mode standard)
     const voronoiCells = useMemo(() => {
         if (!projection || !stations.length) return [];
-        // On projette les stations filtrées
         const points = stations.map(s => projection([s.lon, s.lat]));
         const delaunay = Delaunay.from(points);
         const voronoi = delaunay.voronoi([0, 0, WIDTH, HEIGHT]);
@@ -262,11 +301,11 @@ const WindGustMap = () => {
         }));
     }, [projection, stations]);
 
-    // --- MOTEUR D'INTERPOLATION POUR LE MODE LISSAGE (Style Modèle Météo) ---
+    // Moteur d'interpolation IDW pour le mode lissage
     const interpolatedGrid = useMemo(() => {
         if (!isSmooth || stations.length < 20 || !projection) return null;
 
-        const gridResX = 60; // Résolution augmentée pour plus de finesse
+        const gridResX = 60;
         const gridResY = 55;
         const grid = [];
 
@@ -281,14 +320,12 @@ const WindGustMap = () => {
                 let weightSum = 0;
                 let valueSum = 0;
 
-                // Algorithme IDW avec puissance 3 pour des contours beaucoup plus nets (bulles)
                 stations.forEach(s => {
                     const dx = s.lon - geoCoords[0];
                     const dy = s.lat - geoCoords[1];
                     const d2 = dx * dx + dy * dy;
 
-                    if (d2 < 6) { // Rayon d'influence 
-                        // Puissance 3 = beaucoup moins de mélange, les records restent records
+                    if (d2 < 6) {
                         const w = 1 / (Math.pow(d2, 1.5) + 0.001);
                         weightSum += w;
                         valueSum += s.value * w;
@@ -297,17 +334,14 @@ const WindGustMap = () => {
 
                 if (weightSum > 0) {
                     const finalVal = valueSum / weightSum;
-                    // On ne garde que ce qui est au-dessus d'un seuil pour l'effet "taches" de vent
-                    if (finalVal > 28) {
-                        grid.push({
-                            x: posX,
-                            y: posY,
-                            val: finalVal,
-                            opacity: finalVal < 40 ? 0.3 : finalVal < 70 ? 0.6 : 0.9,
-                            w: WIDTH / gridResX,
-                            h: HEIGHT / gridResY
-                        });
-                    }
+                    grid.push({
+                        x: posX,
+                        y: posY,
+                        val: finalVal,
+                        opacity: 0.85,
+                        w: WIDTH / gridResX,
+                        h: HEIGHT / gridResY
+                    });
                 }
             }
         }
@@ -315,11 +349,11 @@ const WindGustMap = () => {
     }, [isSmooth, stations, projection]);
 
     const handleExport = () => {
-        const el = document.getElementById("wind-map-container");
+        const el = document.getElementById("temp-map-container");
         if (!el) return;
         html2canvas(el, { scale: 2, useCORS: true }).then(canvas => {
             const link = document.createElement("a");
-            link.download = `carte-rafales-${selectedDate}.png`;
+            link.download = `carte-${tempMode === "tn" ? "tn" : "tx"}-${selectedDate}.png`;
             link.href = canvas.toDataURL();
             link.click();
         });
@@ -334,23 +368,20 @@ const WindGustMap = () => {
         }
     };
 
+    // Légende réduite pour l'affichage sur la carte (pas tous les paliers)
+    const legendScaleFiltered = activeTempScale.filter(r => r.min !== -Infinity && r.max !== Infinity);
+
     return (
         <div className="wind-map-page" style={{ padding: '20px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'Outfit, sans-serif' }}>
             <header style={{
-                maxWidth: '1300px',
-                margin: '0 auto 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '15px',
-                background: 'white',
-                padding: '24px',
-                borderRadius: '20px',
-                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'
+                maxWidth: '1300px', margin: '0 auto 20px', display: 'flex', flexDirection: 'column', gap: '15px',
+                background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Wind className="text-blue-500" size={28} /> Rafales : {selectedRegionName}
+                            <Thermometer style={{ color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} size={28} />
+                            {tempMode === 'tn' ? 'Tn' : 'Tx'} : {selectedRegionName}
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b' }}></div>
@@ -361,23 +392,41 @@ const WindGustMap = () => {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '10px' }}>
+                        {/* Sélecteur Tn / Tx */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '12px', padding: '3px' }}>
+                            <button
+                                onClick={() => setTempMode('tn')}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                    fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                    background: tempMode === 'tn' ? '#3b82f6' : 'transparent',
+                                    color: tempMode === 'tn' ? 'white' : '#64748b'
+                                }}
+                            >
+                                Tn (Min)
+                            </button>
+                            <button
+                                onClick={() => setTempMode('tx')}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                    fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                    background: tempMode === 'tx' ? '#ef4444' : 'transparent',
+                                    color: tempMode === 'tx' ? 'white' : '#64748b'
+                                }}
+                            >
+                                Tx (Max)
+                            </button>
+                        </div>
+
                         {/* Sélecteur de Région */}
                         <div style={{ position: 'relative' }}>
                             <select
                                 value={selectedRegionName}
                                 onChange={(e) => setSelectedRegionName(e.target.value)}
                                 style={{
-                                    padding: '8px 12px',
-                                    borderRadius: '12px',
-                                    border: '1px solid #e2e8f0',
-                                    background: '#f8fafc',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '700',
-                                    color: '#1e293b',
-                                    outline: 'none',
-                                    cursor: 'pointer',
-                                    appearance: 'none',
-                                    paddingRight: '30px'
+                                    padding: '8px 12px', borderRadius: '12px', border: '1px solid #e2e8f0',
+                                    background: '#f8fafc', fontSize: '0.85rem', fontWeight: '700', color: '#1e293b',
+                                    outline: 'none', cursor: 'pointer', appearance: 'none', paddingRight: '30px'
                                 }}
                             >
                                 <option value="France">Toute la France</option>
@@ -387,22 +436,26 @@ const WindGustMap = () => {
                             </select>
                             <ChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' }} />
                         </div>
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <button onClick={() => setShowLabels(!showLabels)} style={{ ...navBtnStyle, background: showLabels ? '#ebf5ff' : 'transparent', color: showLabels ? '#2563eb' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setShowLabels(!showLabels)} style={{ ...navBtnStyle, background: showLabels ? '#fef3c7' : 'transparent', color: showLabels ? '#d97706' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
                                 VALEURS
                             </button>
-                            <button onClick={() => setShowRegions(!showRegions)} style={{ ...navBtnStyle, background: showRegions ? '#ebf5ff' : 'transparent', color: showRegions ? '#2563eb' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setShowRegions(!showRegions)} style={{ ...navBtnStyle, background: showRegions ? '#fef3c7' : 'transparent', color: showRegions ? '#d97706' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
                                 RÉGIONS
                             </button>
-                            <button onClick={() => setIsSmooth(!isSmooth)} style={{ ...navBtnStyle, background: isSmooth ? '#ebf5ff' : 'transparent', color: isSmooth ? '#2563eb' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setIsSmooth(!isSmooth)} style={{ ...navBtnStyle, background: isSmooth ? '#fef3c7' : 'transparent', color: isSmooth ? '#d97706' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
                                 LISSAGE
+                            </button>
+                            <button onClick={() => setUseAltScale(!useAltScale)} style={{ ...navBtnStyle, background: useAltScale ? '#f3e8ff' : 'transparent', color: useAltScale ? '#7c3aed' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+                                {useAltScale ? 'MODÈLE MF' : 'STANDARD'}
                             </button>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', padding: '6px', borderRadius: '14px' }}>
                             <button onClick={() => changeDate(-1)} style={navBtnStyle}><ChevronLeft size={20} /></button>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-                                <Calendar size={18} style={{ marginRight: '10px', color: '#3b82f6' }} />
+                                <Calendar size={18} style={{ marginRight: '10px', color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} />
                                 <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e293b' }}>{format(new Date(selectedDate), "dd MMM yyyy", { locale: fr })}</span>
                                 <input
                                     type="date"
@@ -412,11 +465,7 @@ const WindGustMap = () => {
                                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                                 />
                             </div>
-                            <button
-                                onClick={() => changeDate(1)}
-                                style={navBtnStyle}
-                                disabled={selectedDate === new Date().toISOString().split('T')[0]}
-                            >
+                            <button onClick={() => changeDate(1)} style={navBtnStyle} disabled={selectedDate === new Date().toISOString().split('T')[0]}>
                                 <ChevronRight size={20} />
                             </button>
                         </div>
@@ -436,14 +485,10 @@ const WindGustMap = () => {
                         type="text"
                         value={mapTitle}
                         onChange={(e) => setMapTitle(e.target.value)}
-                        placeholder="Ex: Épisode Méditerranéen..."
+                        placeholder="Ex: Vague de froid..."
                         style={{
-                            flex: 1,
-                            padding: '10px 15px',
-                            borderRadius: '10px',
-                            border: '1px solid #cbd5e1',
-                            fontSize: '1rem',
-                            outline: 'none',
+                            flex: 1, padding: '10px 15px', borderRadius: '10px',
+                            border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none',
                             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                         }}
                     />
@@ -451,22 +496,16 @@ const WindGustMap = () => {
             </header>
 
             <main style={{ maxWidth: '1300px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 340px', gap: '25px', paddingBottom: '30px' }}>
-                <div ref={mapContainerRef} id="wind-map-container" style={{
-                    background: 'white',
-                    borderRadius: '4px',
-                    padding: '0',
-                    boxShadow: 'none',
-                    position: 'relative',
-                    aspectRatio: '1000 / 920',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    border: '1px solid #000'
+                <div ref={mapContainerRef} id="temp-map-container" style={{
+                    background: 'white', borderRadius: '4px', padding: '0',
+                    boxShadow: 'none', position: 'relative',
+                    aspectRatio: '1000 / 920', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden', border: '1px solid #000'
                 }}>
                     {loading && (
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-                            <div className="loader" style={{ width: '48px', height: '48px', border: '5px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                            <div className="loader" style={{ width: '48px', height: '48px', border: '5px solid #e2e8f0', borderTopColor: tempMode === 'tn' ? '#3b82f6' : '#ef4444', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                             <p style={{ marginTop: '20px', fontWeight: '700', color: '#1e40af', fontSize: '1.1rem' }}>Saisie des mesures météo...</p>
                         </div>
                     )}
@@ -474,41 +513,39 @@ const WindGustMap = () => {
                     {geoData && !error && (
                         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} style={{ width: '100%', height: '100%' }}>
                             <defs>
-                                <clipPath id="france-clip">
+                                <clipPath id="france-clip-temp">
                                     <path d={combinedPath} />
                                 </clipPath>
-
-                                {/* Filtre de flou final pour le mode grille (Heatmap) */}
-                                <filter id="grid-blur">
+                                <filter id="grid-blur-temp">
                                     <feGaussianBlur stdDeviation="12" />
                                 </filter>
                             </defs>
 
-                            {/* Rendu des Données (Voronoi vs Interpolé) */}
-                            <g clipPath="url(#france-clip)">
+                            {/* Fond blanc sous le clip pour que les températures basses soient visibles */}
+                            <g clipPath="url(#france-clip-temp)">
+                                <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="#e2e8f0" />
+                            </g>
+
+                            <g clipPath="url(#france-clip-temp)">
                                 {isSmooth && interpolatedGrid ? (
-                                    // MODE LISSÉ : Grille interpolée (Style Modèle Météo)
-                                    <g filter="url(#grid-blur)">
+                                    <g filter="url(#grid-blur-temp)">
                                         {interpolatedGrid.map((p, i) => (
                                             <rect
                                                 key={`grid-${i}`}
-                                                x={p.x - 1}
-                                                y={p.y - 1}
-                                                width={p.w + 2}
-                                                height={p.h + 2}
-                                                fill={getWindColor(p.val)}
+                                                x={p.x - 1} y={p.y - 1}
+                                                width={p.w + 2} height={p.h + 2}
+                                                fill={getTempColor(p.val, activeTempScale)}
                                                 fillOpacity={p.opacity}
                                             />
                                         ))}
                                     </g>
                                 ) : (
-                                    // MODE STANDARD : Voronoi (Cellules nettes)
                                     <g>
                                         {voronoiCells?.map((cell, idx) => (
                                             <path
                                                 key={`cell-${cell.station.id}-${idx}`}
                                                 d={cell.path}
-                                                fill={getWindColor(cell.station.value)}
+                                                fill={getTempColor(cell.station.value, activeTempScale)}
                                                 style={{ transition: 'fill 0.4s ease' }}
                                             />
                                         ))}
@@ -516,38 +553,29 @@ const WindGustMap = () => {
                                 )}
                             </g>
 
-                            {/* Frontières des départements (superposées - style IGN fin) */}
+                            {/* Frontières des départements */}
                             <g fill="none" stroke="black" strokeWidth="0.2" strokeOpacity="0.4">
                                 {geoData.features.map((f, idx) => (
                                     <path key={`dept-${f.properties.code || idx}`} d={pathGenerator(f)} />
                                 ))}
                             </g>
 
-                            {/* Frontières des Régions (les 13 régions - trait plus fort) */}
+                            {/* Frontières des Régions */}
                             {showRegions && regionsGeoData && (
                                 <g fill="none" stroke="black" strokeWidth="1.2" strokeOpacity="1">
                                     {regionsGeoData.features.map((f, idx) => (
-                                        <path
-                                            key={`region-${f.properties.code || f.properties.nom || idx}`}
-                                            d={pathGenerator(f)}
-                                        />
+                                        <path key={`region-${f.properties.code || f.properties.nom || idx}`} d={pathGenerator(f)} />
                                     ))}
                                 </g>
                             )}
 
-                            {/* Contour de la France plus marqué */}
-                            <path
-                                d={combinedPath}
-                                fill="none"
-                                stroke="black"
-                                strokeWidth="1.5"
-                            />
+                            {/* Contour de la France */}
+                            <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
                             {/* Points des Stations et Valeurs */}
                             {stations.map(s => {
                                 const coords = projection([s.lon, s.lat]);
                                 if (!coords) return null;
-
                                 return (
                                     <g key={`marker-${s.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}
                                         style={{ cursor: 'pointer' }}
@@ -560,23 +588,19 @@ const WindGustMap = () => {
                                     >
                                         <circle r={3} fill="transparent" />
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
-
                                         {showLabels && (
                                             <text
                                                 y={-4}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '8px',
-                                                    fontWeight: 'bold',
-                                                    fill: s.value > 100 ? '#fff' : '#000',
-                                                    stroke: s.value > 100 ? '#000' : '#fff',
-                                                    strokeWidth: '1.5px',
-                                                    paintOrder: 'stroke',
-                                                    pointerEvents: 'none',
-                                                    fontFamily: 'sans-serif'
+                                                    fontSize: '8px', fontWeight: 'bold',
+                                                    fill: (s.value < -2 || s.value > 35) ? '#fff' : '#000',
+                                                    stroke: (s.value < -2 || s.value > 35) ? '#000' : '#fff',
+                                                    strokeWidth: '1.5px', paintOrder: 'stroke',
+                                                    pointerEvents: 'none', fontFamily: 'sans-serif'
                                                 }}
                                             >
-                                                {Math.round(s.value)}
+                                                {s.value.toFixed(1)}
                                             </text>
                                         )}
                                     </g>
@@ -599,11 +623,11 @@ const WindGustMap = () => {
                         }}>
                             <div style={{ fontWeight: '800', marginBottom: '2px' }}>{hoveredStation.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Station {hoveredStation.id} — Dpt {hoveredStation.id.substring(0, 2)}</div>
-                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: '#fbbf24' }}>{Math.round(hoveredStation.value)} km/h</div>
+                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: tempMode === 'tn' ? '#38bdf8' : '#f87171' }}>{hoveredStation.value.toFixed(1)} °C</div>
                         </div>
                     )}
 
-                    {/* Bloc Titre Image (Style épuré et pro) */}
+                    {/* Bloc Titre Image */}
                     <div style={{ position: 'absolute', bottom: '55px', left: '30px', padding: '12px 20px', background: 'rgba(255,255,255,0.85)', borderRadius: '8px', border: '1px solid #000' }}>
                         <div style={{ fontSize: '1.6rem', fontWeight: '1000', color: '#000', textTransform: 'uppercase', lineHeight: '1.2' }}>{mapTitle}</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#000', marginTop: '4px' }}>
@@ -611,7 +635,7 @@ const WindGustMap = () => {
                         </div>
                     </div>
 
-                    {/* Logo Personnel (Bas Droite) */}
+                    {/* Logo */}
                     <div style={{ position: 'absolute', bottom: '55px', right: '30px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                         <img src="/logo.jpg" alt="Logo" style={{ height: '60px', borderRadius: '8px', border: '1px solid #000', background: 'white' }} />
                         <span style={{ fontSize: '0.75rem', color: '#000', fontWeight: '900', letterSpacing: '0.05em' }}>WWW.METEO-CLIMAT.PRO</span>
@@ -621,65 +645,61 @@ const WindGustMap = () => {
                     <div style={{
                         position: 'absolute', bottom: 0, left: 0, right: 0,
                         background: 'rgba(255,255,255,0.95)',
-                        padding: '6px 12px',
+                        padding: '6px 8px',
                         borderTop: '1px solid #000',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        gap: '2px', flexWrap: 'wrap'
+                        gap: '1px', flexWrap: 'wrap'
                     }}>
-                        <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000', marginRight: '6px' }}>km/h</span>
-                        {WIND_SCALE.filter(r => r.min >= 60).map(range => (
+                        <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000', marginRight: '4px' }}>°C</span>
+                        {legendScaleFiltered.filter((_, i) => i % 2 === 0).map(range => (
                             <div key={range.min} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <div style={{ width: '28px', height: '14px', background: range.color, border: '0.5px solid rgba(0,0,0,0.3)' }} />
-                                <span style={{ fontSize: '8px', fontWeight: '800', color: '#000', marginTop: '1px' }}>{range.min}</span>
+                                <div style={{ width: '22px', height: '14px', background: range.color, border: '0.5px solid rgba(0,0,0,0.3)' }} />
+                                <span style={{ fontSize: '7px', fontWeight: '800', color: '#000', marginTop: '1px' }}>{range.min}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    {/* Légende */}
+                    {/* Légende Panneau Latéral */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                         <h3 style={{ margin: '0 0 12px', fontSize: '0.9rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
-                            Vitesse Rafales (km/h)
+                            {tempMode === 'tn' ? 'Temp. Minimale (°C)' : 'Temp. Maximale (°C)'}
                         </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                            {WIND_SCALE.map(range => (
-                                <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: range.color, border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
+                            {TEMP_SCALE.filter(r => r.min !== -Infinity).map(range => (
+                                <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ width: '16px', height: '16px', borderRadius: '3px', background: range.color, border: '1px solid rgba(0,0,0,0.1)' }}></div>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Top Rafales */}
+                    {/* Top Températures */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ margin: '0 0 15px', fontSize: '1rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Wind size={18} className="text-blue-500" /> Top Rafales
+                            <Thermometer size={18} style={{ color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} />
+                            {tempMode === 'tn' ? 'Top Froid (Tn)' : 'Top Chaleur (Tx)'}
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
                             {stations.length > 0 ? (
-                                [...stations].sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
+                                stations.slice(0, 15).map((s, i) => (
                                     <div key={s.id} style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '8px 0',
-                                        borderBottom: i === 14 ? 'none' : '1px solid #f1f5f9'
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        padding: '8px 0', borderBottom: i === 14 ? 'none' : '1px solid #f1f5f9'
                                     }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '180px' }}>
                                             <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
                                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Dpt {s.id.substring(0, 2)}</span>
                                         </div>
                                         <div style={{
-                                            background: getWindColor(s.value),
-                                            color: s.value > 100 ? 'white' : '#1e293b',
-                                            padding: '4px 8px',
-                                            borderRadius: '6px',
-                                            fontSize: '0.85rem',
-                                            fontWeight: '800'
+                                            background: getTempColor(s.value, activeTempScale),
+                                            color: (s.value < -2 || s.value > 35) ? 'white' : '#1e293b',
+                                            padding: '4px 8px', borderRadius: '6px',
+                                            fontSize: '0.85rem', fontWeight: '800'
                                         }}>
-                                            {Math.round(s.value)} <small>km/h</small>
+                                            {s.value.toFixed(1)} <small>°C</small>
                                         </div>
                                     </div>
                                 ))
@@ -690,11 +710,14 @@ const WindGustMap = () => {
                     </div>
 
                     {/* Infos API */}
-                    <div style={{ background: '#e0f2fe', borderRadius: '20px', padding: '15px', display: 'flex', gap: '12px' }}>
-                        <Info className="text-blue-600" size={20} style={{ shrink: 0 }} />
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369a1', lineHeight: '1.4' }}>
+                    <div style={{ background: tempMode === 'tn' ? '#dbeafe' : '#fee2e2', borderRadius: '20px', padding: '15px', display: 'flex', gap: '12px' }}>
+                        <Info style={{ color: tempMode === 'tn' ? '#1d4ed8' : '#dc2626' }} size={20} />
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: tempMode === 'tn' ? '#1e40af' : '#991b1b', lineHeight: '1.4' }}>
                             Données issues des stations automatiques du réseau Météo-France.
-                            La valeur affichée est la rafale maximale (FXI) enregistrée par département.
+                            {tempMode === 'tn'
+                                ? " La valeur affichée est la température minimale (Tn) enregistrée sur 24h."
+                                : " La valeur affichée est la température maximale (Tx) enregistrée sur 24h."
+                            }
                         </p>
                     </div>
                 </div>
@@ -704,29 +727,16 @@ const WindGustMap = () => {
 };
 
 const navBtnStyle = {
-    padding: '6px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'transparent',
-    cursor: 'pointer',
-    color: '#64748b',
-    display: 'flex',
-    alignItems: 'center',
-    transition: 'all 0.2s'
+    padding: '6px', borderRadius: '8px', border: 'none',
+    background: 'transparent', cursor: 'pointer', color: '#64748b',
+    display: 'flex', alignItems: 'center', transition: 'all 0.2s'
 };
 
 const iconBtnStyle = {
-    width: '40px',
-    height: '40px',
-    borderRadius: '12px',
-    border: '1px solid #e2e8f0',
-    background: 'white',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#64748b',
-    transition: 'all 0.2s'
+    width: '40px', height: '40px', borderRadius: '12px',
+    border: '1px solid #e2e8f0', background: 'white',
+    cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', color: '#64748b', transition: 'all 0.2s'
 };
 
-export default WindGustMap;
+export default TemperatureMap;
