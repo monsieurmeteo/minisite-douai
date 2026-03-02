@@ -602,7 +602,34 @@ Voici les données brutes :`;
                 for (const day of missingDays) {
                     const dayData6mn = await weatherAPI.getStation6mnHistory(selectedStationId, day);
                     if (dayData6mn && dayData6mn.length > 0) {
-                        const dayHourly = dayData6mn.filter(h => h.time.getMinutes() === 0).map(hourlyItem => {
+                        const exactHourlyData = dayData6mn.filter(h => h.time.getMinutes() === 0);
+                        const allHoursStr = new Set(exactHourlyData.map(h => h.time.getHours()));
+                        const hourlyMap = new Map();
+                        dayData6mn.forEach(h => {
+                            const hr = h.time.getHours();
+                            if (h.time.getMinutes() === 0) {
+                                hourlyMap.set(hr, h);
+                            } else if (!allHoursStr.has(hr)) {
+                                const existing = hourlyMap.get(hr);
+                                if (!existing) hourlyMap.set(hr, h);
+                                else {
+                                    const distH = Math.min(h.time.getMinutes(), 60 - h.time.getMinutes());
+                                    const distE = Math.min(existing.time.getMinutes(), 60 - existing.time.getMinutes());
+                                    if (distH < distE) hourlyMap.set(hr, h);
+                                }
+                            }
+                        });
+                        const cleanBestItems = Array.from(hourlyMap.values()).map(item => {
+                            if (item.time.getMinutes() !== 0) {
+                                const newTime = new Date(item.time);
+                                if (newTime.getMinutes() > 30) newTime.setHours(newTime.getHours() + 1);
+                                newTime.setMinutes(0);
+                                newTime.setSeconds(0);
+                                return { ...item, time: newTime };
+                            }
+                            return item;
+                        });
+                        const dayHourly = cleanBestItems.map(hourlyItem => {
                             const endTime = hourlyItem.time.getTime();
                             const startTime = endTime - (60 * 60 * 1000);
                             const hourlyRain = dayData6mn
