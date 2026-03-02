@@ -165,8 +165,26 @@ export default function StationDetail() {
         let base;
 
         if (!showInfra) {
-            // Mode Horaire : On filtre les piles (XX:00) ET on cumule la pluie sur l'heure glissante
-            base = fullHistory.filter(h => h.time.getMinutes() === 0).map(hourlyItem => {
+            // Mode Horaire : On récupère la donnée la plus proche de l'heure pleine
+            const hourlyMap = new Map();
+            fullHistory.forEach(h => {
+                const hour = h.time.getHours();
+                const existing = hourlyMap.get(hour);
+                if (!existing) {
+                    hourlyMap.set(hour, h);
+                } else {
+                    const distH = Math.min(h.time.getMinutes(), 60 - h.time.getMinutes());
+                    const distE = Math.min(existing.time.getMinutes(), 60 - existing.time.getMinutes());
+                    if (distH < distE) {
+                        hourlyMap.set(hour, h);
+                    }
+                }
+            });
+
+            const bestHourlyItems = Array.from(hourlyMap.values()).sort((a, b) => b.time.getTime() - a.time.getTime());
+
+            // ET on cumule la pluie sur l'heure glissante
+            base = bestHourlyItems.map(hourlyItem => {
                 const endTime = hourlyItem.time.getTime();
                 const startTime = endTime - (60 * 60 * 1000); // 1h avant
                 const hourlySegment = fullHistory.filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime);
