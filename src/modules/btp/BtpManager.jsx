@@ -619,29 +619,30 @@ Voici les données brutes :`;
                                 }
                             }
                         });
-                        const cleanBestItems = Array.from(hourlyMap.values()).map(item => {
-                            if (item.time.getMinutes() !== 0) {
-                                const newTime = new Date(item.time);
-                                if (newTime.getMinutes() > 30) newTime.setHours(newTime.getHours() + 1);
-                                newTime.setMinutes(0);
-                                newTime.setSeconds(0);
-                                return { ...item, time: newTime };
-                            }
-                            return item;
-                        });
-                        const dayHourly = cleanBestItems.map(hourlyItem => {
-                            const endTime = hourlyItem.time.getTime();
+                        // On calcule le cumul de pluie AVANT d'altérer l'heure pour garantir 60 min de cumul
+                        const dayHourly = Array.from(hourlyMap.values()).map(item => {
+                            const endTime = item.time.getTime();
                             const startTime = endTime - (60 * 60 * 1000);
                             const hourlyRain = dayData6mn
                                 .filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime)
                                 .reduce((sum, d) => sum + (d.rain || 0), 0);
+
+                            // Nettoyage de l'heure pour l'affichage (ex: 16:06 -> 16:00)
+                            let cleanTime = item.time;
+                            if (item.time.getMinutes() !== 0) {
+                                cleanTime = new Date(item.time);
+                                if (cleanTime.getMinutes() > 30) cleanTime.setHours(cleanTime.getHours() + 1);
+                                cleanTime.setMinutes(0);
+                                cleanTime.setSeconds(0);
+                            }
+
                             return {
-                                time: hourlyItem.time,
-                                temp: hourlyItem.temp,
+                                time: cleanTime,
+                                temp: item.temp,
                                 rain: hourlyRain,
-                                wind: hourlyItem.wind,
-                                gust: hourlyItem.gust,
-                                hum: hourlyItem.hum
+                                wind: item.wind,
+                                gust: item.gust,
+                                hum: item.hum
                             };
                         });
                         history = [...history, ...dayHourly].sort((a, b) => a.time - b.time);

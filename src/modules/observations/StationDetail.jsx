@@ -198,22 +198,8 @@ export default function StationDetail() {
             // Sort chronological DESCENDING (newest first, oldest last)
             const bestHourlyItems = Array.from(hourlyMap.values()).sort((a, b) => b.time.getTime() - a.time.getTime());
 
-            // Pour l'affichage "propre", on force l'heure pile si c'est pas le cas
-            const cleanBestItems = bestHourlyItems.map(item => {
-                if (item.time.getMinutes() !== 0) {
-                    const newTime = new Date(item.time);
-                    if (newTime.getMinutes() > 30) {
-                        newTime.setHours(newTime.getHours() + 1);
-                    }
-                    newTime.setMinutes(0);
-                    newTime.setSeconds(0);
-                    return { ...item, time: newTime };
-                }
-                return item;
-            });
-
-            // ET on cumule la pluie sur l'heure glissante
-            base = cleanBestItems.map(hourlyItem => {
+            // ET on cumule la pluie sur l'heure glissante AVANT d'altérer l'heure
+            base = bestHourlyItems.map(hourlyItem => {
                 const endTime = hourlyItem.time.getTime();
                 const startTime = endTime - (60 * 60 * 1000); // 1h avant
                 const hourlySegment = fullHistory.filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime);
@@ -239,8 +225,20 @@ export default function StationDetail() {
                 // Si -999, on garde la valeur instantanée ou null
                 const finalTemp = hourlyTempMax > -900 ? hourlyTempMax : hourlyItem.temp;
 
+                // Nettoyage de l'heure pour l'affichage (ex: 16:06 -> 16:00)
+                let cleanTime = hourlyItem.time;
+                if (hourlyItem.time.getMinutes() !== 0) {
+                    cleanTime = new Date(hourlyItem.time);
+                    if (cleanTime.getMinutes() > 30) {
+                        cleanTime.setHours(cleanTime.getHours() + 1);
+                    }
+                    cleanTime.setMinutes(0);
+                    cleanTime.setSeconds(0);
+                }
+
                 return {
                     ...hourlyItem,
+                    time: cleanTime,
                     rain: hourlyRain,
                     gust: hourlyGust,
                     wind: hourlyWindMax,
