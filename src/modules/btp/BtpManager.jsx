@@ -920,7 +920,8 @@ Voici les données brutes :`;
         let unit = r.var.includes('pluie') ? 'mm' : (r.var.includes('neige') ? 'cm' : ((r.var.includes('temp') || r.var.includes('heat')) ? '°C' : (r.var.includes('soil') ? '%' : 'km/h')));
 
         const formatVal = (val, h) => {
-            return `${val}${unit} (à ${h}h)`;
+            const finalVal = unit === 'km/h' ? Math.round(val) : (Number(val) % 1 === 0 ? val : Number(val).toFixed(1));
+            return `${finalVal}${unit} (à ${h}h)`;
         };
 
         if (r.type == 'cond1') {
@@ -1167,8 +1168,8 @@ Voici les données brutes :`;
             if (annexCols.temp) { sumH += `<th style="${thStyle}">T. Min</th><th style="${thStyle}">T. Max</th>`; sumR += `<td>${tsAll.length ? Math.min(...tsAll).toFixed(1) : '--'}°</td><td>${tsAll.length ? Math.max(...tsAll).toFixed(1) : '--'}°</td>`; }
             if (annexCols.rain) { sumH += `<th style="${thStyle}">Pluie Tot.</th>`; sumR += `<td>${rsAll.reduce((a, b) => a + b, 0).toFixed(1)} mm</td>`; }
             if (annexCols.snow) { sumH += `<th style="${thStyle}">Neige Tot.</th>`; sumR += `<td>${ssAll.reduce((a, b) => a + b, 0).toFixed(1)} cm</td>`; }
-            if (annexCols.windAvgPdf) { sumH += `<th style="${thStyle}">Vent Moy. Max</th>`; sumR += `<td>${asAll.length ? Math.max(...asAll).toFixed(1) : 0} km/h</td>`; }
-            if (annexCols.windG) { sumH += `<th style="${thStyle}">Rafale Max</th>`; sumR += `<td>${gsAll.length ? Math.max(...gsAll).toFixed(1) : 0} km/h</td>`; }
+            if (annexCols.windAvgPdf) { sumH += `<th style="${thStyle}">Vent Moy. Max</th>`; sumR += `<td>${asAll.length ? Math.round(Math.max(...asAll)) : 0} km/h</td>`; }
+            if (annexCols.windG) { sumH += `<th style="${thStyle}">Rafale Max</th>`; sumR += `<td>${gsAll.length ? Math.round(Math.max(...gsAll)) : 0} km/h</td>`; }
             if (annexCols.humi) { sumH += `<th style="${thStyle}">Hum. Max</th>`; sumR += `<td>${hsAll.length ? Math.max(...hsAll).toFixed(1) : 0}%</td>`; }
             if (annexCols.soil) { sumH += `<th style="${thStyle}">Hum. Sol</th>`; sumR += `<td>${soilVal || '--'}%</td>`; }
             if (annexCols.fog) { sumH += `<th style="${thStyle}">Brouillard</th>`; sumR += `<td>${forceFog ? 'OUI' : 'NON'}</td>`; }
@@ -1195,8 +1196,8 @@ Voici les données brutes :`;
                 if (annexCols.temp) part2 += `<td>${r.temp !== null ? parseFloat(r.temp).toFixed(1) : '--'}</td>`;
                 if (annexCols.rain) part2 += `<td>${parseFloat(r.rain || 0).toFixed(1)}</td>`;
                 if (annexCols.snow) part2 += `<td>${parseFloat(r.snow || 0).toFixed(1)}</td>`;
-                if (annexCols.windAvgPdf) part2 += `<td>${parseFloat(r.w_avg || 0).toFixed(1)}</td>`;
-                if (annexCols.windG) part2 += `<td>${parseFloat(r.w_gst || 0).toFixed(1)}</td>`;
+                if (annexCols.windAvgPdf) part2 += `<td>${Math.round(r.w_avg || 0)}</td>`;
+                if (annexCols.windG) part2 += `<td>${Math.round(r.w_gst || 0)}</td>`;
                 if (annexCols.humi) part2 += `<td>${Math.round(r.humi || 0)}%</td>`;
                 part2 += `</tr>`;
             });
