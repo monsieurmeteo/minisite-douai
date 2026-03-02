@@ -181,8 +181,8 @@ export default function StationDetail() {
                 }
             });
 
+            // Sort chronological DESCENDING (newest first, oldest last)
             const bestHourlyItems = Array.from(hourlyMap.values()).sort((a, b) => b.time.getTime() - a.time.getTime());
-
             // ET on cumule la pluie sur l'heure glissante
             base = bestHourlyItems.map(hourlyItem => {
                 const endTime = hourlyItem.time.getTime();
