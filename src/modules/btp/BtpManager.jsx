@@ -636,12 +636,27 @@ Voici les données brutes :`;
                                 cleanTime.setSeconds(0);
                             }
 
+                            const hourlySegment = dayData6mn.filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime);
+                            const hourlyGust = hourlySegment.length > 0
+                                ? Math.max(...hourlySegment.map(d => d.gust || 0))
+                                : (item.gust || 0);
+
+                            const hourlyWindMax = hourlySegment.length > 0
+                                ? Math.max(...hourlySegment.map(d => d.wind || 0))
+                                : (item.wind || 0);
+
+                            const hourlyTempMax = hourlySegment.length > 0
+                                ? Math.max(...hourlySegment.map(d => d.temp !== null ? d.temp : -999))
+                                : (item.temp || -999);
+
+                            const finalTemp = hourlyTempMax > -900 ? hourlyTempMax : item.temp;
+
                             return {
                                 time: cleanTime,
-                                temp: item.temp,
+                                temp: finalTemp,
                                 rain: hourlyRain,
-                                wind: item.wind,
-                                gust: item.gust,
+                                wind: hourlyWindMax,
+                                gust: hourlyGust,
                                 hum: item.hum
                             };
                         });
