@@ -165,26 +165,55 @@ export default function StationDetail() {
         let base;
 
         if (!showInfra) {
-            // Mode Horaire : On récupère la donnée la plus proche de l'heure pleine
+            // 1. On cherche d'abord la liste des heures disponibles avec pile :00
+            const exactHourlyData = fullHistory.filter(h => h.time.getMinutes() === 0);
+
+            // 2. On identifie les heures "pleines" de la dernière journée
+            const allHoursStr = new Set(exactHourlyData.map(h => `${h.time.getDate()}-${h.time.getHours()}`));
+
+            // 3. Pour chaque 6mn, on rajoute ou complète
             const hourlyMap = new Map();
             fullHistory.forEach(h => {
-                const hour = h.time.getHours();
-                const existing = hourlyMap.get(hour);
-                if (!existing) {
-                    hourlyMap.set(hour, h);
-                } else {
-                    const distH = Math.min(h.time.getMinutes(), 60 - h.time.getMinutes());
-                    const distE = Math.min(existing.time.getMinutes(), 60 - existing.time.getMinutes());
-                    if (distH < distE) {
-                        hourlyMap.set(hour, h);
+                const hourId = `${h.time.getDate()}-${h.time.getHours()}`;
+
+                // Si on a déjà une donnée parfaite (pile poil 00) pour cette heure-là, on privilégie
+                if (h.time.getMinutes() === 0) {
+                    hourlyMap.set(hourId, h);
+                } else if (!allHoursStr.has(hourId)) {
+                    // Si on n'a PAS de donnée parfaite et qu'on cherche la plus proche de 00
+                    const existing = hourlyMap.get(hourId);
+                    if (!existing) {
+                        hourlyMap.set(hourId, h);
+                    } else {
+                        // On prend la plus proche entre :06 et :54 (0 et 60)
+                        const distH = Math.min(h.time.getMinutes(), 60 - h.time.getMinutes());
+                        const distE = Math.min(existing.time.getMinutes(), 60 - existing.time.getMinutes());
+                        if (distH < distE) {
+                            hourlyMap.set(hourId, h);
+                        }
                     }
                 }
             });
 
             // Sort chronological DESCENDING (newest first, oldest last)
             const bestHourlyItems = Array.from(hourlyMap.values()).sort((a, b) => b.time.getTime() - a.time.getTime());
+
+            // Pour l'affichage "propre", on force l'heure pile si c'est pas le cas
+            const cleanBestItems = bestHourlyItems.map(item => {
+                if (item.time.getMinutes() !== 0) {
+                    const newTime = new Date(item.time);
+                    if (newTime.getMinutes() > 30) {
+                        newTime.setHours(newTime.getHours() + 1);
+                    }
+                    newTime.setMinutes(0);
+                    newTime.setSeconds(0);
+                    return { ...item, time: newTime };
+                }
+                return item;
+            });
+
             // ET on cumule la pluie sur l'heure glissante
-            base = bestHourlyItems.map(hourlyItem => {
+            base = cleanBestItems.map(hourlyItem => {
                 const endTime = hourlyItem.time.getTime();
                 const startTime = endTime - (60 * 60 * 1000); // 1h avant
                 const hourlySegment = fullHistory.filter(d => d.time.getTime() > startTime && d.time.getTime() <= endTime);
