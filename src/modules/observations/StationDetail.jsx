@@ -582,7 +582,7 @@ export default function StationDetail() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {displayData.map((h, i, arr) => {
+                                        {displayData.slice().reverse().map((h, i, arr) => {
                                             const prev = arr[i + 1];
                                             const trend = (prev && h.pressure && prev.pressure)
                                                 ? (h.pressure > prev.pressure ? '↗' : h.pressure < prev.pressure ? '↘' : '→')
