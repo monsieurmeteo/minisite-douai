@@ -527,13 +527,13 @@ const RainfallMap = () => {
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
                                         {showLabels && s.value >= 1 && (
                                             <text
-                                                y={-4}
+                                                y={selectedRegionName === "France" ? -4 : -8}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '11px', fontWeight: 'bold',
+                                                    fontSize: selectedRegionName === "France" ? '11px' : '22px', fontWeight: 'bold',
                                                     fill: s.value > 50 ? '#fff' : '#000',
                                                     stroke: s.value > 50 ? '#000' : '#fff',
-                                                    strokeWidth: '1.5px', paintOrder: 'stroke',
+                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
                                                     pointerEvents: 'none', fontFamily: 'sans-serif'
                                                 }}
                                             >

@@ -665,11 +665,11 @@ const MonthlyMapsHub = () => {
                                         <circle r={3} fill="transparent" />
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
                                         {showLabels && (activeParam !== 'rain' || s.value >= 1) && (
-                                            <text y={-4} textAnchor="middle" style={{
-                                                fontSize: '10px', fontWeight: 'bold',
+                                            <text y={selectedRegionName === "France" ? -4 : -8} textAnchor="middle" style={{
+                                                fontSize: selectedRegionName === "France" ? '10px' : '20px', fontWeight: 'bold',
                                                 fill: highContrast ? '#fff' : '#000',
                                                 stroke: highContrast ? '#000' : '#fff',
-                                                strokeWidth: '1.5px', paintOrder: 'stroke',
+                                                strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
                                                 pointerEvents: 'none', fontFamily: 'sans-serif'
                                             }}>
                                                 {activeParam === 'wind' ? Math.round(s.value) : s.value.toFixed(1)}

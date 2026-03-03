@@ -563,14 +563,14 @@ const WindGustMap = () => {
 
                                         {showLabels && (
                                             <text
-                                                y={-4}
+                                                y={selectedRegionName === "France" ? -4 : -8}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '11px',
+                                                    fontSize: selectedRegionName === "France" ? '11px' : '22px',
                                                     fontWeight: 'bold',
                                                     fill: s.value > 100 ? '#fff' : '#000',
                                                     stroke: s.value > 100 ? '#000' : '#fff',
-                                                    strokeWidth: '1.5px',
+                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
                                                     paintOrder: 'stroke',
                                                     pointerEvents: 'none',
                                                     fontFamily: 'sans-serif'
