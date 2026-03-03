@@ -666,7 +666,7 @@ const MonthlyMapsHub = () => {
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
                                         {showLabels && (activeParam !== 'rain' || s.value >= 1) && (
                                             <text y={-4} textAnchor="middle" style={{
-                                                fontSize: '7px', fontWeight: 'bold',
+                                                fontSize: '10px', fontWeight: 'bold',
                                                 fill: highContrast ? '#fff' : '#000',
                                                 stroke: highContrast ? '#000' : '#fff',
                                                 strokeWidth: '1.5px', paintOrder: 'stroke',

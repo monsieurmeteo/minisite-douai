@@ -593,7 +593,7 @@ const TemperatureMap = () => {
                                                 y={-4}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '8px', fontWeight: 'bold',
+                                                    fontSize: '11px', fontWeight: 'bold',
                                                     fill: (s.value < -2 || s.value > 35) ? '#fff' : '#000',
                                                     stroke: (s.value < -2 || s.value > 35) ? '#000' : '#fff',
                                                     strokeWidth: '1.5px', paintOrder: 'stroke',
@@ -667,7 +667,7 @@ const TemperatureMap = () => {
                             {tempMode === 'tn' ? 'Temp. Minimale (°C)' : 'Temp. Maximale (°C)'}
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
-                            {TEMP_SCALE.filter(r => r.min !== -Infinity).map(range => (
+                            {activeTempScale.filter(r => r.min !== -Infinity).map(range => (
                                 <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <div style={{ width: '16px', height: '16px', borderRadius: '3px', background: range.color, border: '1px solid rgba(0,0,0,0.1)' }}></div>
                                     <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>

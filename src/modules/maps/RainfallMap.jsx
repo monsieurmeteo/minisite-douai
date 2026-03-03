@@ -530,7 +530,7 @@ const RainfallMap = () => {
                                                 y={-4}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '8px', fontWeight: 'bold',
+                                                    fontSize: '11px', fontWeight: 'bold',
                                                     fill: s.value > 50 ? '#fff' : '#000',
                                                     stroke: s.value > 50 ? '#000' : '#fff',
                                                     strokeWidth: '1.5px', paintOrder: 'stroke',
@@ -588,7 +588,7 @@ const RainfallMap = () => {
                         gap: '2px', flexWrap: 'wrap'
                     }}>
                         <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000', marginRight: '6px' }}>mm</span>
-                        {activeRainScale.filter(r => r.min >= (useAltScale ? 0.5 : 1) && r.max !== Infinity).map(range => (
+                        {activeRainScale.filter(r => r.min >= 0.5 && r.max !== Infinity).map(range => (
                             <div key={range.min} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                 <div style={{ width: '24px', height: '14px', background: range.color, border: '0.5px solid rgba(0,0,0,0.3)' }} />
                                 <span style={{ fontSize: '7px', fontWeight: '800', color: '#000', marginTop: '1px' }}>{range.min}</span>
@@ -604,7 +604,7 @@ const RainfallMap = () => {
                             Cumul de Pluie (mm)
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                            {activeRainScale.filter(r => r.min >= (useAltScale ? 0.5 : 1)).map(range => (
+                            {activeRainScale.filter(r => r.min >= 0.5 || r.min === 0).map(range => (
                                 <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: range.color, border: '1px solid rgba(0,0,0,0.1)' }}></div>
                                     <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>

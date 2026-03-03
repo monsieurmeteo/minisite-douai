@@ -97,7 +97,7 @@
     font-family: 'Inter', sans-serif;
     /* text-shadow: retiré pour le mode propre (ou très léger selon couleur) */
     border: 1px solid rgba(255, 255, 255, 0.4);
-    font-size: 11px;
+    font-size: 13px;
     transition: all 0.2s;
 }
 

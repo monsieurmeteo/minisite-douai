@@ -566,7 +566,7 @@ const WindGustMap = () => {
                                                 y={-4}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: '8px',
+                                                    fontSize: '11px',
                                                     fontWeight: 'bold',
                                                     fill: s.value > 100 ? '#fff' : '#000',
                                                     stroke: s.value > 100 ? '#000' : '#fff',
