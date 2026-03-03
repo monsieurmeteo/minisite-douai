@@ -109,8 +109,7 @@ class MeteoFranceCollector {
      * 
      * Stratégie :
      *  1. Fetch bulk infrahoraire-6m (DPPaquetObs) → ~1940 stations
-     *  2. Fetch bulk horaire (DPPaquetObs) pour compléter les ~60-70 stations manquantes
-     *  3. Appels individuels DPObs pour les dernières stations récalcitrantes
+     *  2. Appels individuels DPObs 6-minutes pour les ~60 stations manquantes
      */
     async collectAllStations() {
         try {
@@ -129,14 +128,11 @@ class MeteoFranceCollector {
             // ÉTAPE 1 : Fetch bulk infrahoraire-6m
             // ──────────────────────────────────────────────────
             const url6m = `${API_BASE}/paquet/stations/infrahoraire-6m?date=${cycleTime}&format=json`;
-            const [res6m, resH] = await Promise.allSettled([
-                fetch(url6m, { headers }),
-                this.fetchHoraireBulk(cycleTime, headers)
-            ]);
+            const res6m = await fetch(url6m, { headers });
 
             let stations6m = [];
-            if (res6m.status === 'fulfilled' && res6m.value.ok) {
-                stations6m = await res6m.value.json();
+            if (res6m.ok) {
+                stations6m = await res6m.json();
                 if (!Array.isArray(stations6m)) stations6m = [];
             } else {
                 console.error('[MeteoCollector] ❌ Échec fetch bulk 6min');
@@ -157,46 +153,22 @@ class MeteoFranceCollector {
             console.log(`[MeteoCollector] 📡 Bulk 6min : ${allStations.length} stations`);
 
             // ──────────────────────────────────────────────────
-            // ÉTAPE 2 : Compléter avec le bulk horaire
-            // ──────────────────────────────────────────────────
-            let horaireStations = [];
-            if (resH.status === 'fulfilled') {
-                horaireStations = resH.value || [];
-            }
-
-            let completedFromHoraire = 0;
-            for (const s of horaireStations) {
-                const id = s.geo_id_insee || s.id;
-                if (!id || collectedIds.has(id)) continue;
-
-                // Ne compléter que les stations qu'on connaît
-                if (!stationNamesData[id]) continue;
-
-                collectedIds.add(id);
-                allStations.push(this.enrichStation({ ...s, _source: 'horaire' }));
-                completedFromHoraire++;
-            }
-
-            if (completedFromHoraire > 0) {
-                console.log(`[MeteoCollector] 📊 Horaire : +${completedFromHoraire} stations complétées`);
-            }
-
-            // ──────────────────────────────────────────────────
-            // ÉTAPE 3 : Appels individuels DPObs pour les manquantes
+            // ÉTAPE 2 : Appels individuels DPObs pour les manquantes (ex: Steenvoorde)
             // ──────────────────────────────────────────────────
             const allKnownIds = Object.keys(stationNamesData);
             const missingIds = allKnownIds.filter(id => !collectedIds.has(id));
 
-            // Limiter aux stations métropolitaines (01-95)
+            // Limiter aux stations métropolitaines (01-95, 20)
             const missingMetro = missingIds.filter(id => {
                 const prefix = parseInt(id.substring(0, 2));
-                return prefix >= 1 && prefix <= 95;
+                return prefix >= 1 && prefix <= 95 || id.startsWith('20');
             });
 
             let completedFromDPObs = 0;
-            if (missingMetro.length > 0 && missingMetro.length <= 100) {
-                // On requête par lots de 10 en parallèle pour ne pas surcharger
-                const BATCH = 10;
+            if (missingMetro.length > 0) {
+                console.log(`[MeteoCollector] 🔍 Test de ${missingMetro.length} stations manquantes via DPObs individuel...`);
+                // On requête par lots de 15 en parallèle pour ne pas surcharger
+                const BATCH = 15;
                 for (let i = 0; i < missingMetro.length; i += BATCH) {
                     const batch = missingMetro.slice(i, i + BATCH);
                     const results = await Promise.allSettled(
@@ -218,12 +190,12 @@ class MeteoFranceCollector {
             }
 
             if (completedFromDPObs > 0) {
-                console.log(`[MeteoCollector] 🔍 DPObs : +${completedFromDPObs} stations complétées`);
+                console.log(`[MeteoCollector] 🔍 DPObs : +${completedFromDPObs} stations avec des données 6-minutes récupérées`);
             }
 
             // Résumé
             const finalMissing = allKnownIds.filter(id => !collectedIds.has(id)).length;
-            console.log(`[MeteoCollector] ✅ TOTAL : ${allStations.length} stations collectées (${finalMissing} encore absentes)`);
+            console.log(`[MeteoCollector] ✅ TOTAL : ${allStations.length} stations collectées (${finalMissing} hors réseau)`);
 
             // Log visibilité
             const stationsAvecVisibilite = allStations.filter(s => s.vv !== null);
