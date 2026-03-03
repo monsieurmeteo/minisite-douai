@@ -527,10 +527,10 @@ const RegionalMapGenerator = () => {
                                 } else {
                                     if (framedMode) {
                                         // Style CADRE: Fond blanc, Bordure couleur, Texte noir
-                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2px solid ${color}; width: 60px; height: 60px; font-size: 26px; font-weight: 800;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2px solid ${color}; width: 60px; height: 60px; font-size: 30px; font-weight: 800;">${displayVal}</div>`;
                                     } else {
                                         // Style PLEIN: Fond couleur, Texte contrasté
-                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 60px; height: 60px; font-size: 26px;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 60px; height: 60px; font-size: 30px;">${displayVal}</div>`;
                                     }
                                 }
 
