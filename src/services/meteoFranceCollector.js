@@ -2,14 +2,19 @@
  * Collecteur de données Météo France en temps réel
  * Récupère les 2000+ stations toutes les 6 minutes
  * Utilise un token manuel (OAuth ne fonctionne pas dans le navigateur à cause de CORS)
+ * 
+ * MULTI-ENDPOINT : Le paquet bulk infrahoraire-6m ne contient pas toutes les stations.
+ * On complète avec le paquet horaire et des appels individuels DPObs.
  */
 
-// Utilisation du Proxy pour contourner CORS
-const API_BASE = '/api-meteo-paquet';
-// Note: On va ajouter une règle spécifique dans netlify.toml pour celui-là car c'est DPPaquetObs
+// Utilisation des Proxys pour contourner CORS
+const API_BASE = '/api-meteo-paquet';   // DPPaquetObs (bulk)
+const API_DPOBS = '/api-meteo';          // DPObs (individuel)
 
 // Import Supabase pour l'archivage automatique depuis le navigateur
 import { supabase } from './supabaseClient';
+// Import de la liste complète des stations connues
+import stationNamesData from '../data/stationNames.json';
 
 class MeteoFranceCollector {
     constructor() {
@@ -86,66 +91,199 @@ class MeteoFranceCollector {
     }
 
     /**
-     * Collecter les données de toutes les stations
+     * Enrichir un objet station brut avec des conversions (K→°C, m/s→km/h)
+     */
+    enrichStation(station) {
+        return {
+            ...station,
+            temp_celsius: station.t != null ? Math.round((station.t - 273.15) * 10) / 10 : null,
+            dewpoint_celsius: station.td != null ? Math.round((station.td - 273.15) * 10) / 10 : null,
+            wind_kmh: station.ff != null ? Math.round(station.ff * 3.6 * 10) / 10 : null,
+            gust_kmh: station.fxi10 != null ? Math.round(station.fxi10 * 3.6 * 10) / 10 : null,
+            vv: station.vv ?? null
+        };
+    }
+
+    /**
+     * Collecter les données de TOUTES les stations (multi-endpoint)
+     * 
+     * Stratégie :
+     *  1. Fetch bulk infrahoraire-6m (DPPaquetObs) → ~1940 stations
+     *  2. Fetch bulk horaire (DPPaquetObs) pour compléter les ~60-70 stations manquantes
+     *  3. Appels individuels DPObs pour les dernières stations récalcitrantes
      */
     async collectAllStations() {
         try {
             const token = await this.getValidToken();
             const cycleTime = this.getLatestCycleTime();
 
-            const url = `${API_BASE}/paquet/stations/infrahoraire-6m?date=${cycleTime}&format=json`;
+            console.log(`[MeteoCollector] 🚀 Collecte multi-endpoint pour ${cycleTime}...`);
 
-            console.log(`[MeteoCollector] Collecte des données pour ${cycleTime}...`);
+            const headers = {
+                'apikey': token,
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            };
 
-            console.log("[MeteoCollector] Token utilisé (début):", token.substring(0, 10));
-            const response = await fetch(url, {
-                headers: {
-                    'apikey': token,
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
+            // ──────────────────────────────────────────────────
+            // ÉTAPE 1 : Fetch bulk infrahoraire-6m
+            // ──────────────────────────────────────────────────
+            const url6m = `${API_BASE}/paquet/stations/infrahoraire-6m?date=${cycleTime}&format=json`;
+            const [res6m, resH] = await Promise.allSettled([
+                fetch(url6m, { headers }),
+                this.fetchHoraireBulk(cycleTime, headers)
+            ]);
+
+            let stations6m = [];
+            if (res6m.status === 'fulfilled' && res6m.value.ok) {
+                stations6m = await res6m.value.json();
+                if (!Array.isArray(stations6m)) stations6m = [];
+            } else {
+                console.error('[MeteoCollector] ❌ Échec fetch bulk 6min');
+            }
+
+            // Index des stations déjà récupérées
+            const collectedIds = new Set();
+            const allStations = [];
+
+            // Enrichir et indexer les stations 6min
+            for (const s of stations6m) {
+                const id = s.geo_id_insee || s.id;
+                if (!id) continue;
+                collectedIds.add(id);
+                allStations.push(this.enrichStation(s));
+            }
+
+            console.log(`[MeteoCollector] 📡 Bulk 6min : ${allStations.length} stations`);
+
+            // ──────────────────────────────────────────────────
+            // ÉTAPE 2 : Compléter avec le bulk horaire
+            // ──────────────────────────────────────────────────
+            let horaireStations = [];
+            if (resH.status === 'fulfilled') {
+                horaireStations = resH.value || [];
+            }
+
+            let completedFromHoraire = 0;
+            for (const s of horaireStations) {
+                const id = s.geo_id_insee || s.id;
+                if (!id || collectedIds.has(id)) continue;
+
+                // Ne compléter que les stations qu'on connaît
+                if (!stationNamesData[id]) continue;
+
+                collectedIds.add(id);
+                allStations.push(this.enrichStation({ ...s, _source: 'horaire' }));
+                completedFromHoraire++;
+            }
+
+            if (completedFromHoraire > 0) {
+                console.log(`[MeteoCollector] 📊 Horaire : +${completedFromHoraire} stations complétées`);
+            }
+
+            // ──────────────────────────────────────────────────
+            // ÉTAPE 3 : Appels individuels DPObs pour les manquantes
+            // ──────────────────────────────────────────────────
+            const allKnownIds = Object.keys(stationNamesData);
+            const missingIds = allKnownIds.filter(id => !collectedIds.has(id));
+
+            // Limiter aux stations métropolitaines (01-95)
+            const missingMetro = missingIds.filter(id => {
+                const prefix = parseInt(id.substring(0, 2));
+                return prefix >= 1 && prefix <= 95;
             });
 
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.status}`);
-            }
+            let completedFromDPObs = 0;
+            if (missingMetro.length > 0 && missingMetro.length <= 100) {
+                // On requête par lots de 10 en parallèle pour ne pas surcharger
+                const BATCH = 10;
+                for (let i = 0; i < missingMetro.length; i += BATCH) {
+                    const batch = missingMetro.slice(i, i + BATCH);
+                    const results = await Promise.allSettled(
+                        batch.map(id => this.fetchStationDPObs(id, cycleTime, headers))
+                    );
 
-            const stations = await response.json();
-
-            // Enrichir les données avec timestamp de collecte
-            const enrichedStations = stations.map(station => ({
-                ...station,
-                // Conversion Kelvin -> Celsius
-                temp_celsius: station.t ? Math.round((station.t - 273.15) * 10) / 10 : null,
-                dewpoint_celsius: station.td ? Math.round((station.td - 273.15) * 10) / 10 : null,
-                // Conversion m/s -> km/h
-                wind_kmh: station.ff ? Math.round(station.ff * 3.6 * 10) / 10 : null,
-                gust_kmh: station.fxi10 ? Math.round(station.fxi10 * 3.6 * 10) / 10 : null,
-                vv: station.vv ?? station.vis ?? station.visibility ?? null
-            }));
-
-            // DEBUG VISIBILITÉ
-            const stationsAvecVisibilite = enrichedStations.filter(s => s.vv !== null);
-            if (stationsAvecVisibilite.length > 0) {
-                console.log(`[MeteoCollector] 👁️ Visibilité trouvée sur ${stationsAvecVisibilite.length} stations`);
-                // Log spécifique pour Rennes (35281001)
-                const rennes = stationsAvecVisibilite.find(s => s.geo_id_insee === '35281001' || s.id === '35281001');
-                if (rennes) {
-                    console.log(`[MeteoCollector] 🌫️ Rennes St Jacques: Visibilité = ${rennes.vv}m`);
+                    for (let j = 0; j < results.length; j++) {
+                        if (results[j].status === 'fulfilled' && results[j].value) {
+                            const obs = results[j].value;
+                            const id = obs.geo_id_insee || obs.id || batch[j];
+                            if (!collectedIds.has(id)) {
+                                collectedIds.add(id);
+                                allStations.push(this.enrichStation({ ...obs, _source: 'dpobs' }));
+                                completedFromDPObs++;
+                            }
+                        }
+                    }
                 }
-            } else {
-                console.warn('[MeteoCollector] ⚠️ Aucune donnée de visibilité reçue ce cycle');
             }
 
-            console.log(`[MeteoCollector] ✅ ${enrichedStations.length} stations collectées`);
+            if (completedFromDPObs > 0) {
+                console.log(`[MeteoCollector] 🔍 DPObs : +${completedFromDPObs} stations complétées`);
+            }
 
-            return enrichedStations;
+            // Résumé
+            const finalMissing = allKnownIds.filter(id => !collectedIds.has(id)).length;
+            console.log(`[MeteoCollector] ✅ TOTAL : ${allStations.length} stations collectées (${finalMissing} encore absentes)`);
+
+            // Log visibilité
+            const stationsAvecVisibilite = allStations.filter(s => s.vv !== null);
+            if (stationsAvecVisibilite.length > 0) {
+                console.log(`[MeteoCollector] 👁️ Visibilité : ${stationsAvecVisibilite.length} stations`);
+            }
+
+            return allStations;
 
         } catch (error) {
             console.error('[MeteoCollector] Erreur de collecte:', error);
             throw error;
         }
     }
+
+    /**
+     * Fetch le paquet horaire (bulk) pour compléter les stations manquantes du 6min
+     */
+    async fetchHoraireBulk(cycleTime, headers) {
+        try {
+            // Arrondir à l'heure (le endpoint horaire attend une heure ronde)
+            const cycleDate = new Date(cycleTime);
+            cycleDate.setUTCMinutes(0, 0, 0);
+            const hourStr = cycleDate.toISOString().split('.')[0] + 'Z';
+
+            const url = `${API_BASE}/paquet/stations/horaire?date=${hourStr}&format=json`;
+            const response = await fetch(url, { headers });
+
+            if (!response.ok) return [];
+            const data = await response.json();
+            return Array.isArray(data) ? data : [];
+        } catch (e) {
+            console.warn('[MeteoCollector] ⚠️ Échec fetch horaire bulk:', e.message);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch une station individuelle via DPObs infrahoraire-6m
+     */
+    async fetchStationDPObs(stationId, cycleTime, headers) {
+        try {
+            const url = `${API_DPOBS}/station/infrahoraire-6m?id_station=${stationId}&date=${cycleTime}&format=json`;
+            const response = await fetch(url, { headers });
+
+            if (!response.ok) return null;
+
+            const text = await response.text();
+            if (text.startsWith('<') || text.length < 5) return null;
+
+            const data = JSON.parse(text);
+            if (Array.isArray(data) && data.length > 0) {
+                return data[0];
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
 
     /**
      * Démarrer la collecte automatique
@@ -209,15 +347,16 @@ class MeteoFranceCollector {
                 ...obs,
                 receivedAt: now.toISOString(),
                 // S'assurer que les valeurs numériques sont bien des nombres
-                t: obs.t ? Math.round((obs.t - 273.15) * 10) / 10 : null, // Convertir en Celsius et arrondir
-                u: obs.u,
-                ff: obs.ff ? Math.round(obs.ff * 3.6) : null, // km/h (arrondi entier pour le vent)
-                td: obs.td ? Math.round((obs.td - 273.15) * 10) / 10 : null,
-                min_t: obs.min_t ? Math.round((obs.min_t - 273.15) * 10) / 10 : null,
-                max_t: obs.max_t ? Math.round((obs.max_t - 273.15) * 10) / 10 : null,
-                gust_kmh: (obs.fxi || obs.fxi10) ? Math.round((obs.fxi || obs.fxi10) * 3.6) : null,
-                rr_per: obs.rr_per !== undefined ? obs.rr_per : 0,
-                vv: obs.vv
+                // IMPORTANT: != null pour ne pas perdre la valeur 0 (ex: 0°C = 273.15K, vent calme = 0 m/s)
+                t: obs.t != null ? Math.round((obs.t - 273.15) * 10) / 10 : null,
+                u: obs.u ?? null,
+                ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
+                td: obs.td != null ? Math.round((obs.td - 273.15) * 10) / 10 : null,
+                min_t: obs.min_t != null ? Math.round((obs.min_t - 273.15) * 10) / 10 : null,
+                max_t: obs.max_t != null ? Math.round((obs.max_t - 273.15) * 10) / 10 : null,
+                gust_kmh: (obs.fxi10 != null) ? Math.round(obs.fxi10 * 3.6) : (obs.fxi != null ? Math.round(obs.fxi * 3.6) : null),
+                rr_per: obs.rr_per ?? 0,
+                vv: obs.vv ?? null
             };
 
             // Vérifier doublons
@@ -269,18 +408,28 @@ class MeteoFranceCollector {
 
         // Mapping complet (y compris rafales fxi et direction dd)
         const now = new Date();
-        const allRows = data.map(obs => ({
-            station_id: obs.geo_id_insee || obs.id, // ID Station
-            timestamp: obs.validity_time || now.toISOString(), // Heure observation
-            t: obs.t ? Math.round((obs.t - 273.15) * 10) / 10 : null,
-            u: obs.u,
-            ff: obs.ff ? Math.round(obs.ff * 3.6) : null,
-            rr_per: obs.rr_per ?? 0,
-            pres: obs.pres,
-            fxi: (obs.fxi || obs.fxi10 || (obs.gust_kmh ? obs.gust_kmh / 3.6 : 0)) ? Math.round(((obs.fxi || obs.fxi10 || 0) * 3.6)) : null,
-            dd: obs.dd,
-            vv: obs.vv ?? obs.vis ?? obs.visibility ?? null
-        }));
+        const allRows = data.map(obs => {
+            const stationId = obs.geo_id_insee || obs.id;
+            // Rafales : prioriser fxi10 (brut API), puis fxi, puis gust_kmh (déjà converti)
+            let fxiKmh = null;
+            if (obs.fxi10 != null) fxiKmh = Math.round(obs.fxi10 * 3.6);
+            else if (obs.fxi != null) fxiKmh = Math.round(obs.fxi * 3.6);
+            else if (obs.gust_kmh != null) fxiKmh = Math.round(obs.gust_kmh);
+
+            return {
+                station_id: stationId,
+                timestamp: obs.validity_time || now.toISOString(),
+                // IMPORTANT: != null pour ne pas perdre les valeurs 0 légitimes
+                t: obs.t != null ? Math.round((obs.t - 273.15) * 10) / 10 : null,
+                u: obs.u ?? null,
+                ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
+                rr_per: obs.rr_per ?? 0,
+                pres: obs.pres ?? null,
+                fxi: fxiKmh,
+                dd: obs.dd ?? null,
+                vv: obs.vv ?? null
+            };
+        });
 
         // BATCHING: Découpage par paquets de 100 pour éviter le timeout/refus navigateur
         const BATCH_SIZE = 100;
