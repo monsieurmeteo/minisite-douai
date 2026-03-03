@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
         const supabaseKey = Deno.env.get('SERVICE_ROLE_KEY')!; // Nom autorisé
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        console.log("🚀 START: Smart Update 6mn");
+        console.log("🚀 START: Smart Update 6mn (Rolling 72m)");
 
         // 1. Get Token
         const { data: secrets } = await supabase
@@ -30,9 +30,15 @@ Deno.serve(async (req) => {
 
         let token = secrets?.access_token;
 
-        // Function call API
-        const callApi = async (dateStr: string, currentToken: string) => {
+        // Function call API (Bulk)
+        const callApiBulk = async (dateStr: string, currentToken: string) => {
             const url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/stations/infrahoraire-6m?date=${dateStr}&format=json`;
+            return await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
+        };
+
+        // Function call API (Individual - for missing stations like Steenvoorde)
+        const callApiIndividual = async (stationId: string, dateStr: string, currentToken: string) => {
+            const url = `https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m?id_station=${stationId}&date=${dateStr}&format=json`;
             return await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
         };
 
@@ -51,36 +57,20 @@ Deno.serve(async (req) => {
             return data.access_token;
         };
 
-        // 2. Determine Missing Slots (Smart Logic)
-        const { data: lastRecord } = await supabase
-            .from('observations_6mn')
-            .select('timestamp')
-            .order('timestamp', { ascending: false })
-            .limit(1);
-
-        // If DB empty, start 1 hour ago. Else start after last record.
-        const lastTs = lastRecord?.[0]?.timestamp ? new Date(lastRecord[0].timestamp) : new Date(Date.now() - 60 * 60 * 1000);
+        // 2. Determine Rolling Lookback Slots (72 minutes window)
+        // We always fetch the last 12 slots to catch delayed or missing stations
         const now = new Date();
-
-        // T-2 min : C'est le délai minimum car Météo-France finit de compiler ses paquets 
-        // entre 120 et 240 secondes après l'heure pile du créneau de 6 min.
+        const startPoint = new Date(Math.floor(now.getTime() / 360000) * 360000 - 72 * 60000);
         const limitDate = new Date(now.getTime() - 2 * 60000);
 
         const slotsToFetch: Date[] = [];
-        // Round lastTs to nearest 6mn if needed
-        let reader = new Date(Math.floor(lastTs.getTime() / 360000) * 360000 + 360000);
+        let reader = new Date(startPoint);
 
         while (reader <= limitDate) {
-            // Round to nearest 6mn
             reader.setMinutes(Math.floor(reader.getMinutes() / 6) * 6, 0, 0);
-
-            if (reader > lastTs) {
-                slotsToFetch.push(new Date(reader));
-            }
+            slotsToFetch.push(new Date(reader));
             reader = new Date(reader.getTime() + 6 * 60000);
-
-            // Safety: Max 5 slots per run to avoid Timeout on Edge Function
-            if (slotsToFetch.length >= 5) break;
+            if (slotsToFetch.length >= 12) break;
         }
 
         if (slotsToFetch.length === 0) {
@@ -88,110 +78,96 @@ Deno.serve(async (req) => {
             return new Response(JSON.stringify({ status: "Up to date" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        console.log(`📥 Fetching ${slotsToFetch.length} slots: ${slotsToFetch.map(d => d.toISOString()).join(', ')}`);
+        console.log(`📥 Fetching ${slotsToFetch.length} rolling slots: ${slotsToFetch.map(d => d.toISOString()).join(', ')}`);
+
+        // Get the list of stations we want to supervise from DB
+        const { data: dbStationsData, error: dbError } = await supabase.from('stations').select('id');
+        const TARGET_STATIONS: string[] = (dbStationsData || []).map((s: any) => s.id);
+
+        if (dbError) console.error('⚠️ Could not fetch stations from DB:', dbError.message);
 
         let totalInserted = 0;
 
         for (const slot of slotsToFetch) {
             const dateStr = slot.toISOString().split('.')[0] + 'Z';
+            let allBatchData: any[] = [];
+            let bulkStationsIds = new Set();
 
-            let res = await callApi(dateStr, token);
-
+            // 1. Appel Bulk
+            let res = await callApiBulk(dateStr, token);
             if (res.status === 401) {
                 token = await refreshToken();
-                res = await callApi(dateStr, token);
+                res = await callApiBulk(dateStr, token);
             }
 
-            if (res.status === 404 || res.status === 400 || res.status === 204) {
-                console.log(`⚠️ No data for ${dateStr} (yet)`);
-                continue;
+            if (res.ok) {
+                const bulkData = await res.json();
+                if (Array.isArray(bulkData)) {
+                    allBatchData = [...bulkData];
+                    bulkData.forEach(obs => {
+                        const sid = obs.id || obs.id_station || obs.geo_id_insee;
+                        if (sid) bulkStationsIds.add(sid);
+                    });
+                }
             }
 
-            if (!res.ok) {
-                console.log(`❌ Error ${res.status} for ${dateStr}`);
-                continue;
+            // 2. Identify missing stations ( those in TARGET_STATIONS but not in Bulk )
+            const missingFromBulk = TARGET_STATIONS.filter(sid => !bulkStationsIds.has(sid));
+
+            if (missingFromBulk.includes('35281001')) {
+                console.log(`🔍 RENNES (35281001) is missing from Bulk for ${dateStr}. Attempting individual fetch...`);
             }
 
-            const data = await res.json();
-            if (!Array.isArray(data)) continue;
+            // 3. Appels Individuels (pour les stations vraiment manquantes)
+            if (missingFromBulk.length > 0) {
+                for (const sid of missingFromBulk) {
+                    try {
+                        let resIndiv = await callApiIndividual(sid, dateStr, token);
+                        if (resIndiv.status === 401) {
+                            token = await refreshToken();
+                            resIndiv = await callApiIndividual(sid, dateStr, token);
+                        }
+                        if (resIndiv.ok) {
+                            const indivData = await resIndiv.json();
+                            if (Array.isArray(indivData) && indivData[0]) {
+                                if (sid === '35281001') console.log(`✅ RENNES data found via indiv fetch for ${dateStr}`);
+                                allBatchData.push({ ...indivData[0], _source: 'indiv' });
+                            } else {
+                                if (sid === '35281001') console.log(`⚠️ RENNES indiv fetch returned empty/invalid data for ${dateStr}`);
+                            }
+                        } else {
+                            if (sid === '35281001') console.log(`❌ RENNES indiv fetch failed (status ${resIndiv.status}) for ${dateStr}`);
+                        }
+                    } catch (e) {
+                        console.log(`❌ Error fetching indiv station ${sid}:`, (e as any).message);
+                    }
+                    // Petit délai pour éviter 429
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            }
 
-            // Transform
-            const rows = data.map((obs: any) => ({
-                station_id: obs.id || obs.id_station || obs.geo_id_insee,
-                timestamp: new Date(obs.validity_time || dateStr).toISOString(),
-                t: obs.t ? Math.round((obs.t - 273.15) * 10) / 10 : null,
-                td: obs.td ? Math.round((obs.td - 273.15) * 10) / 10 : null,
-                u: obs.u || null,
-                ff: obs.ff ? Math.round(obs.ff * 3.6) : null,
-                fxi: obs.fxi10 ? Math.round(obs.fxi10 * 3.6) : null,
-                dd: obs.dd || null,
-                pres: obs.pmer ? Math.round(obs.pmer / 100 * 10) / 10 : null, // Sea level pressure (hPa)
-                rr_per: obs.rr_per || 0
-            })).filter((r: any) => r.station_id);
+            if (allBatchData.length === 0) continue;
 
-            // Insert
-            const { error } = await supabase.from('observations_6mn').upsert(rows, { onConflict: 'station_id, timestamp' });
+            const rows = allBatchData.map((obs: any) => {
+                const stationId = obs.id || obs.id_station || obs.geo_id_insee;
+                return {
+                    station_id: stationId,
+                    timestamp: new Date(obs.validity_time || dateStr).toISOString(),
+                    t: obs.t != null ? Math.round((obs.t - 273.15) * 10) / 10 : null,
+                    td: obs.td != null ? Math.round((obs.td - 273.15) * 10) / 10 : null,
+                    u: obs.u != null ? obs.u : null,
+                    ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
+                    fxi: obs.fxi10 != null ? Math.round(obs.fxi10 * 3.6) : (obs.fxi != null ? Math.round(obs.fxi * 3.6) : null),
+                    dd: obs.dd != null ? obs.dd : null,
+                    pres: obs.pmer != null ? Math.round(obs.pmer / 100 * 10) / 10 : (obs.pres != null ? Math.round(obs.pres / 100 * 10) / 10 : null),
+                    rr_per: obs.rr_per != null ? obs.rr_per : 0
+                };
+            }).filter((r: any) => r.station_id);
 
-            if (!error) {
+            const { error: upsertError } = await supabase.from('observations_6mn').upsert(rows, { onConflict: 'station_id, timestamp' });
+            if (!upsertError) {
                 totalInserted += rows.length;
                 console.log(`✅ ${rows.length} inserted for ${dateStr}`);
-
-                // 3. --- ROBOT DE SURVEILLANCE DES ALERTES UTILISATEURS (LOGIQUE BLINDÉE) ---
-                console.log("🔍 Checking active user alerts...");
-                const { data: userConfigs } = await supabase.from('user_station_configs').select('*');
-
-                if (userConfigs && userConfigs.length > 0) {
-                    for (const config of userConfigs) {
-                        // On cherche le relevé le plus récent dans les 15 dernières minutes pour cette station
-                        const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
-                        const { data: recentObs } = await supabase
-                            .from('observations_6mn')
-                            .select('*')
-                            .eq('station_id', config.nearest_station_id)
-                            .gte('timestamp', fifteenMinsAgo)
-                            .order('timestamp', { ascending: false })
-                            .limit(1);
-
-                        if (!recentObs || recentObs.length === 0) continue;
-                        const obs = recentObs[0];
-
-                        let alertMsg = null;
-                        let tags = '';
-
-                        // Alerte Vent (Gusts fxi)
-                        if (config.alert_wind_enabled && obs.fxi !== null && obs.fxi >= (config.alert_wind_threshold || 80)) {
-                            alertMsg = `💨 VENT FORT : ${obs.fxi} km/h à ${config.city_name} (Station: ${config.nearest_station_name})`;
-                            tags = 'wind,warning';
-                        }
-                        // Alerte Pluie (rr_per sur 6mn -> converti pour seuil mm/h)
-                        else if (config.alert_rain_enabled && obs.rr_per !== null && (obs.rr_per * 10) >= (config.alert_rain_threshold || 10)) {
-                            alertMsg = `🌧️ PLUIE : Forte intensité à ${config.city_name} (${obs.rr_per}mm en 6mn)`;
-                            tags = 'droplets,umbrella';
-                        }
-                        // Alerte Froid
-                        else if (config.alert_tmin_enabled && obs.t !== null && obs.t <= (config.alert_tmin_threshold || 0)) {
-                            alertMsg = `❄️ FROID : ${obs.t}°C à ${config.city_name} (Seuil < ${config.alert_tmin_threshold})`;
-                            tags = 'snowflake,cold';
-                        }
-                        // Alerte Chaleur
-                        else if (config.alert_tmax_enabled && obs.t !== null && obs.t >= (config.alert_tmax_threshold || 35)) {
-                            alertMsg = `🔥 CHALEUR : ${obs.t}°C à ${config.city_name} (Seuil > ${config.alert_tmax_threshold})`;
-                            tags = 'fire,hot';
-                        }
-
-                        if (alertMsg) {
-                            // On vérifie si on a déjà envoyé CETTE alerte (même station, même timestamp)
-                            // On utilise le cache local de la fonction ou on fait confiance à ntfy pour le dedupe
-                            console.log(`🚀 ALERT TRIGGERED for ${config.city_name} on ${config.ntfy_topic} : ${alertMsg}`);
-                            await fetch(`https://ntfy.sh/${config.ntfy_topic}`, {
-                                method: 'POST', body: alertMsg,
-                                headers: { 'Title': `Meteo Pro Alerte - ${config.city_name}`, 'Priority': 'high', 'Tags': tags }
-                            });
-                        }
-                    }
-                }
-            } else {
-                console.error(`❌ DB Error: ${error.message}`);
             }
         }
 
@@ -203,7 +179,7 @@ Deno.serve(async (req) => {
     } catch (error) {
         console.error('❌ FATAL:', error);
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: (error as any).message }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

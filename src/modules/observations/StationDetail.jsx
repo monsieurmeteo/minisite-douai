@@ -600,7 +600,7 @@ export default function StationDetail() {
                                                     }}>
                                                         {typeof h.temp === 'number' && !isNaN(h.temp) ? h.temp.toFixed(1) : '--'}
                                                     </td>
-                                                    <td style={{ color: '#64748b' }}>{h.hum ?? '--'}<small>%</small></td>
+                                                    <td style={{ color: '#64748b' }}>{h.hum != null ? <>{h.hum}<small>%</small></> : <span style={{ color: '#cbd5e1' }}>--</span>}</td>
                                                     <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{typeof h.dewpoint === 'number' && !isNaN(h.dewpoint) ? h.dewpoint.toFixed(1) : '--'}</td>
                                                     <td style={{
                                                         background: h.humidex > h.temp ? 'rgba(234, 88, 12, 0.04)' : 'transparent',
@@ -617,19 +617,23 @@ export default function StationDetail() {
                                                         {typeof h.windchill === 'number' && !isNaN(h.windchill) ? h.windchill.toFixed(1) : '--'}
                                                     </td>
                                                     <td style={{ width: '24px', paddingRight: '0' }}>
-                                                        {h.dir !== null && (
+                                                        {h.dir != null ? (
                                                             <svg viewBox="0 0 24 24" width="14" height="14" style={{ transform: `rotate(${h.dir + 180}deg)`, color: '#64748b' }}>
                                                                 <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" fill="currentColor" />
                                                             </svg>
-                                                        )}
+                                                        ) : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                     </td>
                                                     <td className="wind-col" style={{ textAlign: 'left', paddingLeft: '4px', whiteSpace: 'nowrap' }}>
-                                                        <span style={{ fontWeight: '700', color: '#1e293b' }}>{Math.round(h.gust || 0)}</span>
-                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '4px' }}>({Math.round(h.wind || 0)})</span>
-                                                        <small style={{ fontSize: '0.65rem', color: '#cbd5e1', marginLeft: '2px' }}>km/h</small>
+                                                        {h.gust != null || h.wind != null ? (
+                                                            <>
+                                                                <span style={{ fontWeight: '700', color: '#1e293b' }}>{h.gust != null ? Math.round(h.gust) : '--'}</span>
+                                                                <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '4px' }}>({h.wind != null ? Math.round(h.wind) : '--'})</span>
+                                                                <small style={{ fontSize: '0.65rem', color: '#cbd5e1', marginLeft: '2px' }}>km/h</small>
+                                                            </>
+                                                        ) : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                     </td>
                                                     <td className="pres-col" style={{ fontSize: '0.85rem' }}>
-                                                        {typeof h.pressure === 'number' && !isNaN(h.pressure) ? h.pressure.toFixed(1) : <div className="missing-data-line"></div>}
+                                                        {typeof h.pressure === 'number' && !isNaN(h.pressure) ? h.pressure.toFixed(1) : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                         {trend && (
                                                             <span style={{
                                                                 marginLeft: '4px',
@@ -641,15 +645,15 @@ export default function StationDetail() {
                                                         )}
                                                     </td>
                                                     <td style={{ fontSize: '0.85rem', color: '#eab308', fontWeight: '500' }}>
-                                                        {h.sun !== null ? h.sun : <div className="missing-data-line"></div>}
+                                                        {h.sun != null ? h.sun : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                     </td>
                                                     <td style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '600' }}>
-                                                        {h.vv !== null ? (h.vv / 1000).toFixed(1) : <div className="missing-data-line"></div>}
+                                                        {h.vv != null ? (h.vv / 1000).toFixed(1) : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                     </td>
                                                     <td className={h.rain > 0 ? 'rain-val' : ''} style={{ fontSize: '0.85rem' }}>
                                                         {typeof h.rain === 'number' && !isNaN(h.rain) ? (
                                                             h.rain > 0 ? <strong>{h.rain.toFixed(1)}</strong> : <span style={{ color: '#cbd5e1' }}>0.0</span>
-                                                        ) : <div className="missing-data-line"></div>}
+                                                        ) : <span style={{ color: '#cbd5e1' }}>--</span>}
                                                     </td>
                                                 </tr>
                                             );

@@ -530,7 +530,7 @@ const RainfallMap = () => {
                                                 y={selectedRegionName === "France" ? -4 : -8}
                                                 textAnchor="middle"
                                                 style={{
-                                                    fontSize: selectedRegionName === "France" ? '11px' : '22px', fontWeight: 'bold',
+                                                    fontSize: selectedRegionName === "France" ? '11px' : '30px', fontWeight: 'bold',
                                                     fill: s.value > 50 ? '#fff' : '#000',
                                                     stroke: s.value > 50 ? '#000' : '#fff',
                                                     strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',

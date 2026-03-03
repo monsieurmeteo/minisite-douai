@@ -393,6 +393,7 @@ class MeteoFranceCollector {
                 timestamp: obs.validity_time || now.toISOString(),
                 // IMPORTANT: != null pour ne pas perdre les valeurs 0 légitimes
                 t: obs.t != null ? Math.round((obs.t - 273.15) * 10) / 10 : null,
+                td: obs.td != null ? Math.round((obs.td - 273.15) * 10) / 10 : null,
                 u: obs.u ?? null,
                 ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
                 rr_per: obs.rr_per ?? 0,

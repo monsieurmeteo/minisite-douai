@@ -1013,7 +1013,8 @@ Voici les données brutes :`;
 
         // --- SYNTHÈSE GLOBALE ---
         if (checkPeriod) {
-            let totalDays = Object.keys(globalData).length;
+            const dataEntries = Object.entries(globalData || {}).filter(([k]) => k !== '__metadata');
+            let totalDays = dataEntries.length;
             let totalRainPeriod = 0; const daysKO = new Set();
             let syncHtml = `<div class="btp-doc-section">`;
 
@@ -1091,7 +1092,8 @@ Voici les données brutes :`;
                 totalRainPeriod += rs;
                 let dayIsKo = false;
                 rules.forEach(r => {
-                    if (r.lots && r.lots.some(t => activeTrades.includes(t)) && calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze, dataObj.fog)) dayIsKo = true;
+                    const affectsActive = r.lots && r.lots.some(t => activeTrades.includes(t));
+                    if (affectsActive && calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze, dataObj.fog)) dayIsKo = true;
                 });
                 if (dayIsKo) daysKO.add(date);
                 syncHtml += `<tr><td style="font-weight:700; padding:4px;">${date}</td><td style="padding:4px;">${ts.length ? Math.min(...ts).toFixed(1) + '°' : '--'} / ${ts.length ? Math.max(...ts).toFixed(1) + '°' : '--'}</td><td style="padding:4px;">${rs.toFixed(1)} mm</td><td style="padding:4px;">${maxG.toFixed(1)} km/h</td><td style="padding:4px;">${dayIsKo ? '<span class="btp-tag btp-tag-ko" style="padding:2px 6px; font-size:0.65rem;">INTEMPÉRIE</span>' : '<span class="btp-tag btp-tag-ok" style="padding:2px 6px; font-size:0.65rem;">RAS</span>'}</td></tr>`;
@@ -1233,11 +1235,12 @@ Voici les données brutes :`;
         setReportOutput(html);
         setChartsOutput(''); // No longer used separately
 
-        if (showCharts && Object.keys(globalData).length > 0) {
+        if (showCharts && Object.keys(globalData || {}).filter(k => k !== '__metadata').length > 0) {
             setTimeout(() => {
-                for (const [date, dataObj] of Object.entries(globalData)) {
+                Object.entries(globalData || {}).forEach(([date, dataObj]) => {
+                    if (date === '__metadata') return;
                     renderChart(`btp-chart-${date.replace(/\//g, '-')}`, dataObj.rows);
-                }
+                });
             }, 800);
         }
     };
@@ -1437,14 +1440,16 @@ Voici les données brutes :`;
         body += `--------------------------------------------------\n`;
 
         let hasData = false;
-        for (const [date, dataObj] of Object.entries(globalData)) {
+        Object.entries(globalData).forEach(([date, dataObj]) => {
+            if (date === '__metadata') return; // Skip metadata info
             hasData = true;
             let dayHasKo = false;
             const details = [];
+
             rules.forEach(r => {
                 const affectsActive = r.lots && r.lots.some(t => activeTrades.includes(t));
                 if (affectsActive) {
-                    const res = calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze);
+                    const res = calculateKoV96(r, dataObj.rows, dataObj.soil, dataObj.forceHeat, dataObj.forceFroze, dataObj.fog);
                     if (res) {
                         dayHasKo = true;
                         let k = r.var;
@@ -1459,11 +1464,11 @@ Voici les données brutes :`;
 
             body += `\n--- DATE : ${date} ---\n`;
             if (dayHasKo) {
-                body += `❌ [!] INTEMPÉRIES CONSTATÉES\nCauses :\n${details.join('\n')}\n`;
+                body += `❌ [!] INTEMPÉRÉES CONSTATÉES\nCauses :\n${details.join('\n')}\n`;
             } else {
                 body += `✅ [OK] RAS\n`;
             }
-        }
+        });
 
         if (!hasData) {
             body += "Aucune donnée analysée.\n";
@@ -1476,15 +1481,42 @@ Voici les données brutes :`;
     };
 
     const sendMail = () => {
-        const body = generateMailBody();
-        const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
-        const subject = `Relevé Intempéries - ${chantierName || projectName || projectClient || 'Météo'}`;
+        try {
+            const body = generateMailBody();
+            const recipient = emailCli || clientEmail || "";
+            const subject = `Relevé Intempéries - ${chantierName || projectName || projectClient || 'Météo'}`;
 
-        // NOTE: Standard mailto does NOT support attachments.
-        // We warn the user to attach the PDF manually.
-        alert("⚠️ Le mail va s'ouvrir dans votre logiciel de messagerie.\n\nNote : Les navigateurs ne permettent pas de joindre automatiquement le PDF. N'oubliez pas d'attacher le fichier que vous venez de télécharger (Bouton IMPRIMER / PDF).");
+            if (!recipient) {
+                alert("⚠️ Aucun destinataire n'est configuré.\n\nVeuillez remplir le champ 'Email de Contact' ou 'Destinataire Mail' dans l'onglet Client & Chantier.");
+                return;
+            }
 
-        window.location.href = `mailto:${emailCli}?subject=${encodeURIComponent(subject)}&body=${encodedBody}`;
+            console.log("[BTP] Envoi mail vers:", recipient, "Taille body:", body.length);
+
+            // Construction du lien mailto avec encodage robuste
+            const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
+            const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodedBody}`;
+
+            // Vérification de la longueur (limite ~2000 caractères pour mailto)
+            if (mailtoUrl.length > 2000) {
+                console.warn("[BTP] Mailto trop long:", mailtoUrl.length);
+                alert("⚠️ Le contenu du rapport est trop long pour être envoyé directement par email (limite des navigateurs).\n\n✅ Le rapport a été copié dans votre presse-papier !\n\nCollez-le (Ctrl+V) dans votre logiciel d'email.");
+                navigator.clipboard.writeText(body);
+                return;
+            }
+
+            // Ouverture via lien invisible (plus robuste que window.location.href)
+            const link = document.createElement('a');
+            link.href = mailtoUrl;
+            link.click();
+
+            // Notification informative
+            alert("📧 Envoi en cours...\n\nSi votre logiciel de messagerie ne s'ouvre pas, vérifiez qu'une application par défaut (Outlook, Courrier, Gmail...) est configurée sur votre ordinateur.");
+
+        } catch (e) {
+            console.error("[BTP] Erreur sendMail:", e);
+            alert("❌ Une erreur est survenue : " + e.message);
+        }
     };
 
     const copyMailBody = () => {
