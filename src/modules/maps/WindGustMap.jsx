@@ -549,26 +549,24 @@ const WindGustMap = () => {
                                 strokeWidth="1.5"
                             />
 
-                            {/* Points des Stations et Valeurs */}
-                            {stations.map(s => {
-                                const coords = projection([s.lon, s.lat]);
-                                if (!coords) return null;
+                            <g clipPath="url(#france-clip)">
+                                {stations.map(s => {
+                                    const coords = projection([s.lon, s.lat]);
+                                    if (!coords) return null;
+                                    return (
+                                        <g key={`marker-${s.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}
+                                            style={{ cursor: 'pointer' }}
+                                            onMouseEnter={(e) => {
+                                                const rect = mapContainerRef.current?.getBoundingClientRect();
+                                                if (rect) setHoveredStation({ ...s, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                            }}
+                                            onMouseLeave={() => setHoveredStation(null)}
+                                            onClick={() => navigate(`/observations/station/${s.id}`)}
+                                        >
+                                            <circle r={3} fill="transparent" />
+                                            <circle r={0.6} fill="black" fillOpacity="0.2" />
 
-                                return (
-                                    <g key={`marker-${s.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}
-                                        style={{ cursor: 'pointer' }}
-                                        onMouseEnter={(e) => {
-                                            const rect = mapContainerRef.current?.getBoundingClientRect();
-                                            if (rect) setHoveredStation({ ...s, x: e.clientX - rect.left, y: e.clientY - rect.top });
-                                        }}
-                                        onMouseLeave={() => setHoveredStation(null)}
-                                        onClick={() => navigate(`/observations/station/${s.id}`)}
-                                    >
-                                        <circle r={3} fill="transparent" />
-                                        <circle r={0.6} fill="black" fillOpacity="0.2" />
-
-                                        {showLabels && (
-                                            <g clipPath="url(#france-clip)">
+                                            {showLabels && (
                                                 <text
                                                     y={selectedRegionName === "France" ? -5 : -12}
                                                     textAnchor="middle"
@@ -585,11 +583,11 @@ const WindGustMap = () => {
                                                 >
                                                     {Math.round(s.value)}
                                                 </text>
-                                            </g>
-                                        )}
-                                    </g>
-                                );
-                            })}
+                                            )}
+                                        </g>
+                                    );
+                                })}
+                            </g>
                         </svg>
                     )}
 

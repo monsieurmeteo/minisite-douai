@@ -653,24 +653,24 @@ const MonthlyMapsHub = () => {
 
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
-                            {stations.map(s => {
-                                const coords = projection([s.lon, s.lat]);
-                                if (!coords) return null;
-                                const highContrast = (activeParam === 'wind' && s.value > 100) || (activeParam === 'rain' && s.value > 80) || ((activeParam === 'tn' || activeParam === 'tx') && (s.value < -2 || s.value > 35));
-                                return (
-                                    <g key={`marker-${s.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}
-                                        style={{ cursor: 'pointer' }}
-                                        onMouseEnter={(e) => {
-                                            const rect = mapContainerRef.current?.getBoundingClientRect();
-                                            if (rect) setHoveredStation({ ...s, x: e.clientX - rect.left, y: e.clientY - rect.top });
-                                        }}
-                                        onMouseLeave={() => setHoveredStation(null)}
-                                        onClick={() => navigate(`/observations/station/${s.id}`)}
-                                    >
-                                        <circle r={3} fill="transparent" />
-                                        <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                        {showLabels && (activeParam !== 'rain' || s.value >= 0.1) && (
-                                            <g clipPath="url(#france-clip-monthly)">
+                            <g clipPath="url(#france-clip-monthly)">
+                                {stations.map(s => {
+                                    const coords = projection([s.lon, s.lat]);
+                                    if (!coords) return null;
+                                    const highContrast = (activeParam === 'wind' && s.value > 100) || (activeParam === 'rain' && s.value > 80) || ((activeParam === 'tn' || activeParam === 'tx') && (s.value < -2 || s.value > 35));
+                                    return (
+                                        <g key={`marker-${s.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}
+                                            style={{ cursor: 'pointer' }}
+                                            onMouseEnter={(e) => {
+                                                const rect = mapContainerRef.current?.getBoundingClientRect();
+                                                if (rect) setHoveredStation({ ...s, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                            }}
+                                            onMouseLeave={() => setHoveredStation(null)}
+                                            onClick={() => navigate(`/observations/station/${s.id}`)}
+                                        >
+                                            <circle r={3} fill="transparent" />
+                                            <circle r={0.6} fill="black" fillOpacity="0.2" />
+                                            {showLabels && (activeParam !== 'rain' || s.value >= 0.1) && (
                                                 <text y={selectedRegionName === "France" ? -5 : -12} textAnchor="middle" style={{
                                                     fontSize: selectedRegionName === "France" ? '10px' : '20px', fontWeight: 'bold',
                                                     fill: highContrast ? '#fff' : '#000',
@@ -680,11 +680,11 @@ const MonthlyMapsHub = () => {
                                                 }}>
                                                     {Math.round(s.value)}
                                                 </text>
-                                            </g>
-                                        )}
-                                    </g>
-                                );
-                            })}
+                                            )}
+                                        </g>
+                                    );
+                                })}
+                            </g>
                         </svg>
                     )}
 
