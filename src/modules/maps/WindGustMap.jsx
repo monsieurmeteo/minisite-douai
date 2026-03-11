@@ -177,9 +177,9 @@ const WindGustMap = () => {
                             const lon = meta?.lon || s.lon;
 
                             if (lat && lon) {
-                                // Clé unique basée sur les coordonnées (précision 0.01 pour regrouper les postes urbains proches)
+                                // Clé unique basée sur les coordonnées (précision 0.05 degré ~ 5km pour correspondre au Générateur)
                                 // Cela élimine les "taches" dues à des stations trop rapprochées.
-                                const geoKey = `${(Math.round(lat * 100) / 100).toFixed(2)}_${(Math.round(lon * 100) / 100).toFixed(2)}`;
+                                const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
 
                                 if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < gust) {
                                     uniqueStations.set(geoKey, {
@@ -569,7 +569,8 @@ const WindGustMap = () => {
 
                                             {showLabels && (
                                                 <text
-                                                    y={selectedRegionName === "France" ? -6 : -18}
+                                                    y={selectedRegionName === "France" ? -6 : 0}
+                                                    dy={selectedRegionName === "France" ? 0 : "0.35em"}
                                                     textAnchor="middle"
                                                     style={{
                                                         fontSize: selectedRegionName === "France" ? '14px' : '28px',

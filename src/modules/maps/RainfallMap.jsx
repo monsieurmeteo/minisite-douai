@@ -195,8 +195,8 @@ const RainfallMap = () => {
                             const lon = meta?.lon || s.lon;
 
                             if (lat && lon) {
-                                // Agrégation plus fine pour éviter de fusionner des stations proches en vue régionale (environ 1km)
-                                const geoKey = `${(Math.round(lat * 100) / 100).toFixed(2)}_${(Math.round(lon * 100) / 100).toFixed(2)}`;
+                                // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
+                                const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
 
                                 if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < rain) {
                                     uniqueStations.set(geoKey, {
@@ -534,7 +534,8 @@ const RainfallMap = () => {
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
                                             {showLabels && s.value >= 0.1 && (
                                                 <text
-                                                    y={selectedRegionName === "France" ? -6 : -18}
+                                                    y={selectedRegionName === "France" ? -6 : 0}
+                                                    dy={selectedRegionName === "France" ? 0 : "0.35em"}
                                                     textAnchor="middle"
                                                     style={{
                                                         fontSize: selectedRegionName === "France" ? '14px' : '28px', 
