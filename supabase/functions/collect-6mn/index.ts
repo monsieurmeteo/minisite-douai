@@ -57,11 +57,10 @@ Deno.serve(async (req) => {
             return data.access_token;
         };
 
-        // 2. Determine Rolling Lookback Slots (72 minutes window)
-        // We always fetch the last 12 slots to catch delayed or missing stations
+        // 2. Determine Rolling Lookback Slots (18 minutes window - enough for catchup)
         const now = new Date();
-        const startPoint = new Date(Math.floor(now.getTime() / 360000) * 360000 - 72 * 60000);
-        const limitDate = new Date(now.getTime() - 2 * 60000);
+        const startPoint = new Date(Math.floor(now.getTime() / 360000) * 360000 - 18 * 60000); // 18m instead of 72m
+        const limitDate = new Date(now.getTime() - 1 * 60000);
 
         const slotsToFetch: Date[] = [];
         let reader = new Date(startPoint);
@@ -70,7 +69,7 @@ Deno.serve(async (req) => {
             reader.setMinutes(Math.floor(reader.getMinutes() / 6) * 6, 0, 0);
             slotsToFetch.push(new Date(reader));
             reader = new Date(reader.getTime() + 6 * 60000);
-            if (slotsToFetch.length >= 12) break;
+            if (slotsToFetch.length >= 3) break; // 3 slots max in a single run
         }
 
         if (slotsToFetch.length === 0) {
@@ -80,15 +79,15 @@ Deno.serve(async (req) => {
 
         console.log(`📥 Fetching ${slotsToFetch.length} rolling slots: ${slotsToFetch.map(d => d.toISOString()).join(', ')}`);
 
-        // Get the list of stations we want to supervise from DB
-        const { data: dbStationsData, error: dbError } = await supabase.from('stations').select('id');
-        const TARGET_STATIONS: string[] = (dbStationsData || []).map((s: any) => s.id);
-
-        if (dbError) console.error('⚠️ Could not fetch stations from DB:', dbError.message);
+        // Get only the PRIORITY stations from DB to avoid fetching 2000+ indiv calls
+        // In this case, we'll fetch only a small set if missing.
+        const PRIORITY_IDS = ['59343001', '59178001', '59350001', '35281001']; // Lille, Douai, Rennes...
 
         let totalInserted = 0;
 
-        for (const slot of slotsToFetch) {
+        for (let i = 0; i < slotsToFetch.length; i++) {
+            const slot = slotsToFetch[i];
+            const isLatest = (i === slotsToFetch.length - 1);
             const dateStr = slot.toISOString().split('.')[0] + 'Z';
             let allBatchData: any[] = [];
             let bulkStationsIds = new Set();
@@ -109,40 +108,29 @@ Deno.serve(async (req) => {
                         if (sid) bulkStationsIds.add(sid);
                     });
                 }
+            } else {
+                console.error(`❌ Bulk API failed for ${dateStr}: ${res.status}`);
             }
 
-            // 2. Identify missing stations ( those in TARGET_STATIONS but not in Bulk )
-            const missingFromBulk = TARGET_STATIONS.filter(sid => !bulkStationsIds.has(sid));
-
-            if (missingFromBulk.includes('35281001')) {
-                console.log(`🔍 RENNES (35281001) is missing from Bulk for ${dateStr}. Attempting individual fetch...`);
-            }
-
-            // 3. Appels Individuels (pour les stations vraiment manquantes)
-            if (missingFromBulk.length > 0) {
-                for (const sid of missingFromBulk) {
-                    try {
-                        let resIndiv = await callApiIndividual(sid, dateStr, token);
-                        if (resIndiv.status === 401) {
-                            token = await refreshToken();
-                            resIndiv = await callApiIndividual(sid, dateStr, token);
-                        }
-                        if (resIndiv.ok) {
-                            const indivData = await resIndiv.json();
-                            if (Array.isArray(indivData) && indivData[0]) {
-                                if (sid === '35281001') console.log(`✅ RENNES data found via indiv fetch for ${dateStr}`);
-                                allBatchData.push({ ...indivData[0], _source: 'indiv' });
-                            } else {
-                                if (sid === '35281001') console.log(`⚠️ RENNES indiv fetch returned empty/invalid data for ${dateStr}`);
+            // 2. Individual fetch ONLY for priority stations and ONLY for the latest slot (to save time)
+            if (isLatest) {
+                const missingPriority = PRIORITY_IDS.filter(sid => !bulkStationsIds.has(sid));
+                if (missingPriority.length > 0) {
+                    console.log(`🔍 Fetching ${missingPriority.length} priority stations individually for ${dateStr}...`);
+                    for (const sid of missingPriority) {
+                        try {
+                            const resIndiv = await callApiIndividual(sid, dateStr, token);
+                            if (resIndiv.ok) {
+                                const indivData = await resIndiv.json();
+                                if (Array.isArray(indivData) && indivData[0]) {
+                                    allBatchData.push({ ...indivData[0], _source: 'indiv' });
+                                }
                             }
-                        } else {
-                            if (sid === '35281001') console.log(`❌ RENNES indiv fetch failed (status ${resIndiv.status}) for ${dateStr}`);
+                        } catch (e) {
+                            console.log(`❌ Error fetching indiv station ${sid}:`, (e as any).message);
                         }
-                    } catch (e) {
-                        console.log(`❌ Error fetching indiv station ${sid}:`, (e as any).message);
+                        await new Promise(r => setTimeout(r, 200)); // Faster delay for fewer stations
                     }
-                    // Petit délai pour éviter 429
-                    await new Promise(r => setTimeout(r, 500));
                 }
             }
 

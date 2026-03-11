@@ -61,6 +61,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-radar-mf/, ''),
         secure: false,
+      },
+      '/api-meteociel': {
+        target: 'https://www.meteociel.fr',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-meteociel/, ''),
+        secure: false,
       }
     }
   }

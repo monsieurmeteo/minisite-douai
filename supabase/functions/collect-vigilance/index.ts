@@ -5,8 +5,11 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Météo-France API Keys (Same as collect-6mn)
+const METEO_KEY = 'Mhar9YSs8LEluq4neXqP0YeHaaka';
+const METEO_SECRET = 'nDKPWzVr2_2o5Ej1aPZa7O6hu4Ia';
+
 Deno.serve(async (req) => {
-    // Handle CORS
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -14,18 +17,42 @@ Deno.serve(async (req) => {
     try {
         const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || Deno.env.get('PROJECT_URL')!;
         const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!;
-        const METEO_FRANCE_TOKEN = Deno.env.get('METEO_VIGILANCE_TOKEN')!;
-
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        console.log("🚀 Lancement de la collecte Vigilance Avancée...");
+        console.log("🚀 Lancement de la collecte Vigilance (v2 - Bearer Token)...");
+
+        // 1. Get Token from DB or Refresh
+        const { data: secrets } = await supabase
+            .from('api_secrets')
+            .select('access_token, updated_at')
+            .eq('provider', 'meteo_france')
+            .single();
+
+        let token = secrets?.access_token;
+        const lastUpdate = secrets?.updated_at ? new Date(secrets.updated_at).getTime() : 0;
+        const nowTs = Date.now();
+
+        // Refresh if older than 45 min
+        if (!token || (nowTs - lastUpdate > 45 * 60 * 1000)) {
+            console.log('🔄 Refreshing Météo-France Token for Vigilance...');
+            const auth = btoa(`${METEO_KEY}:${METEO_SECRET}`);
+            const resT = await fetch('https://portail-api.meteofrance.fr/token', {
+                method: 'POST',
+                headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'grant_type=client_credentials'
+            });
+            if (!resT.ok) throw new Error('Token refresh failed');
+            const dataT = await resT.json();
+            token = dataT.access_token;
+            await supabase.from('api_secrets').upsert({ provider: 'meteo_france', access_token: token, updated_at: new Date().toISOString() });
+        }
 
         const fetchHeaders = {
             "Accept": "application/json",
-            "apikey": METEO_FRANCE_TOKEN
+            "Authorization": `Bearer ${token}`
         };
 
-        // 1. Fetch Carte
+        // 2. Fetch Carte
         const mapRes = await fetch("https://public-api.meteofrance.fr/public/DPVigilance/v1/cartevigilance/encours", {
             headers: fetchHeaders
         });
@@ -33,7 +60,7 @@ Deno.serve(async (req) => {
         const mapData = await mapRes.json();
         console.log(`📊 Map Data Periods: ${mapData.product.periods.length}`);
 
-        // 2. Fetch Bulletins
+        // 3. Fetch Bulletins
         let textData: any = { product: { text_bloc_items: [] } };
         const textRes = await fetch("https://public-api.meteofrance.fr/public/DPVigilance/v1/textesvigilance/encours", {
             headers: fetchHeaders
@@ -41,8 +68,6 @@ Deno.serve(async (req) => {
 
         if (textRes.ok) {
             textData = await textRes.json();
-        } else if (textRes.status === 404) {
-            console.log("ℹ️ Aucun bulletin texte disponible (404 est normal ici).");
         } else {
             console.warn(`⚠️ Erreur non-bloquante lors du fetch des textes: ${textRes.status}`);
         }
@@ -52,7 +77,6 @@ Deno.serve(async (req) => {
         if (mapData && mapData.product && mapData.product.periods) {
             mapData.product.periods.forEach((period: any, periodIdx: number) => {
                 if (!period.timelaps || !period.timelaps.domain_ids) return;
-                console.log(`📍 Period ${periodIdx} [${period.begin_validity_time} -> ${period.end_validity_time}]: ${period.timelaps.domain_ids.length} domains`);
                 const domains = period.timelaps.domain_ids;
                 const upsertData = domains.map((domain: any) => ({
                     dep_code: domain.domain_id,
@@ -72,8 +96,7 @@ Deno.serve(async (req) => {
         }
 
         if (allUpsertData.length > 0) {
-            const { error: statusErr } = await supabase.from('vigilance_status').upsert(allUpsertData, { onConflict: 'dep_code, period' });
-            if (statusErr) console.error("Error upserting status:", statusErr.message);
+            await supabase.from('vigilance_status').upsert(allUpsertData, { onConflict: 'dep_code, period' });
         }
 
         // --- Process Bulletins ---
@@ -91,12 +114,6 @@ Deno.serve(async (req) => {
                                     if (obj.bold_text) contentParts.push(`**${obj.bold_text}**`);
                                     if (Array.isArray(obj.text)) {
                                         obj.text.forEach((t: string) => contentParts.push(t));
-                                    }
-                                    if (Array.isArray(obj.subdivision_text)) {
-                                        obj.subdivision_text.forEach((st: any) => {
-                                            if (typeof st === 'string') contentParts.push(st);
-                                            else extractFromObj(st);
-                                        });
                                     }
                                 };
                                 extractFromObj(ti);
@@ -120,42 +137,7 @@ Deno.serve(async (req) => {
         }
 
         if (bulletins.length > 0) {
-            const { error: bullErr } = await supabase.from('vigilance_bulletins').upsert(bulletins, { onConflict: 'domain_id, text_type' });
-            if (bullErr) console.error("Error upserting bulletins:", bullErr.message);
-        }
-
-        // --- Notification Alert ---
-        // On récupère toutes les configurations de surveillance actives
-        const { data: userConfigs } = await supabase.from('user_station_configs').select('*').eq('alert_vigilance_enabled', true);
-
-        if (userConfigs && userConfigs.length > 0) {
-            // Liste unique des départements à surveiller (les 2 premiers chiffres du zip_code)
-            const deptsToWatch = [...new Set(userConfigs.map(c => c.zip_code?.substring(0, 2)))].filter(Boolean);
-
-            for (const depCode of deptsToWatch) {
-                const depStatus = allUpsertData.find(d => d.dep_code === depCode && d.period === 0);
-
-                if (depStatus && depStatus.level >= 2) { // 2=Jaune, 3=Orange, 4=Rouge
-                    const colorNames = { 2: 'JAUNE', 3: 'ORANGE', 4: 'ROUGE' };
-                    const colorName = colorNames[depStatus.level] || 'INCONNUE';
-
-                    // On envoie la notif à tous les utilisateurs qui surveillent ce département
-                    const configsForDep = userConfigs.filter(c => c.zip_code?.startsWith(depCode));
-
-                    for (const config of configsForDep) {
-                        console.log(`Sending vigilance alert (${colorName}) to ${config.ntfy_topic} for ${config.city_name}`);
-                        await fetch(`https://ntfy.sh/${config.ntfy_topic}`, {
-                            method: 'POST',
-                            body: `⚠️ VIGILANCE ${colorName} : Le département ${depCode} (${config.city_name}) est en alerte. Consultez votre site pour les détails.`,
-                            headers: {
-                                'Title': 'Vigilance Meteo-France',
-                                'Priority': depStatus.level >= 3 ? 'urgent' : 'default',
-                                'Tags': 'warning,triangular_flag_on_post'
-                            }
-                        });
-                    }
-                }
-            }
+            await supabase.from('vigilance_bulletins').upsert(bulletins, { onConflict: 'domain_id, text_type' });
         }
 
         return new Response(JSON.stringify({

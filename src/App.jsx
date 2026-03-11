@@ -30,7 +30,11 @@ import WindGustMap from './modules/maps/WindGustMap';
 import RainfallMap from './modules/maps/RainfallMap';
 import TemperatureMap from './modules/maps/TemperatureMap';
 import MonthlyMapsHub from './modules/maps/MonthlyMapsHub';
+import MeteocielArchives from './modules/rankings/MeteocielArchives';
+import StationArchives from './modules/rankings/StationArchives';
+import HDFRadar from './modules/climatology/HDFRadar';
 import { Menu } from 'lucide-react';
+
 import './App.css';
 
 function App() {
@@ -78,7 +82,11 @@ function App() {
           <Route path="/carte-pluie" element={<RainfallMap />} />
           <Route path="/carte-temperatures" element={<TemperatureMap />} />
           <Route path="/cartes-mensuelles" element={<MonthlyMapsHub />} />
+          <Route path="/archives-classements" element={<MeteocielArchives />} />
+          <Route path="/archives-station" element={<StationArchives />} />
+          <Route path="/hdf-radar" element={<HDFRadar />} />
         </Routes>
+
       </main>
 
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}

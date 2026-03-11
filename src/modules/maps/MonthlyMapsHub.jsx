@@ -9,7 +9,7 @@ import { fr } from "date-fns/locale";
 import stationNamesData from "../../data/stationNames.json";
 import stationsListData from "../../data/stations_list.json";
 import { Delaunay } from "d3-delaunay";
-
+import { REGIONS } from "../../data/departments";
 // ======================= ÉCHELLES DE COULEURS ==========================
 
 const WIND_SCALE = [
@@ -351,7 +351,12 @@ const MonthlyMapsHub = () => {
                 }
             });
 
-            const finalList = Array.from(uniqueStations.values());
+            let finalList = Array.from(uniqueStations.values());
+
+            if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                const regionDepts = REGIONS[selectedRegionName];
+                finalList = finalList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+            }
 
             // Tri
             if (activeParam === 'tn') finalList.sort((a, b) => a.value - b.value);
@@ -664,16 +669,18 @@ const MonthlyMapsHub = () => {
                                     >
                                         <circle r={3} fill="transparent" />
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                        {showLabels && (activeParam !== 'rain' || s.value >= 1) && (
-                                            <text y={selectedRegionName === "France" ? -4 : -8} textAnchor="middle" style={{
-                                                fontSize: selectedRegionName === "France" ? '10px' : '30px', fontWeight: 'bold',
-                                                fill: highContrast ? '#fff' : '#000',
-                                                stroke: highContrast ? '#000' : '#fff',
-                                                strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
-                                                pointerEvents: 'none', fontFamily: 'sans-serif'
-                                            }}>
-                                                {activeParam === 'wind' ? Math.round(s.value) : s.value.toFixed(1)}
-                                            </text>
+                                        {showLabels && (activeParam !== 'rain' || s.value >= 0.1) && (
+                                            <g clipPath="url(#france-clip-monthly)">
+                                                <text y={selectedRegionName === "France" ? -5 : -12} textAnchor="middle" style={{
+                                                    fontSize: selectedRegionName === "France" ? '10px' : '20px', fontWeight: 'bold',
+                                                    fill: highContrast ? '#fff' : '#000',
+                                                    stroke: highContrast ? '#000' : '#fff',
+                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
+                                                    pointerEvents: 'none', fontFamily: 'sans-serif'
+                                                }}>
+                                                    {Math.round(s.value)}
+                                                </text>
+                                            </g>
                                         )}
                                     </g>
                                 );
@@ -761,7 +768,7 @@ const MonthlyMapsHub = () => {
                                             color: ((activeParam === 'wind' && s.value > 100) || (activeParam === 'rain' && s.value > 80) || (s.value < -2 || s.value > 35)) ? 'white' : '#1e293b',
                                             padding: '4px 8px', borderRadius: '6px', fontSize: '0.82rem', fontWeight: '800', whiteSpace: 'nowrap'
                                         }}>
-                                            {activeParam === 'wind' ? Math.round(s.value) : s.value.toFixed(1)} <small>{paramConfig.unit}</small>
+                                            {Math.round(s.value)} <small>{paramConfig.unit}</small>
                                         </div>
                                     </div>
                                 ))

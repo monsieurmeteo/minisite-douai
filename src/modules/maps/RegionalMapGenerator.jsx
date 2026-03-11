@@ -101,6 +101,21 @@ const RegionalMapGenerator = () => {
         foudre: { label: "Impacts Foudre ⚡", unit: "Impacts" }
     };
 
+    const stationsLookup = useMemo(() => {
+        const map = {};
+        if (stationsListData && stationsListData.features) {
+            stationsListData.features.forEach(f => {
+                const sid = f.properties.num;
+                map[sid] = {
+                    lat: f.geometry.coordinates[1],
+                    lon: f.geometry.coordinates[0],
+                    name: f.properties.nom
+                };
+            });
+        }
+        return map;
+    }, []);
+
     useEffect(() => {
         if (selectedParam === 'foudre') {
             loadLightning();
@@ -465,11 +480,17 @@ const RegionalMapGenerator = () => {
                         ) : (
                             // RENDU STATIONS CLASSIQUE
                             filteredData.map(station => {
-                                const coords = stationsCoords[station.station_id.substring(0, 5)];
-                                if (!coords) return null;
+                                let sid = String(station.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+                                
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat || station.lat;
+                                const lon = meta?.lon || station.lon;
+                                
+                                if (!lat || !lon) return null;
 
                                 const val = station[selectedParam];
-                                const displayVal = val.toFixed(selectedParam === 'wind_gust_max' ? 0 : 1);
+                                const displayVal = Math.round(val).toString();
 
                                 // FORCE CONSISTENCY: Use the DISPLAYED value for color calculation
                                 // This ensures that if we see "5" and "5", they have the same color, 
@@ -527,15 +548,15 @@ const RegionalMapGenerator = () => {
                                 } else {
                                     if (framedMode) {
                                         // Style CADRE: Fond blanc, Bordure couleur, Texte noir
-                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2px solid ${color}; width: 60px; height: 60px; font-size: 30px; font-weight: 800;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2px solid ${color}; width: 44px; height: 44px; font-size: 22px; font-weight: 800;">${displayVal}</div>`;
                                     } else {
                                         // Style PLEIN: Fond couleur, Texte contrasté
-                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 60px; height: 60px; font-size: 30px;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 44px; height: 44px; font-size: 22px; font-weight: 700;">${displayVal}</div>`;
                                     }
                                 }
 
-                                const iconSize = isFrance ? [8, 8] : [60, 60]; // Doublé pour les régions
-                                const iconAnchor = isFrance ? [4, 4] : [30, 30];
+                                const iconSize = isFrance ? [8, 8] : [44, 44];
+                                const iconAnchor = isFrance ? [4, 4] : [22, 22];
 
                                 const icon = L.divIcon({
                                     className: 'custom-div-icon',
@@ -544,7 +565,7 @@ const RegionalMapGenerator = () => {
                                     iconAnchor: iconAnchor
                                 });
 
-                                return <Marker key={station.station_id} position={[coords.lat, coords.lon]} icon={icon} />;
+                                return <Marker key={station.station_id} position={[lat, lon]} icon={icon} />;
                             })
                         )}
                     </MapContainer>

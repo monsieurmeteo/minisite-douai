@@ -10,8 +10,7 @@ import stationNamesData from "../../data/stationNames.json";
 import stationsMetadata from "../../data/stationsMetadata.json";
 import stationsListData from "../../data/stations_list.json";
 import { Delaunay } from "d3-delaunay";
-
-// Échelle de couleurs officielle pour les températures (extraite de la légende fournie : -12 à 46°C)
+import { REGIONS } from "../../data/departments";// Échelle de couleurs officielle pour les températures (extraite de la légende fournie : -12 à 46°C)
 const TEMP_SCALE = [
     { min: -Infinity, max: -12, color: '#1a1a6e', label: '< -12' },
     { min: -12, max: -10, color: '#23239e', label: '-12 / -10' },
@@ -246,6 +245,12 @@ const TemperatureMap = () => {
                     });
 
                     stationList = Array.from(uniqueStations.values());
+
+                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                        const regionDepts = REGIONS[selectedRegionName];
+                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                    }
+
                     console.log(`[TemperatureMap] ${stationList.length} stations uniques après regroupement.`);
                 }
             } catch (err) {
@@ -589,20 +594,22 @@ const TemperatureMap = () => {
                                         <circle r={3} fill="transparent" />
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
                                         {showLabels && (
-                                            <text
-                                                y={selectedRegionName === "France" ? -4 : -8}
-                                                textAnchor="middle"
-                                                style={{
-                                                    fontSize: selectedRegionName === "France" ? '11px' : '30px', fontWeight: 'bold',
-                                                    fill: (s.value < -2 || s.value > 35) ? '#fff' : '#000',
-                                                    stroke: (s.value < -2 || s.value > 35) ? '#000' : '#fff',
-                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
-                                                    paintOrder: 'stroke',
-                                                    pointerEvents: 'none', fontFamily: 'sans-serif'
-                                                }}
-                                            >
-                                                {s.value.toFixed(1)}
-                                            </text>
+                                            <g clipPath="url(#france-clip-temp)">
+                                                <text
+                                                    y={selectedRegionName === "France" ? -5 : -12}
+                                                    textAnchor="middle"
+                                                    style={{
+                                                        fontSize: selectedRegionName === "France" ? '11px' : '20px', fontWeight: 'bold',
+                                                        fill: (s.value < -2 || s.value > 35) ? '#fff' : '#000',
+                                                        stroke: (s.value < -2 || s.value > 35) ? '#000' : '#fff',
+                                                        strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
+                                                        paintOrder: 'stroke',
+                                                        pointerEvents: 'none', fontFamily: 'sans-serif'
+                                                    }}
+                                                >
+                                                    {Math.round(s.value)}
+                                                </text>
+                                            </g>
                                         )}
                                     </g>
                                 );
@@ -700,7 +707,7 @@ const TemperatureMap = () => {
                                             padding: '4px 8px', borderRadius: '6px',
                                             fontSize: '0.85rem', fontWeight: '800'
                                         }}>
-                                            {s.value.toFixed(1)} <small>°C</small>
+                                            {Math.round(s.value)} <small>°C</small>
                                         </div>
                                     </div>
                                 ))

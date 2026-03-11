@@ -364,7 +364,7 @@ class MeteoFranceCollector {
         // Sauvegarder (partiellement pour perf)
         if (save) {
             this.saveToLocalStorage();
-            this.archiveToSupabase(newData);
+            // this.archiveToSupabase(newData); // Temporairement désactivé pour réduire la charge DB
         }
         console.log(`[MeteoCollector] ✅ Données traitées et historique mis à jour (${newData.length} stations)`);
     }

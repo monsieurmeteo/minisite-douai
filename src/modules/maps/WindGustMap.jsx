@@ -11,7 +11,7 @@ import stationNamesData from "../../data/stationNames.json";
 import stationsMetadata from "../../data/stationsMetadata.json";
 import stationsListData from "../../data/stations_list.json";
 import { Delaunay } from "d3-delaunay";
-
+import { REGIONS } from "../../data/departments";
 // Échelle de couleurs officielle (60 -> 180 km/h) extraite de l'image de référence
 const WIND_SCALE = [
     { min: 0, max: 60, color: '#ffffe0', label: '< 60' },
@@ -195,6 +195,12 @@ const WindGustMap = () => {
                     });
 
                     stationList = Array.from(uniqueStations.values());
+
+                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                        const regionDepts = REGIONS[selectedRegionName];
+                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                    }
+
                     console.log(`[Diagnostic] ${stationList.length} stations uniques après regroupement.`);
                 }
             } catch (err) {
@@ -562,22 +568,24 @@ const WindGustMap = () => {
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
 
                                         {showLabels && (
-                                            <text
-                                                y={selectedRegionName === "France" ? -4 : -8}
-                                                textAnchor="middle"
-                                                style={{
-                                                    fontSize: selectedRegionName === "France" ? '11px' : '30px',
-                                                    fontWeight: 'bold',
-                                                    fill: s.value > 100 ? '#fff' : '#000',
-                                                    stroke: s.value > 100 ? '#000' : '#fff',
-                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
-                                                    paintOrder: 'stroke',
-                                                    pointerEvents: 'none',
-                                                    fontFamily: 'sans-serif'
-                                                }}
-                                            >
-                                                {Math.round(s.value)}
-                                            </text>
+                                            <g clipPath="url(#france-clip)">
+                                                <text
+                                                    y={selectedRegionName === "France" ? -5 : -12}
+                                                    textAnchor="middle"
+                                                    style={{
+                                                        fontSize: selectedRegionName === "France" ? '11px' : '20px',
+                                                        fontWeight: 'bold',
+                                                        fill: s.value > 100 ? '#fff' : '#000',
+                                                        stroke: s.value > 100 ? '#000' : '#fff',
+                                                        strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
+                                                        paintOrder: 'stroke',
+                                                        pointerEvents: 'none',
+                                                        fontFamily: 'sans-serif'
+                                                    }}
+                                                >
+                                                    {Math.round(s.value)}
+                                                </text>
+                                            </g>
                                         )}
                                     </g>
                                 );

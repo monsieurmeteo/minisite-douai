@@ -10,8 +10,7 @@ import stationNamesData from "../../data/stationNames.json";
 import stationsMetadata from "../../data/stationsMetadata.json";
 import stationsListData from "../../data/stations_list.json";
 import { Delaunay } from "d3-delaunay";
-
-// Échelle de couleurs officielle pour les cumuls de pluie 24h (extraite de la légende fournie)
+import { REGIONS } from "../../data/departments";// Échelle de couleurs officielle pour les cumuls de pluie 24h (extraite de la légende fournie)
 const RAIN_SCALE = [
     { min: 0, max: 1, color: '#ffffff', label: '< 1' },
     { min: 1, max: 5, color: '#dcf0dc', label: '1 - 5' },
@@ -212,6 +211,12 @@ const RainfallMap = () => {
                     });
 
                     stationList = Array.from(uniqueStations.values());
+
+                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                        const regionDepts = REGIONS[selectedRegionName];
+                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                    }
+
                     console.log(`[RainfallMap] ${stationList.length} stations uniques après regroupement.`);
                 }
             } catch (err) {
@@ -525,20 +530,22 @@ const RainfallMap = () => {
                                     >
                                         <circle r={3} fill="transparent" />
                                         <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                        {showLabels && s.value >= 1 && (
-                                            <text
-                                                y={selectedRegionName === "France" ? -4 : -8}
-                                                textAnchor="middle"
-                                                style={{
-                                                    fontSize: selectedRegionName === "France" ? '11px' : '30px', fontWeight: 'bold',
-                                                    fill: s.value > 50 ? '#fff' : '#000',
-                                                    stroke: s.value > 50 ? '#000' : '#fff',
-                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
-                                                    pointerEvents: 'none', fontFamily: 'sans-serif'
-                                                }}
-                                            >
-                                                {s.value.toFixed(1)}
-                                            </text>
+                                        {showLabels && s.value >= 0.1 && (
+                                            <g clipPath="url(#france-clip-rain)">
+                                                <text
+                                                    y={selectedRegionName === "France" ? -5 : -12}
+                                                    textAnchor="middle"
+                                                    style={{
+                                                        fontSize: selectedRegionName === "France" ? '11px' : '20px', fontWeight: 'bold',
+                                                        fill: s.value > 50 ? '#fff' : '#000',
+                                                        stroke: s.value > 50 ? '#000' : '#fff',
+                                                        strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
+                                                        pointerEvents: 'none', fontFamily: 'sans-serif'
+                                                    }}
+                                                >
+                                                    {Math.round(s.value)}
+                                                </text>
+                                            </g>
                                         )}
                                     </g>
                                 );
@@ -631,11 +638,11 @@ const RainfallMap = () => {
                                         </div>
                                         <div style={{
                                             background: getRainColor(s.value, activeRainScale),
-                                            color: s.value > 80 ? 'white' : '#1e293b',
+                                            color: s.value > 50 ? 'white' : '#1e293b',
                                             padding: '4px 8px', borderRadius: '6px',
                                             fontSize: '0.85rem', fontWeight: '800'
                                         }}>
-                                            {s.value.toFixed(1)} <small>mm</small>
+                                            {Math.round(s.value)} <small>mm</small>
                                         </div>
                                     </div>
                                 ))

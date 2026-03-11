@@ -198,6 +198,10 @@ export default function Sidebar({ isOpen, onClose }) {
           <Zap size={18} style={{ color: '#ef4444' }} />
           <span>Supervision Records</span>
         </NavLink>
+        <NavLink to="/hdf-radar" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Radio size={18} style={{ color: '#ef4444' }} />
+          <span>Radar Records HDF</span>
+        </NavLink>
         <NavLink to="/btp" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <HardHat size={18} style={{ color: '#f59e0b' }} />
           <span>BTP & Chantiers</span>
@@ -209,6 +213,16 @@ export default function Sidebar({ isOpen, onClose }) {
         <NavLink to="/attestation-intemperie" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <FileText size={18} style={{ color: '#0ea5e9' }} />
           <span>Attestation Intempérie</span>
+        </NavLink>
+
+        <div className="nav-divider-label">ARCHIVES</div>
+        <NavLink to="/archives-classements" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Table size={18} style={{ color: '#f59e0b' }} />
+          <span>Classements Nationaux</span>
+        </NavLink>
+        <NavLink to="/archives-station" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Clock size={18} style={{ color: '#60a5fa' }} />
+          <span>Historique Station</span>
         </NavLink>
 
         <div className="nav-divider-label">OUTILS</div>
