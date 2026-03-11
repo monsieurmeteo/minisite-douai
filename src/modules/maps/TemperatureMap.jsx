@@ -280,9 +280,9 @@ const TemperatureMap = () => {
         if (!geoData) return null;
         if (selectedRegionName !== "France" && regionsGeoData) {
             const regionFeature = regionsGeoData.features.find(f => f.properties.nom === selectedRegionName);
-            if (regionFeature) return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], regionFeature);
+            if (regionFeature) return geoConicConformal().fitExtent([[20, 20], [WIDTH - 20, HEIGHT - 180]], regionFeature);
         }
-        return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], geoData);
+        return geoConicConformal().fitExtent([[20, 20], [WIDTH - 20, HEIGHT - 180]], geoData);
     }, [geoData, regionsGeoData, selectedRegionName]);
 
     const pathGenerator = useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);

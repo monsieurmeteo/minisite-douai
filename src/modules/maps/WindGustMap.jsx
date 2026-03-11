@@ -239,6 +239,7 @@ const WindGustMap = () => {
 
         // Sinon, vue par défaut sur la France
         return geoConicConformal().fitSize([WIDTH, HEIGHT - 180], geoData);
+        return geoConicConformal().fitExtent([[20, 20], [WIDTH - 20, HEIGHT - 180]], geoData);
     }, [geoData, regionsGeoData, selectedRegionName]);
 
     const pathGenerator = useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);
@@ -491,7 +492,7 @@ const WindGustMap = () => {
                             </defs>
 
                             {/* Rendu des Données (Voronoi vs Interpolé) */}
-                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip)" : undefined}>
+                            <g clipPath="url(#france-clip)">
                                 {isSmooth && interpolatedGrid ? (
                                     // MODE LISSÉ : Grille interpolée (Style Modèle Météo)
                                     <g filter="url(#grid-blur)">
