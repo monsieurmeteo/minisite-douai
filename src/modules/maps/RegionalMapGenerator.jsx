@@ -548,15 +548,15 @@ const RegionalMapGenerator = () => {
                                 } else {
                                     if (framedMode) {
                                         // Style CADRE: Fond blanc, Bordure couleur, Texte noir
-                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2px solid ${color}; width: 44px; height: 44px; font-size: 22px; font-weight: 800;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: white; color: #1e293b; border: 2.5px solid ${color}; width: 52px; height: 52px; font-size: 28px; font-weight: 800;">${displayVal}</div>`;
                                     } else {
                                         // Style PLEIN: Fond couleur, Texte contrasté
-                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 44px; height: 44px; font-size: 22px; font-weight: 700;">${displayVal}</div>`;
+                                        iconHtml = `<div class="value-marker" style="background-color: ${color}; color: ${textColor}; width: 52px; height: 52px; font-size: 28px; font-weight: 800;">${displayVal}</div>`;
                                     }
                                 }
 
-                                const iconSize = isFrance ? [8, 8] : [44, 44];
-                                const iconAnchor = isFrance ? [4, 4] : [22, 22];
+                                const iconSize = isFrance ? [8, 8] : [52, 52];
+                                const iconAnchor = isFrance ? [4, 4] : [26, 26];
 
                                 const icon = L.divIcon({
                                     className: 'custom-div-icon',

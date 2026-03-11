@@ -341,7 +341,7 @@ const MonthlyMapsHub = () => {
             // Regroupement géographique (même logique que les cartes quotidiennes)
             const uniqueStations = new Map();
             stationList.forEach(s => {
-                const geoKey = `${(Math.round(s.lat * 50) / 50).toFixed(2)}_${(Math.round(s.lon * 50) / 50).toFixed(2)}`;
+                const geoKey = `${(Math.round(s.lat * 100) / 100).toFixed(2)}_${(Math.round(s.lon * 100) / 100).toFixed(2)}`;
                 const existing = uniqueStations.get(geoKey);
                 const shouldReplace = activeParam === 'tn'
                     ? (!existing || s.value < existing.value)
@@ -653,7 +653,7 @@ const MonthlyMapsHub = () => {
 
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
-                            <g clipPath="url(#france-clip-monthly)">
+                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip-monthly)" : undefined}>
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
@@ -671,11 +671,11 @@ const MonthlyMapsHub = () => {
                                             <circle r={3} fill="transparent" />
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
                                             {showLabels && (activeParam !== 'rain' || s.value >= 0.1) && (
-                                                <text y={selectedRegionName === "France" ? -5 : -12} textAnchor="middle" style={{
-                                                    fontSize: selectedRegionName === "France" ? '10px' : '20px', fontWeight: 'bold',
+                                                <text y={selectedRegionName === "France" ? -6 : -18} textAnchor="middle" style={{
+                                                    fontSize: selectedRegionName === "France" ? '13px' : '25px', fontWeight: 'bold',
                                                     fill: highContrast ? '#fff' : '#000',
                                                     stroke: highContrast ? '#000' : '#fff',
-                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px', paintOrder: 'stroke',
+                                                    strokeWidth: selectedRegionName === "France" ? '1.5px' : '3.5px', paintOrder: 'stroke',
                                                     pointerEvents: 'none', fontFamily: 'sans-serif'
                                                 }}>
                                                     {Math.round(s.value)}

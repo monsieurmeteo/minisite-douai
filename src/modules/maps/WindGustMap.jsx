@@ -177,9 +177,9 @@ const WindGustMap = () => {
                             const lon = meta?.lon || s.lon;
 
                             if (lat && lon) {
-                                // Clé unique basée sur les coordonnées (précision 0.02 pour regrouper les postes urbains proches)
+                                // Clé unique basée sur les coordonnées (précision 0.01 pour regrouper les postes urbains proches)
                                 // Cela élimine les "taches" dues à des stations trop rapprochées.
-                                const geoKey = `${(Math.round(lat * 50) / 50).toFixed(2)}_${(Math.round(lon * 50) / 50).toFixed(2)}`;
+                                const geoKey = `${(Math.round(lat * 100) / 100).toFixed(2)}_${(Math.round(lon * 100) / 100).toFixed(2)}`;
 
                                 if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < gust) {
                                     uniqueStations.set(geoKey, {
@@ -491,7 +491,7 @@ const WindGustMap = () => {
                             </defs>
 
                             {/* Rendu des Données (Voronoi vs Interpolé) */}
-                            <g clipPath="url(#france-clip)">
+                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip)" : undefined}>
                                 {isSmooth && interpolatedGrid ? (
                                     // MODE LISSÉ : Grille interpolée (Style Modèle Météo)
                                     <g filter="url(#grid-blur)">
@@ -549,7 +549,7 @@ const WindGustMap = () => {
                                 strokeWidth="1.5"
                             />
 
-                            <g clipPath="url(#france-clip)">
+                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip)" : undefined}>
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
@@ -568,14 +568,14 @@ const WindGustMap = () => {
 
                                             {showLabels && (
                                                 <text
-                                                    y={selectedRegionName === "France" ? -5 : -12}
+                                                    y={selectedRegionName === "France" ? -6 : -18}
                                                     textAnchor="middle"
                                                     style={{
-                                                        fontSize: selectedRegionName === "France" ? '11px' : '20px',
+                                                        fontSize: selectedRegionName === "France" ? '14px' : '28px',
                                                         fontWeight: 'bold',
                                                         fill: s.value > 100 ? '#fff' : '#000',
                                                         stroke: s.value > 100 ? '#000' : '#fff',
-                                                        strokeWidth: selectedRegionName === "France" ? '1.5px' : '3px',
+                                                        strokeWidth: selectedRegionName === "France" ? '2px' : '4px',
                                                         paintOrder: 'stroke',
                                                         pointerEvents: 'none',
                                                         fontFamily: 'sans-serif'
