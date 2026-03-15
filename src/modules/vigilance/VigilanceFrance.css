@@ -1433,7 +1433,7 @@
 }
 
 .share-link-box-modern {
-    background: #f8fafc;
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 15px;
@@ -1507,20 +1507,41 @@
     border-color: #2563eb;
 }
 
-.copy-btn-modern {
-    flex: 1;
+.copy-btn-modern-blue {
+    background: #3453a2;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 10px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.copy-btn-modern-blue:hover {
+    background: #2a4282;
+    transform: translateY(-1px);
+}
+
+.share-link-group-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #3453a2;
+    margin: 10px 0 5px 0;
+}
+
+.share-footer-note {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-style: italic;
+    text-align: center;
+    margin-top: 15px;
 }
 
 /* 📝 BULLETIN AUTOMATISÉ */
@@ -1605,4 +1626,147 @@
 
 .no-display-web {
     display: none;
+}
+
+/* --- TABS EXTENSION --- */
+.tabs-center {
+    display: flex;
+    gap: 8px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 20px;
+}
+
+.tab-item.mini {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    border-radius: 16px;
+    background: transparent;
+}
+
+.tab-item.mini.active {
+    background: #ffffff;
+    color: #3453a2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* --- HUB RÉGIONAL --- */
+.vigilance-regions-hub {
+    width: 100%;
+    margin-bottom: 40px;
+}
+
+.hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 25px;
+}
+
+.region-hub-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease;
+}
+
+.region-hub-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.region-hub-header {
+    background: #f8fafc;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.region-title-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.region-title-box h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.region-title-box svg {
+    color: #3453a2;
+}
+
+.copy-region-link-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.copy-region-link-btn:hover {
+    background: #3453a2;
+    color: white;
+    border-color: #3453a2;
+}
+
+.region-hub-bulletin {
+    padding: 20px;
+}
+
+.region-hub-bulletin pre {
+    white-space: pre-wrap;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #334155;
+    background: #f1f5f9;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 0;
+    border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .hub-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- REGIONAL MAPS IN CARDS --- */
+.region-hub-map-container {
+    padding: 10px;
+    background: radial-gradient(circle at center, #ffffff 0%, #f8fafc 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 180px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.region-hub-map-container svg {
+    height: 100%;
+    width: 100%;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.08));
+    transition: transform 0.3s ease;
+}
+
+.region-hub-map-container:hover svg {
+    transform: scale(1.05);
 }

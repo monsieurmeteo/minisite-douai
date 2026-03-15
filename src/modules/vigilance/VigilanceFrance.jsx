@@ -34,6 +34,22 @@ const PHENOMENONS = [
     { id: "8", name: "Avalanches", icon: Info },
 ];
 
+const REGIONS = [
+    { id: 'ARA', name: 'Auvergne-Rhône-Alpes', deps: ['01', '03', '07', '15', '26', '38', '42', '43', '63', '69', '73', '74'] },
+    { id: 'BFC', name: 'Bourgogne-Franche-Comté', deps: ['21', '25', '39', '58', '70', '71', '89', '90'] },
+    { id: 'BRE', name: 'Bretagne', deps: ['22', '29', '35', '56'] },
+    { id: 'CVL', name: 'Centre-Val de Loire', deps: ['18', '28', '36', '37', '41', '45'] },
+    { id: 'COR', name: 'Corse', deps: ['2A', '2B'] },
+    { id: 'GES', name: 'Grand Est', deps: ['08', '10', '51', '52', '54', '55', '57', '67', '68', '88'] },
+    { id: 'HDF', name: 'Hauts-de-France', deps: ['02', '59', '60', '62', '80'] },
+    { id: 'IDF', name: 'Île-de-France', deps: ['75', '77', '78', '91', '92', '93', '94', '95'] },
+    { id: 'NOR', name: 'Normandie', deps: ['14', '27', '50', '61', '76'] },
+    { id: 'NAQ', name: 'Nouvelle-Aquitaine', deps: ['16', '17', '19', '23', '24', '33', '40', '47', '64', '79', '86', '87'] },
+    { id: 'OCC', name: 'Occitanie', deps: ['09', '11', '12', '30', '31', '32', '34', '46', '48', '65', '66', '81', '82'] },
+    { id: 'PDL', name: 'Pays de la Loire', deps: ['44', '49', '53', '72', '85'] },
+    { id: 'PAC', name: 'Provence-Alpes-Côte d\'Azur', deps: ['04', '05', '06', '13', '83', '84'] },
+];
+
 const VigilanceFrance = () => {
     const [vigilanceData, setVigilanceData] = useState([]);
     const [bulletins, setBulletins] = useState([]);
@@ -46,6 +62,11 @@ const VigilanceFrance = () => {
         return p !== null ? parseInt(p) : 0;
     });
     const [selectedPhenom, setSelectedPhenom] = useState(null);
+    const [viewMode, setViewMode] = useState('national'); // 'national' or 'regional'
+    const [selectedRegion, setSelectedRegion] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('region') || null;
+    });
     const [localData, setLocalData] = useState({ stations: [], obs: [] });
     const [localLoading, setLocalLoading] = useState(false);
 
@@ -134,15 +155,23 @@ const VigilanceFrance = () => {
         return new Date(Math.max(...updates));
     }, [vigilanceData]);
 
-    // 📝 GÉNÉRATION DU BULLETIN AUTOMATISÉ (FORMAT STRICT)
-    const generatedBulletin = useMemo(() => {
+    const getBulletinForScope = (regionId = null) => {
         if (!vigilanceData.length || !geoData) return "";
+        const regionConfig = regionId ? REGIONS.find(r => r.id === regionId) : null;
 
-        const currentVigi = vigilanceData.filter(d =>
-            d.period === period &&
-            d.dep_code &&
-            !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim())
-        );
+        const currentVigi = vigilanceData.filter(d => {
+            const isBaseFilter = d.period === period &&
+                d.dep_code &&
+                !['FRA', '99', 'METRO', '00'].includes(d.dep_code.toString().trim());
+            
+            if (!isBaseFilter) return false;
+            
+            if (regionConfig) {
+                return regionConfig.deps.includes(d.dep_code);
+            }
+            return true;
+        });
+
         const depNames = {};
         geoData.features.forEach(f => {
             depNames[f.properties.code] = f.properties.nom;
@@ -176,24 +205,30 @@ const VigilanceFrance = () => {
                         depString = depList.join(", ") + " et " + last;
                     }
 
-                    const line = `${emoji} Vigilance ${lvlName} – ${phenom.name.toUpperCase()} pour ${count} département${count > 1 ? 's' : ''} : ${depString}`;
-                    const subLine = level === 4
-                        ? "➡️ Situation critique, risque d’inondations ou de phénomènes dangereux majeurs."
-                        : "➡️ Conditions dangereuses nécessitant prudence et vigilance.";
-
-                    sections.push(`${line}\n${subLine}`);
+                    const line = `${emoji} Vigilance ${lvlName} – ${phenom.name.toUpperCase()} : ${depString}`;
+                    sections.push(line);
                 }
             });
         });
 
-        // 2. JAUNE (Une seule ligne)
+        const now = new Date();
+        const targetDate = new Date(now);
+        if (period === 1) targetDate.setDate(now.getDate() + 1);
+        
+        const dateStrFull = new Intl.DateTimeFormat('fr-FR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        }).format(targetDate).toUpperCase();
+
+        const regionName = regionConfig ? regionConfig.name.toUpperCase() : "MÉTÉOROLOGIQUE";
+        const header = `📋 VIGILANCE ${regionName} DU ${dateStrFull}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        // 2. JAUNE (Résumé spécifique demandé)
         const yellowParts = [];
         PHENOMENONS.forEach(phenom => {
             const count = currentVigi.filter(d => {
                 const r = d.risks?.find(r => r.id === phenom.id);
                 return r && r.level === 2;
             }).length;
-
             if (count > 0) {
                 yellowParts.push(`${phenom.name.toUpperCase()} pour ${count} département${count > 1 ? 's' : ''}`);
             }
@@ -203,27 +238,27 @@ const VigilanceFrance = () => {
             sections.push(`🟡 Vigilance JAUNE – ${yellowParts.join(", ")}.`);
         }
 
-        const now = new Date();
-        const targetDate = new Date(now);
-        if (period === 1) targetDate.setDate(now.getDate() + 1);
+        return header + (sections.length > 0 ? sections.join("\n\n").trim() : "✅ RAS : Aucune vigilance.");
+    };
 
-        const dateStr = new Intl.DateTimeFormat('fr-FR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'Europe/Paris'
-        }).format(targetDate).toUpperCase();
-
-        const header = `📋 VIGILANCE MÉTÉOROLOGIQUE DU ${dateStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-        return header + (sections.length > 0 ? sections.join("\n\n").trim() : "✅ RAS : Aucune vigilance particulière sur le territoire.");
-    }, [vigilanceData, geoData, period]);
+    const generatedBulletin = useMemo(() => {
+        return getBulletinForScope(selectedRegion);
+    }, [vigilanceData, geoData, period, selectedRegion]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;
-        return geoConicConformal().fitSize([800, 600], geoData);
-    }, [geoData]);
+        let dataToFit = geoData;
+        if (selectedRegion) {
+            const regionConfig = REGIONS.find(r => r.id === selectedRegion);
+            if (regionConfig) {
+                dataToFit = {
+                    ...geoData,
+                    features: geoData.features.filter(f => regionConfig.deps.includes(f.properties.code))
+                };
+            }
+        }
+        return geoConicConformal().fitSize([800, 600], dataToFit);
+    }, [geoData, selectedRegion]);
 
     const pathGenerator = useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);
 
@@ -335,6 +370,31 @@ const VigilanceFrance = () => {
                     <div className={`tab-item ${period === 1 ? 'active' : ''}`} onClick={() => { setPeriod(1); setSelectedPhenom(null); }}>Demain</div>
                 </div>
 
+                <div className="tabs-center ml-4">
+                    <div className={`tab-item mini ${viewMode === 'national' ? 'active' : ''}`} onClick={() => setViewMode('national')}>Vue Nationale</div>
+                    <div className={`tab-item mini ${viewMode === 'regional' ? 'active' : ''}`} onClick={() => setViewMode('regional')}>Hub des 13 Régions</div>
+                </div>
+
+                <div className="dept-selector-inline">
+                    <select
+                        className="dept-select-official"
+                        value={selectedRegion || ""}
+                        onChange={(e) => {
+                            const val = e.target.value || null;
+                            setSelectedRegion(val);
+                            const url = new URL(window.location);
+                            if (val) url.searchParams.set('region', val);
+                            else url.searchParams.delete('region');
+                            window.history.pushState({}, '', url);
+                        }}
+                    >
+                        <option value="">Toute la France</option>
+                        {REGIONS.map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <div className="dept-selector-inline">
                     <select
                         className="dept-select-official"
@@ -351,344 +411,273 @@ const VigilanceFrance = () => {
                 </div>
             </div>
 
-            <div className="vigilance-main">
-                <main className="map-column">
-                    <div className="map-panel">
-                        <div className="map-view-box">
-                            {loading ? <div className="loader-center"><Loader className="spin" size={40} /></div> : (
-                                <svg id="vigilance-map-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
-                                    <g style={{ transform: mapTransform, transition: 'transform 0.6s ease' }}>
-                                        {geoData?.features.map(f => {
-                                            const code = f.properties.code;
-                                            const d = currentMap[code];
-                                            const color = d ? OFFICIAL_COLORS[d.displayLevel] : '#f1f5f9';
-                                            const isActive = selectedDep === code;
-                                            return (
-                                                <path
-                                                    key={code}
-                                                    d={pathGenerator(f)}
-                                                    fill={color}
-                                                    stroke={isActive ? "#3453a2" : "#475569"}
-                                                    strokeWidth={isActive ? 2.5 : 1.2}
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedDep(code);
-                                                    }}
-                                                    style={{ cursor: 'pointer', transition: 'fill 0.3s ease' }}
-                                                />
-                                            );
-                                        })}
-                                    </g>
-                                </svg>
-                            )}
-                        </div>
-                        <div className="map-legend-official">
-                            <div className="legend-item">
-                                <span className="dot" style={{ background: OFFICIAL_COLORS[1] }}></span>
-                                <span>Vert</span>
+            {viewMode === 'national' ? (
+                <div className="vigilance-main">
+                    <main className="map-column">
+                        <div className="map-panel">
+                            <div className="map-view-box">
+                                {loading ? <div className="loader-center"><Loader className="spin" size={40} /></div> : (
+                                    <svg id="vigilance-map-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                                        <g style={{ transform: mapTransform, transition: 'transform 0.6s ease' }}>
+                                            {geoData?.features.map(f => {
+                                                const code = f.properties.code;
+                                                const d = currentMap[code];
+                                                const color = d ? OFFICIAL_COLORS[d.displayLevel] : '#f1f5f9';
+                                                const isActive = selectedDep === code;
+                                                return (
+                                                    <path
+                                                        key={code}
+                                                        d={pathGenerator(f)}
+                                                        fill={color}
+                                                        stroke={isActive ? "#3453a2" : "#475569"}
+                                                        strokeWidth={isActive ? 2.5 : 1.2}
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedDep(code);
+                                                        }}
+                                                        style={{ cursor: 'pointer', transition: 'fill 0.3s ease' }}
+                                                    />
+                                                );
+                                            })}
+                                        </g>
+                                    </svg>
+                                )}
                             </div>
-                            <div className="legend-item">
-                                <span className="dot" style={{ background: OFFICIAL_COLORS[2] }}></span>
-                                <span>Jaune</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="dot" style={{ background: OFFICIAL_COLORS[3] }}></span>
-                                <span>Orange</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="dot" style={{ background: OFFICIAL_COLORS[4] }}></span>
-                                <span>Rouge</span>
+                            <div className="map-legend-official">
+                                {[1, 2, 3, 4].map(lvl => (
+                                    <div key={lvl} className="legend-item">
+                                        <span className="dot" style={{ background: OFFICIAL_COLORS[lvl] }}></span>
+                                        <span>{lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge'}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    </div>
 
-                    {selectedDep && (
-                        <div className="dept-info-footer animate-in">
-                            <div className="footer-top-row">
-                                <div className="f-title">
-                                    <span className="f-code">{selectedDep}</span>
-                                    <h3>{geoData?.features.find(f => f.properties.code === selectedDep)?.properties.nom}</h3>
-                                    <button className="close-dept-btn" onClick={() => setSelectedDep(null)} title="Fermer la sélection"><X size={20} /></button>
-                                </div>
-                                <div className="f-level-tags">
-                                    <div className="tag-group">
-                                        <span className="tag-label">Aujourd'hui</span>
-                                        <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level || 1] }}>
-                                            {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level === 1 ? "Vert" : "Vigilance"}
-                                        </div>
+                        {selectedDep && (
+                            <div className="dept-info-footer animate-in">
+                                <div className="footer-top-row">
+                                    <div className="f-title">
+                                        <span className="f-code">{selectedDep}</span>
+                                        <h3>{geoData?.features.find(f => f.properties.code === selectedDep)?.properties.nom}</h3>
+                                        <button className="close-dept-btn" onClick={() => setSelectedDep(null)}><X size={20} /></button>
                                     </div>
-                                    <div className="tag-group">
-                                        <span className="tag-label">Demain</span>
-                                        <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level || 1] }}>
-                                            {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level === 1 ? "Vert" : "Vigilance"}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="footer-chronology-grid">
-                                {renderHourlyTimeline(
-                                    vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.risks,
-                                    vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.start_time,
-                                    "Chronologie Aujourd'hui"
-                                )}
-                                {renderHourlyTimeline(
-                                    vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.risks,
-                                    vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.start_time || new Date(new Date().getTime() + 86400000).toISOString(),
-                                    "Chronologie Demain"
-                                )}
-                            </div>
-
-                            {/* Stations Météo (Déplacé ici) */}
-                            <section className="detail-section" style={{ marginTop: '30px' }}>
-                                <h3 className="section-label">Relevés Stations Météo ({selectedDep})</h3>
-                                {localLoading ? <Loader className="spin" size={20} /> : (
-                                    <div className="station-grid-row">
-                                        {localData.stations.length > 0 ? localData.stations.slice(0, 6).map(s => {
-                                            const obs = localData.obs.find(o => o.station_id === s.id);
-                                            let valStr = "--";
-                                            if (obs) {
-                                                if (selectedPhenom === "1") {
-                                                    valStr = (obs.fxi || obs.ff) !== null ? `${obs.fxi || obs.ff} km/h` : "--";
-                                                } else if (selectedPhenom === "2" || selectedPhenom === "4") {
-                                                    valStr = obs.rr1 !== null ? `${obs.rr1} mm` : "--";
-                                                } else {
-                                                    valStr = obs.t !== null ? `${Math.round(obs.t)}°C` : "--";
-                                                }
-                                            }
-                                            return (
-                                                <div key={s.id} className="station-mini-card">
-                                                    <span className="s-name">{s.name}</span>
-                                                    <span className="s-val">{valStr}</span>
-                                                </div>
-                                            );
-                                        }) : <p className="no-data">Aucune station disponible.</p>}
-                                    </div>
-                                )}
-                            </section>
-
-                            {/* --- BLOC BULLETINS : NATIONAL + DEPARTEMENTAL --- */}
-                            {(() => {
-                                // 1. Bulletins Départementaux
-                                const deptBulletins = bulletins.filter(b => b.domain_id === selectedDep);
-                                // 2. Bulletins Nationaux
-                                const nationalBulletins = bulletins.filter(b => b.domain_id === 'france');
-
-                                // On affiche toujours le bloc si un département est sélectionné
-                                if (selectedDep) {
-                                    return (
-                                        <section className="detail-section bulletin-section">
-                                            <h3 className="section-label" style={{ fontSize: '1rem', marginBottom: '20px' }}>
-                                                📰 Bulletins de Suivi
-                                            </h3>
-
-                                            <div className="bulletins-container">
-                                                {/* Bulletins Locaux */}
-                                                <div className="sub-bulletin-group">
-                                                    <h5 className="bulletin-sub-title">Focus Départemental ({selectedDep})</h5>
-                                                    {deptBulletins.length > 0 ? (
-                                                        deptBulletins.map((b, i) => renderBulletinCard(b, i, ""))
-                                                    ) : (
-                                                        <div className="no-bulletin-box">
-                                                            <Info size={16} />
-                                                            <span>Aucun bulletin spécifique émis pour ce département actuellement.</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Bulletins Nationaux */}
-                                                {nationalBulletins.length > 0 && (
-                                                    <div className="sub-bulletin-group">
-                                                        <h5 className="bulletin-sub-title">Contexte National</h5>
-                                                        {nationalBulletins.map((b, i) => renderBulletinCard(b, `nat-${i}`, ""))}
-                                                    </div>
-                                                )}
+                                    <div className="f-level-tags">
+                                        <div className="tag-group">
+                                            <span className="tag-label">Aujourd'hui</span>
+                                            <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level || 1] }}>
+                                                {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level === 1 ? "Vert" : "Vigilance"}
                                             </div>
-                                        </section>
+                                        </div>
+                                        <div className="tag-group">
+                                            <span className="tag-label">Demain</span>
+                                            <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level || 1] }}>
+                                                {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level === 1 ? "Vert" : "Vigilance"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="footer-chronology-grid">
+                                    {renderHourlyTimeline(
+                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.risks,
+                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.start_time,
+                                        "Chronologie Aujourd'hui"
+                                    )}
+                                    {renderHourlyTimeline(
+                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.risks,
+                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.start_time || new Date(new Date().getTime() + 86400000).toISOString(),
+                                        "Chronologie Demain"
+                                    )}
+                                </div>
+
+                                <section className="detail-section" style={{ marginTop: '30px' }}>
+                                    <h3 className="section-label">Relevés Stations ({selectedDep})</h3>
+                                    {localLoading ? <Loader className="spin" size={20} /> : (
+                                        <div className="station-grid-row">
+                                            {localData.stations.length > 0 ? localData.stations.slice(0, 6).map(s => {
+                                                const obs = localData.obs.find(o => o.station_id === s.id);
+                                                let valStr = "--";
+                                                if (obs) {
+                                                    if (selectedPhenom === "1") valStr = (obs.fxi || obs.ff) !== null ? `${obs.fxi || obs.ff} km/h` : "--";
+                                                    else if (selectedPhenom === "2" || selectedPhenom === "4") valStr = obs.rr1 !== null ? `${obs.rr1} mm` : "--";
+                                                    else valStr = obs.t !== null ? `${Math.round(obs.t)}°C` : "--";
+                                                }
+                                                return (
+                                                    <div key={s.id} className="station-mini-card">
+                                                        <span className="s-name">{s.name}</span>
+                                                        <span className="s-val">{valStr}</span>
+                                                    </div>
+                                                );
+                                            }) : <p className="no-data">Aucune station.</p>}
+                                        </div>
+                                    )}
+                                </section>
+                            </div>
+                        )}
+                    </main>
+
+                    <aside className="phenomenon-sidebar">
+                        <div className="sidebar-card">
+                            <div className="sidebar-header-main">
+                                <div className="icon-main-wrap"><ShieldAlert size={22} /></div>
+                                <h3>Risques en cours</h3>
+                            </div>
+                            <div className="phenom-grid">
+                                <div className={`phenom-card-item global ${selectedPhenom === null ? 'active' : ''}`} onClick={() => setSelectedPhenom(null)}>
+                                    <div className="card-inner"><Activity size={20} /><span>Synthèse</span></div>
+                                </div>
+                                {PHENOMENONS.map(p => {
+                                    const Icon = p.icon;
+                                    const isSelected = selectedPhenom === p.id;
+                                    const levels = vigilanceData.filter(d => d.period === period).map(d => d.risks?.find(r => r.id === p.id)?.level || 1);
+                                    const maxLvl = Math.max(...levels);
+                                    return (
+                                        <div key={p.id} className={`phenom-card-item ${isSelected ? 'active' : ''} lvl-${maxLvl}`} onClick={() => setSelectedPhenom(isSelected ? null : p.id)}>
+                                            <div className="card-indicator" style={{ backgroundColor: OFFICIAL_COLORS[maxLvl] }}></div>
+                                            <div className="card-inner"><Icon size={20} /><span>{p.name}</span></div>
+                                        </div>
                                     );
-                                }
-                                return null;
-                            })()}
-                        </div>
-                    )}
-                </main>
-
-                <aside className="phenomenon-sidebar">
-                    <div className="sidebar-card">
-                        <div className="sidebar-header-main">
-                            <div className="icon-main-wrap"><ShieldAlert size={22} /></div>
-                            <h3>Risques en cours</h3>
+                                })}
+                            </div>
                         </div>
 
-                        <div className="phenom-grid">
-                            <div
-                                className={`phenom-card-item global ${selectedPhenom === null ? 'active' : ''}`}
-                                onClick={() => setSelectedPhenom(null)}
-                            >
-                                <div className="card-inner">
-                                    <Activity size={20} />
-                                    <span>Synthèse</span>
+                        <div className="sidebar-card share-card no-capture">
+                            <div className="share-header">
+                                <ImageIcon size={20} />
+                                <h3>Images & Partage</h3>
+                            </div>
+                            <div className="share-links-hub">
+                                <h4 className="share-link-group-title">AUJOURD'HUI</h4>
+                                <div className="share-link-box-modern">
+                                    <div className="url-preview">
+                                        <LinkIcon size={12} />
+                                        <span>{selectedRegion ? `vigilance_region_${selectedRegion}_today.png` : 'vigilance_france_today.png'} (Carte Seule)</span>
+                                    </div>
+                                    <button className="copy-btn-modern-blue" onClick={() => {
+                                        const file = selectedRegion ? `vigilance_region_${selectedRegion}_today.png` : 'vigilance_france_today.png';
+                                        const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/${file}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Lien copié !");
+                                    }}>
+                                        <FileText size={16} /> Copier
+                                    </button>
+                                </div>
+
+                                <div className="share-link-box-modern">
+                                    <div className="url-preview">
+                                        <LinkIcon size={12} />
+                                        <span>{selectedRegion ? `vigilance_region_${selectedRegion}_today_social.png` : 'vigilance_france_today_social.png'} (Social Title)</span>
+                                    </div>
+                                    <button className="copy-btn-modern-blue" onClick={() => {
+                                        const file = selectedRegion ? `vigilance_region_${selectedRegion}_today_social.png` : 'vigilance_france_today_social.png';
+                                        const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/${file}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Lien copié !");
+                                    }}>
+                                        <FileText size={16} /> Copier
+                                    </button>
+                                </div>
+
+                                <h4 className="share-link-group-title" style={{ marginTop: '15px' }}>DEMAIN</h4>
+                                <div className="share-link-box-modern">
+                                    <div className="url-preview">
+                                        <LinkIcon size={12} />
+                                        <span>{selectedRegion ? `vigilance_region_${selectedRegion}_tomorrow.png` : 'vigilance_france_tomorrow.png'} (Carte Seule)</span>
+                                    </div>
+                                    <button className="copy-btn-modern-blue" onClick={() => {
+                                        const file = selectedRegion ? `vigilance_region_${selectedRegion}_tomorrow.png` : 'vigilance_france_tomorrow.png';
+                                        const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/${file}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Lien copié !");
+                                    }}>
+                                        <FileText size={16} /> Copier
+                                    </button>
+                                </div>
+
+                                <div className="share-link-box-modern">
+                                    <div className="url-preview">
+                                        <LinkIcon size={12} />
+                                        <span>{selectedRegion ? `vigilance_region_${selectedRegion}_tomorrow_social.png` : 'vigilance_france_tomorrow_social.png'} (Social Title)</span>
+                                    </div>
+                                    <button className="copy-btn-modern-blue" onClick={() => {
+                                        const file = selectedRegion ? `vigilance_region_${selectedRegion}_tomorrow_social.png` : 'vigilance_france_tomorrow_social.png';
+                                        const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/${file}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Lien copié !");
+                                    }}>
+                                        <FileText size={16} /> Copier
+                                    </button>
                                 </div>
                             </div>
-
-                            {PHENOMENONS.map(p => {
-                                const Icon = p.icon;
-                                const isSelected = selectedPhenom === p.id;
-                                const levels = vigilanceData.filter(d => d.period === period).map(d => d.risks?.find(r => r.id === p.id)?.level || 1);
-                                const maxLvl = Math.max(...levels);
-
-                                return (
-                                    <div
-                                        key={p.id}
-                                        className={`phenom-card-item ${isSelected ? 'active' : ''} lvl-${maxLvl}`}
-                                        onClick={() => setSelectedPhenom(isSelected ? null : p.id)}
-                                    >
-                                        <div className="card-indicator" style={{ backgroundColor: OFFICIAL_COLORS[maxLvl] }}></div>
-                                        <div className="card-inner">
-                                            <Icon size={20} />
-                                            <span>{p.name}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            <p className="share-footer-note">Les captures sont générées toutes les 30 minutes.</p>
                         </div>
+                    </aside>
+                </div>
+            ) : (
+                <div className="vigilance-regions-hub">
+                    <div className="hub-grid">
+                        {REGIONS.map(region => {
+                            // On filtre les départements appartenant à cette région
+                            const regionDeps = geoData?.features.filter(f => region.deps.includes(f.properties.code)) || [];
+                            
+                            // On calcule une projection locale pour cette région
+                            const localProjection = geoConicConformal().fitSize([300, 200], {
+                                type: 'FeatureCollection',
+                                features: regionDeps
+                            });
+                            const localPathGen = geoPath().projection(localProjection);
+
+                            return (
+                                <div key={region.id} className="region-hub-card">
+                                    <div className="region-hub-header">
+                                        <div className="region-title-box">
+                                            <ImageIcon size={18} />
+                                            <h4>{region.name}</h4>
+                                        </div>
+                                        <button 
+                                            className="copy-region-link-btn"
+                                            onClick={() => {
+                                                const suffix = period === 0 ? 'today' : 'tomorrow';
+                                                const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_region_${region.id}_${suffix}.png`;
+                                                navigator.clipboard.writeText(url);
+                                                alert(`Lien ${region.id} copié !`);
+                                            }}
+                                        >
+                                            <LinkIcon size={14} /> Link
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="region-hub-map-container">
+                                        <svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+                                            {regionDeps.map(f => {
+                                                const code = f.properties.code;
+                                                const d = currentMap[code];
+                                                const color = d ? OFFICIAL_COLORS[d.displayLevel] : '#f1f5f9';
+                                                return (
+                                                    <path
+                                                        key={code}
+                                                        d={localPathGen(f)}
+                                                        fill={color}
+                                                        stroke="#475569"
+                                                        strokeWidth="1"
+                                                    />
+                                                );
+                                            })}
+                                        </svg>
+                                    </div>
+
+                                    <div className="region-hub-bulletin">
+                                        <pre>{getBulletinForScope(region.id)}</pre>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
+                </div>
+            )}
 
-                    <div className="sidebar-card share-card no-capture">
-                        <div className="share-header">
-                            <ImageIcon size={20} className="text-blue-600" />
-                            <h3>Liens Images Permanentes</h3>
-                        </div>
-                        <p className="share-desc">Accédez aux images auto-générées pour vos publications :</p>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                            {/* SECTION AUJOURD'HUI */}
-                            <div className="share-link-group">
-                                <h4 className="share-link-title">Aujourd'hui</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <div className="share-link-box-modern mini">
-                                        <div className="url-preview">
-                                            <LinkIcon size={12} />
-                                            <span>vigilance_france_today.png (Carte Seule)</span>
-                                        </div>
-                                        <div className="action-buttons">
-                                            <a
-                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today.png`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="view-btn"
-                                            >
-                                                <Eye size={14} />
-                                            </a>
-                                            <button
-                                                className="copy-btn-modern"
-                                                onClick={() => {
-                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today.png`;
-                                                    navigator.clipboard.writeText(url);
-                                                    alert("Lien Aujourd'hui copié !");
-                                                }}
-                                            >
-                                                <FileText size={14} /> Copier
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="share-link-box-modern mini">
-                                        <div className="url-preview">
-                                            <LinkIcon size={12} />
-                                            <span>vigilance_france_today_social.png (Social Title)</span>
-                                        </div>
-                                        <div className="action-buttons">
-                                            <a
-                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today_social.png`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="view-btn"
-                                            >
-                                                <Eye size={14} />
-                                            </a>
-                                            <button
-                                                className="copy-btn-modern"
-                                                onClick={() => {
-                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_today_social.png`;
-                                                    navigator.clipboard.writeText(url);
-                                                    alert("Lien Social Aujourd'hui copié !");
-                                                }}
-                                            >
-                                                <FileText size={14} /> Copier
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* SECTION DEMAIN */}
-                            <div className="share-link-group">
-                                <h4 className="share-link-title color-blue">Demain</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <div className="share-link-box-modern mini">
-                                        <div className="url-preview">
-                                            <LinkIcon size={12} />
-                                            <span>vigilance_france_tomorrow.png (Carte Seule)</span>
-                                        </div>
-                                        <div className="action-buttons">
-                                            <a
-                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow.png`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="view-btn"
-                                            >
-                                                <Eye size={14} />
-                                            </a>
-                                            <button
-                                                className="copy-btn-modern"
-                                                style={{ background: '#3453a2' }}
-                                                onClick={() => {
-                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow.png`;
-                                                    navigator.clipboard.writeText(url);
-                                                    alert("Lien Demain copié !");
-                                                }}
-                                            >
-                                                <FileText size={14} /> Copier
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="share-link-box-modern mini">
-                                        <div className="url-preview">
-                                            <LinkIcon size={12} />
-                                            <span>vigilance_france_tomorrow_social.png (Social Title)</span>
-                                        </div>
-                                        <div className="action-buttons">
-                                            <a
-                                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow_social.png`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="view-btn"
-                                            >
-                                                <Eye size={14} />
-                                            </a>
-                                            <button
-                                                className="copy-btn-modern"
-                                                style={{ background: '#3453a2' }}
-                                                onClick={() => {
-                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_france_tomorrow_social.png`;
-                                                    navigator.clipboard.writeText(url);
-                                                    alert("Lien Social Demain copié !");
-                                                }}
-                                            >
-                                                <FileText size={14} /> Copier
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <p className="share-note">Les captures sont générées toutes les 30 minutes.</p>
-                    </div>
-                </aside>
-            </div>
-            {/* ONLY VISIBLE DURING CAPTURE - THE SOCIAL CARD */}
             <div id="vigilance-capture-full" className="social-capture-container no-display-web">
                 <VigilanceSocialCard
                     geoData={geoData}
@@ -696,100 +685,55 @@ const VigilanceFrance = () => {
                     period={period}
                     lastUpdate={globalLastUpdate}
                     phenoms={PHENOMENONS}
+                    regionId={selectedRegion}
                 />
             </div>
 
-            {/* LISTE DES DÉPARTEMENTS EN VIGILANCE */}
             <div className="vigilance-text-list-section">
-                {/* 📝 BULLETIN AUTOMATISÉ (NOUVEAU) */}
                 {generatedBulletin && (
                     <div className="text-list-card bulletin-auto-card">
                         <div className="bulletin-header">
-                            <h3>Bulletin de vigilance automatisé</h3>
-                            <button
-                                className="copy-bulletin-btn"
-                                onClick={() => {
-                                    navigator.clipboard.writeText(generatedBulletin);
-                                    const btn = document.activeElement;
-                                    if (btn) {
-                                        const original = btn.innerHTML;
-                                        btn.innerHTML = "Copié !";
-                                        setTimeout(() => btn.innerHTML = original, 2000);
-                                    }
-                                }}
-                            >
-                                <FileText size={16} /> Copier le bulletin
+                            <h3>Bulletin Automatisé ({selectedRegion || 'National'})</h3>
+                            <button className="copy-bulletin-btn" onClick={() => {
+                                navigator.clipboard.writeText(generatedBulletin);
+                                alert("Bulletin copié !");
+                            }}>
+                                <FileText size={16} /> Copier
                             </button>
                         </div>
-                        <pre className="bulletin-text-display">
-                            {generatedBulletin}
-                        </pre>
+                        <pre className="bulletin-text-display">{generatedBulletin}</pre>
                     </div>
                 )}
 
                 <div className="text-list-card">
-                    <h3>État de la vigilance par phénomène</h3>
+                    <h3>Détails par phénomène</h3>
                     <div className="phenomenon-text-groups">
                         {PHENOMENONS.map(phenom => {
-                            // Filter departments with vigilance >= 2 for this phenomenon
                             const activeDepts = vigilanceData
                                 .filter(d => d.period === period && d.dep_code !== "FRA")
-                                .map(d => {
-                                    const risk = d.risks?.find(r => r.id === phenom.id);
-                                    return {
-                                        ...d,
-                                        riskLevel: risk ? risk.level : 1
-                                    };
-                                })
+                                .map(d => ({ ...d, riskLevel: d.risks?.find(r => r.id === phenom.id)?.level || 1 }))
                                 .filter(d => d.riskLevel >= 2)
-                                .sort((a, b) => {
-                                    // Sort by department code numerically (handling 2A/2B)
-                                    const codeA = a.dep_code.replace('2A', '20.1').replace('2B', '20.2');
-                                    const codeB = b.dep_code.replace('2A', '20.1').replace('2B', '20.2');
-                                    return parseFloat(codeA) - parseFloat(codeB);
-                                });
+                                .sort((a, b) => a.dep_code.localeCompare(b.dep_code));
 
                             if (activeDepts.length === 0) return null;
-
                             const Icon = phenom.icon;
-
-                            // Group by vigilance level
-                            const deptsByLevel = { 4: [], 3: [], 2: [] };
-                            activeDepts.forEach(d => {
-                                if (deptsByLevel[d.riskLevel]) deptsByLevel[d.riskLevel].push(d);
-                            });
-
                             return (
                                 <div key={phenom.id} className="phenom-summary-card">
                                     <div className="phenom-summary-header">
-                                        <div className="phenom-summary-icon" style={{ backgroundColor: '#f1f5f9' }}>
-                                            <Icon size={22} color="#334155" />
-                                        </div>
+                                        <Icon size={20} />
                                         <h4>{phenom.name}</h4>
                                     </div>
                                     <div className="phenom-summary-levels">
                                         {[4, 3, 2].map(lvl => {
-                                            const depts = deptsByLevel[lvl];
+                                            const depts = activeDepts.filter(d => d.riskLevel === lvl);
                                             if (depts.length === 0) return null;
-
-                                            const colorName = lvl === 4 ? "Rouge" : lvl === 3 ? "Orange" : "Jaune";
-                                            const colorHex = OFFICIAL_COLORS[lvl];
-
                                             return (
                                                 <div key={lvl} className={`level-summary-row lvl-${lvl}`}>
-                                                    <div className="level-badge" style={{ backgroundColor: colorHex }}>
-                                                        {colorName}
-                                                    </div>
+                                                    <span className="level-badge" style={{ background: OFFICIAL_COLORS[lvl] }}>
+                                                        {lvl === 4 ? 'Rouge' : lvl === 3 ? 'Orange' : 'Jaune'}
+                                                    </span>
                                                     <div className="level-depts-list">
-                                                        {depts.map(d => {
-                                                            const feature = geoData?.features.find(f => f.properties.code === d.dep_code);
-                                                            const name = feature ? feature.properties.nom : "";
-                                                            return (
-                                                                <span key={d.dep_code} className="dept-pill">
-                                                                    <strong>{d.dep_code}</strong> {name}
-                                                                </span>
-                                                            );
-                                                        })}
+                                                        {depts.map(d => <span key={d.dep_code} className="dept-pill"><strong>{d.dep_code}</strong></span>)}
                                                     </div>
                                                 </div>
                                             );
@@ -798,12 +742,6 @@ const VigilanceFrance = () => {
                                 </div>
                             );
                         })}
-
-                        {!vigilanceData.some(d => d.period === period && d.level >= 2) && (
-                            <p className="no-vigilance-text" style={{ textAlign: 'center', color: '#166534', padding: '20px' }}>
-                                Aucune vigilance particulière en cours sur le territoire (Vert).
-                            </p>
-                        )}
                     </div>
                 </div>
             </div>
