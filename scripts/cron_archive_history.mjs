@@ -10,42 +10,46 @@ const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runCronArchive() {
-    console.log(`[CRON ARCHIVE] Démarrage de la routine...`);
+    try {
+        console.log(`[CRON ARCHIVE] Démarrage de la routine...`);
 
-    // 1. Trouver la date la plus ancienne en base
-    const { data: oldestData, error: oldestError } = await supabase
-        .from('observations_6mn')
-        .select('timestamp')
-        .order('timestamp', { ascending: true })
-        .limit(1);
+        const { data: oldestData, error: oldestError } = await supabase
+            .from('observations_6mn')
+            .select('timestamp')
+            .order('timestamp', { ascending: true })
+            .limit(1);
 
-    if (oldestError) throw oldestError;
-    if (!oldestData || oldestData.length === 0) {
-        console.log("[CRON ARCHIVE] La table est vide. Rien à faire.");
-        return;
-    }
+        if (oldestError) throw oldestError;
+        if (!oldestData || oldestData.length === 0) {
+            console.log("[CRON ARCHIVE] La table est vide. Rien à faire.");
+            return;
+        }
 
-    const oldestDate = new Date(oldestData[0].timestamp);
-    const stopDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); // On s'arrête à J-2
-    
-    console.log(`[CRON ARCHIVE] Plus vieux record : ${oldestDate.toISOString()}`);
-    console.log(`[CRON ARCHIVE] Seuil d'archivage (J-2) : ${stopDate.toISOString()}`);
-
-    // Boucler sur chaque jour pour archiver
-    let currentDate = new Date(oldestDate);
-    currentDate.setUTCHours(0,0,0,0);
-
-    while (currentDate < stopDate) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        console.log(`\n[CRON ARCHIVE] Traitement de la journée : ${dateStr}`);
+        const oldestDate = new Date(oldestData[0].timestamp);
+        const stopDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); 
         
-        await archiveDay(dateStr);
+        console.log(`[CRON ARCHIVE] Plus vieux record : ${oldestDate.toISOString()}`);
+        console.log(`[CRON ARCHIVE] Seuil d'archivage (J-2) : ${stopDate.toISOString()}`);
+
+        let currentDate = new Date(oldestDate);
+        currentDate.setUTCHours(0,0,0,0);
+
+        while (currentDate < stopDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            console.log(`\n[CRON ARCHIVE] Traitement de la journée : ${dateStr}`);
+            
+            await archiveDay(dateStr);
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        }
         
-        // Passer au jour suivant
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        console.log(`\n[CRON ARCHIVE] Routine terminée avec succès.`);
+    } catch (err) {
+        console.error("\n[CRON ARCHIVE] !!! ERREUR FATALE !!!");
+        console.error(err.message || err);
+        if (err.details) console.error("Détails:", err.details);
+        if (err.hint) console.error("Indice:", err.hint);
+        process.exit(1);
     }
-    
-    console.log(`\n[CRON ARCHIVE] Routine terminée avec succès.`);
 }
 
 async function archiveDay(targetDate) {
@@ -84,15 +88,30 @@ async function archiveDay(targetDate) {
 
         if (uploadError) throw uploadError;
 
-        console.log(`   -> Fichier sauvegardé. Suppression SQL...`);
-        const { error: deleteError } = await supabase
-            .from('observations_6mn')
-            .delete()
-            .gte('timestamp', `${targetDate}T00:00:00Z`)
-            .lt('timestamp', `${targetDate}T23:59:59Z`);
+        console.log(`   -> Fichier sauvegardé. Suppression SQL progressive...`);
+        
+        // Suppression par paquets pour éviter les Timeouts
+        let deletedCount = 0;
+        const totalToDelete = allRows.length;
+        
+        // On supprime par tranches de 2h pour être sûr que ça passe
+        for (let hour = 0; hour < 24; hour += 2) {
+            const hStart = `${hour.toString().padStart(2, '0')}:00:00Z`;
+            const hEnd = `${(hour + 2).toString().padStart(2, '0')}:00:00Z`;
             
-        if(deleteError) throw deleteError;
-        console.log(`   -> Journée ${targetDate} archivée et nettoyée.`);
+            const { error: deleteError } = await supabase
+                .from('observations_6mn')
+                .delete()
+                .gte('timestamp', `${targetDate}T${hStart}`)
+                .lt('timestamp', `${targetDate}T${hEnd}`);
+                
+            if (deleteError) {
+                console.error(`      ! Erreur lors de la suppression de la tranche ${hStart}-${hEnd}`);
+                throw deleteError;
+            }
+        }
+
+        console.log(`   -> Journée ${targetDate} archivée et nettoyée entièrement.`);
     } else {
         console.log(`   -> Aucune donnée pour le ${targetDate}.`);
     }
