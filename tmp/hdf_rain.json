@@ -1,0 +1,152 @@
+[
+  {
+    "id": "60382001",
+    "name": "MARGNY-LES-COMPIEGNE",
+    "total": 0
+  },
+  {
+    "id": "60500005",
+    "name": "PLESSIS-BELLEVILLE AERO",
+    "total": 0
+  },
+  {
+    "id": "60555002",
+    "name": "ROUVROY-LES-MERLES",
+    "total": 0
+  },
+  {
+    "id": "62054001",
+    "name": "CAP-GRIS-NEZ",
+    "total": 0
+  },
+  {
+    "id": "80271002",
+    "name": "EPEHY_SAPC",
+    "total": 0
+  },
+  {
+    "id": "60500004",
+    "name": "PLESSIS-BELLEVILLE",
+    "total": 0.2
+  },
+  {
+    "id": "60566001",
+    "name": "SAINT-ARNOULT",
+    "total": 0.2
+  },
+  {
+    "id": "62076002",
+    "name": "BAINGHEN_SAPC",
+    "total": 0.2
+  },
+  {
+    "id": "62298001",
+    "name": "CAMBRAI-EPINOY",
+    "total": 0.2
+  },
+  {
+    "id": "80086002",
+    "name": "BERNAVILLE",
+    "total": 0.2
+  },
+  {
+    "id": "80379002",
+    "name": "AMIENS-GLISY",
+    "total": 0.4
+  },
+  {
+    "id": "62044001",
+    "name": "ATTIN",
+    "total": 0.6
+  },
+  {
+    "id": "62613001",
+    "name": "NIELLES-LES-BLEQUIN_SAPC",
+    "total": 0.6
+  },
+  {
+    "id": "62784001",
+    "name": "SAULTY",
+    "total": 0.6
+  },
+  {
+    "id": "62873001",
+    "name": "ARRAS",
+    "total": 0.6
+  },
+  {
+    "id": "80001001",
+    "name": "ABBEVILLE",
+    "total": 0.6
+  },
+  {
+    "id": "80713001",
+    "name": "SAINT-QUENTIN EN TT",
+    "total": 0.6
+  },
+  {
+    "id": "60363001",
+    "name": "LIERVILLE",
+    "total": 0.8
+  },
+  {
+    "id": "80182003",
+    "name": "CAYEUX-SUR-MER",
+    "total": 0.8
+  },
+  {
+    "id": "80801001",
+    "name": "VILLERS-CARBONNEL",
+    "total": 1.2
+  },
+  {
+    "id": "62468001",
+    "name": "HUMIERES_SAPC",
+    "total": 1.4
+  },
+  {
+    "id": "80248001",
+    "name": "DOMPIERRE-SUR-AUTHIE",
+    "total": 1.4
+  },
+  {
+    "id": "80523001",
+    "name": "MEAULTE",
+    "total": 1.4
+  },
+  {
+    "id": "62516002",
+    "name": "LILLERS",
+    "total": 1.6
+  },
+  {
+    "id": "80682001",
+    "name": "ROUVROY-EN-SANTERRE",
+    "total": 1.6
+  },
+  {
+    "id": "60445001",
+    "name": "NAMPCEL",
+    "total": 1.8
+  },
+  {
+    "id": "62826001",
+    "name": "LE-TOUQUET",
+    "total": 2
+  },
+  {
+    "id": "62160001",
+    "name": "BOULOGNE-SEM",
+    "total": 2.2
+  },
+  {
+    "id": "62548002",
+    "name": "CALAIS-MARCK",
+    "total": 2.2
+  },
+  {
+    "id": "80253002",
+    "name": "DOULLENS",
+    "total": 2.4
+  }
+]

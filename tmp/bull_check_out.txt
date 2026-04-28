@@ -1,0 +1,2 @@
+﻿[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ÔÜÖ´©Å  load multiple .env files with { path: ['.env.local', '.env'] }
+Bulletin France Update Time: 2026-03-14T09:00:05+00:00

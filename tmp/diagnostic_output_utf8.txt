@@ -1,0 +1,109 @@
+﻿[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ­ƒùé´©Å backup and recover secrets: https://dotenvx.com/ops
+=== DIAGNOSTIC COMPLET DU SYSTEME ===
+Date/heure actuelle: 2026-03-08T14:02:06.585Z
+
+--- 1. CONNEXION SUPABASE ---
+URL: https://ubdevaemtwbzxksjlhjg.supabase.co
+Service Role Key: PRESENT
+
+--- 2. OBSERVATIONS 6MN (dernieres) ---
+Derniere donnee: 2026-03-08T23:54:00+00:00 (il y a -592 minutes)
+  2026-03-08T23:54:00+00:00: station=59178001, t=9C, ff=nullkm/h
+  2026-03-08T23:48:00+00:00: station=59178001, t=9C, ff=nullkm/h
+  2026-03-08T23:42:00+00:00: station=59178001, t=9C, ff=nullkm/h
+  2026-03-08T23:36:00+00:00: station=59178001, t=9C, ff=nullkm/h
+  2026-03-08T23:30:00+00:00: station=59178001, t=9C, ff=nullkm/h
+OK: Donnees 6mn a jour
+
+--- 3. OBSERVATIONS HORAIRES (dernieres) ---
+Derniere donnee: 2026-01-24T10:00:00+00:00 (il y a 62163 minutes)
+  2026-01-24T10:00:00+00:00: station=01014002, t=0.1C
+  2026-01-24T10:00:00+00:00: station=01027003, t=0.5C
+  2026-01-24T10:00:00+00:00: station=01034004, t=4.6C
+  2026-01-24T10:00:00+00:00: station=01064001, t=0.7C
+  2026-01-24T10:00:00+00:00: station=01071001, t=3.4C
+ALERTE: Donnees horaires en retard de plus de 2 heures !
+
+--- 4. VIGILANCE STATUS ---
+Derniere mise a jour: 2026-03-08T13:45:16.505+00:00 (il y a 18 minutes)
+  Dept 6210: niveau 1, maj 2026-03-08T13:45:16.505+00:00
+  Dept 51: niveau 1, maj 2026-03-08T13:45:16.505+00:00
+  Dept 45: niveau 1, maj 2026-03-08T13:45:16.505+00:00
+  Dept 61: niveau 1, maj 2026-03-08T13:45:16.505+00:00
+  Dept FRA: niveau 2, maj 2026-03-08T13:45:16.505+00:00
+OK: Vigilance a jour
+
+--- 5. TOKEN API METEO-FRANCE ---
+Token derniere mise a jour: 2026-03-08T13:04:18.618+00:00 (il y a 59 minutes)
+OK: Token recemment mis a jour
+
+--- 6. STATIONS CONFIGUREES ---
+50 stations configurees
+  01014002: ARBENT
+  02346001: GIZY
+  02381001: HIRSON
+  02471001: MARTIGNY-COURPI
+  02585001: PARCY-ET-TIGNY
+  02705001: NIZY-LE-COMTE
+  02738001: TERGNIER
+  03036002: BOURBON_SAPC
+  03059001: CHAREIL-CINTRAT_SAPC
+  03060001: VICHY-CHARMEIL
+  03061001: CHARMES_SAPC
+  03074001: CHEVAGNES
+  03100001: DIOU
+  03106002: DURDAT-LAREQUILLE
+  03108001: ECHASSIERES_SAPC
+  03114001: FERTE-HAUTERIVE
+  03125001: LA GUILLERMIE
+  03130002: ISLE-ET-BARDAIS
+  03155003: LURCY-LEVIS SA
+  03162001: MARIGNY
+  03180001: MONTBEUGNY
+  03185007: MONTLUCON
+  03204001: PARAY-SOUS-BRIAILLES
+  03226001: SAINT DIDIER_SAPC
+  03240001: ST-LEON
+  03248001: ST-NICOLAS
+  03285001: TORTEZAIS_SAPC
+  03310001: VICHY-VILLE
+  05090002: MOTTE-MOLINES
+  05096404: ORCIERES-NIVOSE
+  05098001: LES ORRES
+  05101001: PELVOUX
+  05110001: PUY-ST-VINCENT
+  05120002: RISTOLAS
+  05126001: ROSANS
+  05136002: ST CREPIN
+  05139006: AGNIERES-EN-DEVOLUY
+  05142001: ST FIRMIN
+  05145002: ST JEAN-ST-NICOLAS
+  05158001: LE SAIX
+  05170001: TALLARD
+  05179001: VEYNES
+  05181002: VILLAR D'ARENE
+  05182001: VILLAR LOUBIERE
+  05183001: VILLAR ST PANCRACE
+  06004002: ANTIBES-GAROUPE
+  06004004: ANTIBES-GOLF
+  06004009: ANTIBES_SAPC
+  06005001: ASCROS
+  06016001: BEUIL-OBS
+
+--- 7. TEST APPEL EDGE FUNCTION collect-6mn ---
+Status: 401
+Reponse: {"code":401,"message":"Invalid JWT"}
+ERREUR: Edge Function collect-6mn en erreur
+
+--- 8. TEST APPEL EDGE FUNCTION collect-horaire ---
+Status: 401
+Reponse: {"code":401,"message":"Invalid JWT"}
+ERREUR: Edge Function collect-horaire en erreur
+
+--- 9. TEST APPEL EDGE FUNCTION collect-vigilance ---
+Status: 401
+Reponse: {"code":401,"message":"Invalid JWT"}
+ERREUR: Edge Function collect-vigilance en erreur
+
+=== RECAPITULATIF ===
+Fin du diagnostic: 2026-03-08T14:03:43.353Z

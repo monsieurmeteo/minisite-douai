@@ -1,0 +1,5 @@
+﻿[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ­ƒôí add observability to secrets: https://dotenvx.com/ops
+--- Checking MF API directly ---
+MF_UPDATE_TIME: 2026-03-15T15:00:48Z
+PERIOD_1_RANGE: 2026-03-15T23:00:00Z to 2026-03-16T23:00:00Z
+DB_LAST_UPDATE: 2026-03-15T15:15:07.408+00:00

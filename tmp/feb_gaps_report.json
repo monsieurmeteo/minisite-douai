@@ -1,0 +1,281 @@
+{
+  "title": "Report: Missing Data - February 2026 (Hauts-de-France)",
+  "run_date": "2026-03-08T10:58:15.682Z",
+  "summary": "Identified 39 stations with gaps below 95% coverage in HF.",
+  "all_stations_count": 70,
+  "stations_with_gaps": [
+    {
+      "id": "80557001",
+      "name": "ESTREES-MONS-INRAE",
+      "count": 0,
+      "missing": 6720,
+      "coverage": 0
+    },
+    {
+      "id": "02173002",
+      "name": "CHAUNY",
+      "count": 137,
+      "missing": 6583,
+      "coverage": 2
+    },
+    {
+      "id": "59580003",
+      "name": "STEENVOORDE",
+      "count": 550,
+      "missing": 6170,
+      "coverage": 8.2
+    },
+    {
+      "id": "62298001",
+      "name": "CAMBRAI-EPINOY",
+      "count": 550,
+      "missing": 6170,
+      "coverage": 8.2
+    },
+    {
+      "id": "60382001",
+      "name": "MARGNY-LES-COMPIEGNE",
+      "count": 561,
+      "missing": 6159,
+      "coverage": 8.3
+    },
+    {
+      "id": "60500004",
+      "name": "PLESSIS-BELLEVILLE",
+      "count": 579,
+      "missing": 6141,
+      "coverage": 8.6
+    },
+    {
+      "id": "60555002",
+      "name": "ROUVROY-LES-MERLES",
+      "count": 580,
+      "missing": 6140,
+      "coverage": 8.6
+    },
+    {
+      "id": "60363001",
+      "name": "LIERVILLE",
+      "count": 590,
+      "missing": 6130,
+      "coverage": 8.8
+    },
+    {
+      "id": "60566001",
+      "name": "SAINT-ARNOULT",
+      "count": 647,
+      "missing": 6073,
+      "coverage": 9.6
+    },
+    {
+      "id": "62613001",
+      "name": "NIELLES-LES-BLEQUIN_SAPC",
+      "count": 681,
+      "missing": 6039,
+      "coverage": 10.1
+    },
+    {
+      "id": "62076002",
+      "name": "BAINGHEN_SAPC",
+      "count": 681,
+      "missing": 6039,
+      "coverage": 10.1
+    },
+    {
+      "id": "80271002",
+      "name": "EPEHY_SAPC",
+      "count": 681,
+      "missing": 6039,
+      "coverage": 10.1
+    },
+    {
+      "id": "02705001",
+      "name": "NIZY-LE-COMTE",
+      "count": 1508,
+      "missing": 5212,
+      "coverage": 22.4
+    },
+    {
+      "id": "62333001",
+      "name": "FIEFS",
+      "count": 3542,
+      "missing": 3178,
+      "coverage": 52.7
+    },
+    {
+      "id": "60445001",
+      "name": "NAMPCEL",
+      "count": 4397,
+      "missing": 2323,
+      "coverage": 65.4
+    },
+    {
+      "id": "02585001",
+      "name": "PARCY-ET-TIGNY",
+      "count": 4607,
+      "missing": 2113,
+      "coverage": 68.6
+    },
+    {
+      "id": "02471001",
+      "name": "MARTIGNY-COURPI",
+      "count": 4670,
+      "missing": 2050,
+      "coverage": 69.5
+    },
+    {
+      "id": "80086002",
+      "name": "BERNAVILLE",
+      "count": 4776,
+      "missing": 1944,
+      "coverage": 71.1
+    },
+    {
+      "id": "60623001",
+      "name": "SONGEONS",
+      "count": 4960,
+      "missing": 1760,
+      "coverage": 73.8
+    },
+    {
+      "id": "59392001",
+      "name": "MAUBEUGE",
+      "count": 5210,
+      "missing": 1510,
+      "coverage": 77.5
+    },
+    {
+      "id": "60260001",
+      "name": "FRESNOY-LA-RIVIERE",
+      "count": 5224,
+      "missing": 1496,
+      "coverage": 77.7
+    },
+    {
+      "id": "60107001",
+      "name": "BREUIL-LE-VERT",
+      "count": 5367,
+      "missing": 1353,
+      "coverage": 79.9
+    },
+    {
+      "id": "80801001",
+      "name": "VILLERS-CARBONNEL",
+      "count": 5612,
+      "missing": 1108,
+      "coverage": 83.5
+    },
+    {
+      "id": "02110002",
+      "name": "BRAINE",
+      "count": 5791,
+      "missing": 929,
+      "coverage": 86.2
+    },
+    {
+      "id": "80628001",
+      "name": "LE-PLESSIER-ROZAINVILLERS",
+      "count": 5798,
+      "missing": 922,
+      "coverage": 86.3
+    },
+    {
+      "id": "62516002",
+      "name": "LILLERS",
+      "count": 5806,
+      "missing": 914,
+      "coverage": 86.4
+    },
+    {
+      "id": "02037002",
+      "name": "AULNOIS-SS-LAON",
+      "count": 5823,
+      "missing": 897,
+      "coverage": 86.7
+    },
+    {
+      "id": "59512001",
+      "name": "ROUBAIX",
+      "count": 5832,
+      "missing": 888,
+      "coverage": 86.8
+    },
+    {
+      "id": "59604001",
+      "name": "TROISVILLES",
+      "count": 5975,
+      "missing": 745,
+      "coverage": 88.9
+    },
+    {
+      "id": "02738001",
+      "name": "TERGNIER",
+      "count": 6127,
+      "missing": 593,
+      "coverage": 91.2
+    },
+    {
+      "id": "62784001",
+      "name": "SAULTY",
+      "count": 6167,
+      "missing": 553,
+      "coverage": 91.8
+    },
+    {
+      "id": "60639001",
+      "name": "BEAUVAIS-TILLE",
+      "count": 6188,
+      "missing": 532,
+      "coverage": 92.1
+    },
+    {
+      "id": "62826001",
+      "name": "LE-TOUQUET",
+      "count": 6198,
+      "missing": 522,
+      "coverage": 92.2
+    },
+    {
+      "id": "60652001",
+      "name": "VALDAMPIERRE",
+      "count": 6205,
+      "missing": 515,
+      "coverage": 92.3
+    },
+    {
+      "id": "62873001",
+      "name": "ARRAS",
+      "count": 6202,
+      "missing": 518,
+      "coverage": 92.3
+    },
+    {
+      "id": "80523001",
+      "name": "MEAULTE",
+      "count": 6206,
+      "missing": 514,
+      "coverage": 92.4
+    },
+    {
+      "id": "80182003",
+      "name": "CAYEUX-SUR-MER",
+      "count": 6236,
+      "missing": 484,
+      "coverage": 92.8
+    },
+    {
+      "id": "60276001",
+      "name": "GODENVILLERS",
+      "count": 6266,
+      "missing": 454,
+      "coverage": 93.2
+    },
+    {
+      "id": "02320001",
+      "name": "ST QUENTIN",
+      "count": 6285,
+      "missing": 435,
+      "coverage": 93.5
+    }
+  ]
+}

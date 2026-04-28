@@ -1,0 +1,20 @@
+﻿[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ­ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+=== DIAGNOSTIC DISK IO SUPABASE ===
+
+ÔÜá´©Å  Table 'observations_6mn' : erreur - 
+ÔÜá´©Å  Table 'observations_horaire' : erreur - 
+Ô£à Table 'observations' : undefined enregistrements
+
+
+=== NETTOYAGE IMM├ëDIAT ===
+
+ÔÅ¡´©Å  observations_6mn : table inaccessible, skipping
+Ô£à  observations_horaire : rien ├á supprimer (< 6 mois)
+ÔÅ¡´©Å  observations : table inaccessible, skipping
+
+=== TERMIN├ë ===
+
+ÔÜá´©Å  Pour la politique de r├®tention automatique, applique le SQL
+   dans supabase/migrations/20260406140000_add_retention_policy.sql
+   via le SQL Editor de Supabase dashboard.
+

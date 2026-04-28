@@ -1,0 +1,101 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Local ou Action
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function runCronArchive() {
+    console.log(`[CRON ARCHIVE] Démarrage de la routine...`);
+
+    // 1. Trouver la date la plus ancienne en base
+    const { data: oldestData, error: oldestError } = await supabase
+        .from('observations_6mn')
+        .select('timestamp')
+        .order('timestamp', { ascending: true })
+        .limit(1);
+
+    if (oldestError) throw oldestError;
+    if (!oldestData || oldestData.length === 0) {
+        console.log("[CRON ARCHIVE] La table est vide. Rien à faire.");
+        return;
+    }
+
+    const oldestDate = new Date(oldestData[0].timestamp);
+    const stopDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); // On s'arrête à J-2
+    
+    console.log(`[CRON ARCHIVE] Plus vieux record : ${oldestDate.toISOString()}`);
+    console.log(`[CRON ARCHIVE] Seuil d'archivage (J-2) : ${stopDate.toISOString()}`);
+
+    // Boucler sur chaque jour pour archiver
+    let currentDate = new Date(oldestDate);
+    currentDate.setUTCHours(0,0,0,0);
+
+    while (currentDate < stopDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        console.log(`\n[CRON ARCHIVE] Traitement de la journée : ${dateStr}`);
+        
+        await archiveDay(dateStr);
+        
+        // Passer au jour suivant
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+    
+    console.log(`\n[CRON ARCHIVE] Routine terminée avec succès.`);
+}
+
+async function archiveDay(targetDate) {
+    const BATCH_SIZE = 10000;
+    let allRows = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabase
+            .from('observations_6mn')
+            .select('*')
+            .gte('timestamp', `${targetDate}T00:00:00Z`)
+            .lt('timestamp', `${targetDate}T23:59:59Z`)
+            .range(from, from + BATCH_SIZE - 1)
+            .order('timestamp', { ascending: true });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+            allRows.push(...data);
+            if (data.length < BATCH_SIZE) hasMore = false;
+            else from += BATCH_SIZE;
+        } else {
+            hasMore = false;
+        }
+    }
+
+    if (allRows.length > 0) {
+        const [y, m, d] = targetDate.split('-');
+        const filePath = `6mn/${y}/${m}/${d}.json`;
+        console.log(`   -> ${allRows.length} lignes trouvées. Sauvegarde dans Storage...`);
+        
+        const { error: uploadError } = await supabase.storage
+            .from('observations-archives')
+            .upload(filePath, JSON.stringify(allRows), { contentType: 'application/json', upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        console.log(`   -> Fichier sauvegardé. Suppression SQL...`);
+        const { error: deleteError } = await supabase
+            .from('observations_6mn')
+            .delete()
+            .gte('timestamp', `${targetDate}T00:00:00Z`)
+            .lt('timestamp', `${targetDate}T23:59:59Z`);
+            
+        if(deleteError) throw deleteError;
+        console.log(`   -> Journée ${targetDate} archivée et nettoyée.`);
+    } else {
+        console.log(`   -> Aucune donnée pour le ${targetDate}.`);
+    }
+}
+
+runCronArchive();

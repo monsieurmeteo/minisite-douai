@@ -1,0 +1,64 @@
+﻿node : node:internal/modules/
+package_json_reader:316
+Au caractère Ligne:1 : 1
++ node scripts/capture_vigila
+nce.mjs 2>&1 | Out-File 
+-FilePath tmp/capt ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (node:in  
+  ternal/m...json_reader:3   
+ 16:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+  throw new ERR_MODULE_NOT_FO
+UND(packageName, 
+fileURLToPath(base), null);
+        ^
+
+Error 
+[ERR_MODULE_NOT_FOUND]: 
+Cannot find package 
+'puppeteer' imported from C:\
+Users\grego\Documents\minisit
+e-douai\scripts\capture_vigil
+ance.mjs
+    at 
+Object.getPackageJSONURL (nod
+e:internal/modules/package_js
+on_reader:316:9)
+    at packageResolve (node:i
+nternal/modules/esm/resolve:7
+68:81)
+    at moduleResolve (node:in
+ternal/modules/esm/resolve:85
+8:18)
+    at defaultResolve (node:i
+nternal/modules/esm/resolve:9
+90:11)
+    at #cachedDefaultResolve 
+(node:internal/modules/esm/lo
+ader:718:20)
+    at #resolveAndMaybeBlockO
+nLoaderThread (node:internal/
+modules/esm/loader:735:38)
+    at 
+ModuleLoader.resolveSync (nod
+e:internal/modules/esm/loader
+:764:52)
+    at #resolve (node:interna
+l/modules/esm/loader:700:17)
+    at ModuleLoader.getOrCrea
+teModuleJob (node:internal/mo
+dules/esm/loader:620:35)
+    at ModuleJob.syncLink (no
+de:internal/modules/esm/modul
+e_job:143:33) {
+  code: 
+'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.13.0

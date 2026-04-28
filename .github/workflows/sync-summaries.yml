@@ -1,0 +1,29 @@
+name: Synchronisation Résumés Quotidiens
+
+on:
+  schedule:
+    # Toutes les 15 minutes (0, 15, 30, 45)
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync_summaries:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install @supabase/supabase-js dotenv
+
+    - name: Run Sync Script
+      env:
+        VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      run: node scripts/resync_summaries_local.mjs
