@@ -22,8 +22,6 @@ export const weatherAPI = {
                 .eq('station_id', stationId);
 
             if (dateObj) {
-                // Filter specifically for this day (UTC or Local? DB is typically UTC)
-                // We'll broaden slightly to cover timezone shifts + 0h-24h
                 const start = new Date(dateObj);
                 start.setHours(0, 0, 0, 0);
                 const end = new Date(dateObj);
@@ -31,20 +29,45 @@ export const weatherAPI = {
 
                 query = query
                     .gte('timestamp', start.toISOString())
-                    .lte('timestamp', end.toISOString());
+                    .lte('timestamp', end.toISOString())
+                    .limit(500);
             } else {
-                // Default: last 24h
-                query = query.limit(240);
+                query = query.limit(300);
             }
 
             const { data, error } = await query.order('timestamp', { ascending: false });
-
             if (error) throw error;
-            return data.map(obs => ({
+
+            let finalData = data || [];
+
+            // FALLBACK ARCHIVES
+            if (dateObj && finalData.length === 0) {
+                try {
+                    const y = dateObj.getFullYear();
+                    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const d = String(dateObj.getDate()).padStart(2, '0');
+                    const filePath = `6mn/${y}/${m}/${d}.json`;
+
+                    const { data: storageData, error: storageError } = await supabase.storage
+                        .from('observations-archives')
+                        .download(filePath);
+
+                    if (!storageError && storageData) {
+                        const text = await storageData.text();
+                        const json = JSON.parse(text);
+                        finalData = json.filter(obs => obs.station_id === stationId);
+                        finalData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    }
+                } catch (err) {
+                    console.warn("[API] Archive fallback failed:", err);
+                }
+            }
+
+            return finalData.map(obs => ({
                 time: new Date(obs.timestamp),
                 temp: obs.t,
                 hum: obs.u,
-                rain: obs.rr_per, // contains rr1 (1h) for hourly data, or rr_per for 6mn data
+                rain: obs.rr_per,
                 rain_1h: obs.rr1,
                 rain_3h: obs.rr3,
                 rain_6h: obs.rr6,
@@ -57,7 +80,7 @@ export const weatherAPI = {
                 dewpoint: obs.td,
                 pressure: obs.pres,
                 vv: obs.vv
-            })).reverse(); // Oldest to newest for charts
+            })).reverse();
         } catch (e) {
             console.error("[API] getStation6mnHistory error:", e);
             return [];

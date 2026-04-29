@@ -94,7 +94,7 @@ export default function StationsTable() {
                             .select('*')
                             .eq('station_id', id)
                             .order('timestamp', { ascending: false })
-                            .limit(60), // 6 heures de 6mn
+                            .limit(240), // 24 heures de 6mn (au lieu de 60/6h)
                         supabase
                             .from('observations_horaire')
                             .select('*')
