@@ -29,13 +29,12 @@ export const weatherAPI = {
 
                 query = query
                     .gte('timestamp', start.toISOString())
-                    .lte('timestamp', end.toISOString())
-                    .limit(500);
-            } else {
-                query = query.limit(300);
+                    .lte('timestamp', end.toISOString());
             }
 
-            const { data, error } = await query.order('timestamp', { ascending: false });
+            const { data, error } = await query
+                .order('timestamp', { ascending: false })
+                .limit(1000); // Augmenté à 1000 pour couvrir largement 24h et placé après order
             if (error) throw error;
 
             let finalData = data || [];

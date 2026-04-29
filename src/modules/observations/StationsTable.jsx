@@ -85,43 +85,28 @@ export default function StationsTable() {
                     pressure: h.pres
                 }));
 
-                // 2. Récupérer l'historique SUPABASE (Données archivées : 6mn ET Horaire)
+                // 2. Récupérer l'historique SUPABASE (Données archivées : 6mn ET Horaire) via l'API unifiée
                 let dbFormatted = [];
                 try {
                     const [res6mn, resHoraire] = await Promise.all([
-                        supabase
-                            .from('observations_6mn')
-                            .select('*')
-                            .eq('station_id', id)
-                            .order('timestamp', { ascending: false })
-                            .limit(240), // 24 heures de 6mn (au lieu de 60/6h)
-                        supabase
-                            .from('observations_horaire')
-                            .select('*')
-                            .eq('station_id', id)
-                            .order('timestamp', { ascending: false })
-                            .limit(48) // 48 heures d'horaire
+                        weatherAPI.getStation6mnHistory(id),
+                        weatherAPI.getStationHourlyHistory(id)
                     ]);
 
-                    const rawData = [
-                        ...(res6mn.data || []),
-                        ...(resHoraire.data || [])
+                    // Note: Nos fonctions API renvoient déjà les données formatées et triées chronologiquement (asc)
+                    // Mais le tableau attend un ordre décroissant (plus récent en haut)
+                    dbFormatted = [
+                        ...res6mn.map(h => ({ 
+                            ...h, 
+                            rain: h.rain_1h || h.rain,
+                            // Adaptation du format attendu par le tableau
+                            timestamp: h.time.toISOString()
+                        })),
+                        ...resHoraire.map(h => ({
+                            ...h,
+                            timestamp: h.time.toISOString()
+                        }))
                     ];
-
-                    if (rawData.length > 0) {
-                        dbFormatted = rawData.map(h => ({
-                            time: new Date(h.timestamp),
-                            temp: h.t,
-                            dewpoint: h.td,
-                            hum: h.u,
-                            wind: h.ff,
-                            gust: h.fxi || h.gust_kmh, // fxi dans horaire, gust_kmh parfois ailleurs
-                            dir: h.dd,
-                            rain: h.rr1 || h.rr_per,   // rr1 dans horaire, rr_per dans 6mn
-                            pressure: h.pres,
-                            vv: h.vv
-                        }));
-                    }
                 } catch (e) {
                     console.warn("Erreur lecture Supabase", e);
                 }
