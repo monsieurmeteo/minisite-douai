@@ -53,6 +53,13 @@ async function runCronArchive() {
 }
 
 async function archiveDay(targetDate) {
+    console.log(`   -> Synchronisation des statistiques quotidiennes (batch_sync)...`);
+    const { error: syncError } = await supabase.rpc('batch_sync_daily_summaries', { target_date: targetDate });
+    if (syncError) {
+        console.warn(`      ! Attention: Erreur lors du batch_sync pour ${targetDate}:`, syncError.message);
+        // On continue quand même, car l'archivage est prioritaire pour la place disque
+    }
+
     const BATCH_SIZE = 10000;
     let allRows = [];
     let from = 0;
