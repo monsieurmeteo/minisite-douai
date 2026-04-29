@@ -255,6 +255,61 @@ export const weatherAPI = {
 
 
     /**
+     * Get historical daily extremes for a range of dates (BTP / Statistics)
+     * Queries daily_summaries table which is kept long-term
+     */
+    getHistoricalData: async (startDate, endDate, lat = null, lon = null, stationId = null) => {
+        if (!supabase) return [];
+        try {
+            let targetStationId = stationId;
+
+            // 1. If lat/lon provided, find nearest station
+            if (!targetStationId && lat && lon) {
+                const { data: nearStations } = await supabase
+                    .from('stations')
+                    .select('id, lat, lon')
+                    .not('lat', 'is', null);
+
+                if (nearStations && nearStations.length > 0) {
+                    // Sort by distance (Haversine approx)
+                    nearStations.sort((a, b) => {
+                        const distA = Math.sqrt(Math.pow(a.lat - lat, 2) + Math.pow(a.lon - lon, 2));
+                        const distB = Math.sqrt(Math.pow(b.lat - lat, 2) + Math.pow(b.lon - lon, 2));
+                        return distA - distB;
+                    });
+                    targetStationId = nearStations[0].id;
+                }
+            }
+
+            // Fallback to Douai if still nothing
+            if (!targetStationId) targetStationId = '59343001';
+
+            // 2. Query daily_summaries
+            const { data, error } = await supabase
+                .from('daily_summaries')
+                .select('*')
+                .eq('station_id', targetStationId)
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .order('date', { ascending: true });
+
+            if (error) throw error;
+
+            return data.map(d => ({
+                date: d.date,
+                min: d.temp_min,
+                max: d.temp_max,
+                rain: d.rain_total,
+                gust: d.wind_gust_max,
+                gust_time: d.wind_gust_time
+            }));
+        } catch (e) {
+            console.error("[API] getHistoricalData error:", e);
+            return [];
+        }
+    },
+
+    /**
      * Search communes (official Gouv API)
      */
     searchCity: async (query) => {
