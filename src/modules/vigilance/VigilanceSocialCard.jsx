@@ -116,9 +116,12 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
 
     const headerClass = maxLevel === 4 ? 'bg-red-deep' : maxLevel === 3 ? 'bg-orange-vibrant' : maxLevel === 2 ? 'bg-yellow-bright' : 'bg-green-safe';
 
+    const isReady = geoData && filteredFeatures.length > 0 && projection;
+
     return (
-        <div className="social-fb-container">
+        <div className="social-fb-container" data-ready={isReady ? "true" : "false"}>
             <div id="vigilance-social-card" className="social-fb-card">
+                {!isReady && <div className="loading-overlay-capture">Chargement de la carte...</div>}
                 <div className={`social-fb-header ${headerClass}`}>
                     <div className="header-top-line">
                         <ShieldAlert size={40} className="header-icon" />

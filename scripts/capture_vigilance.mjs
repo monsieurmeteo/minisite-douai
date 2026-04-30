@@ -57,27 +57,8 @@ async function captureAndUpload() {
         headless: "new",
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
     });
-
     try {
         const page = await browser.newPage();
-        await page.setViewport(CONFIG.viewport);
-
-        const periods = [
-            { id: 0, suffix: 'today' },
-            { id: 1, suffix: 'tomorrow' }
-        ];
-
-        // 1. CAPTURE FRANCE (EXISTANT)
-        for (const p of periods) {
-            await captureScope(page, null, p.id, p.suffix);
-        }
-
-        // 2. CAPTURE RÉGIONS (NOUVEAU)
-        for (const region of REGIONS) {
-            console.log(`\n📍 CAPTURE RÉGION: ${region.name} (${region.id})`);
-            for (const p of periods) {
-                await captureScope(page, region.id, p.id, p.suffix);
-            }
         }
 
         console.log(`\n✅ TOUTES LES CAPTURES RÉUSSIES!\n`);
@@ -94,20 +75,18 @@ async function captureScope(page, regionId, periodId, suffix) {
     const targetUrl = `${CONFIG.baseUrl}/vigilance?period=${periodId}${regionId ? `&region=${regionId}` : ''}`;
     
     console.log(`⏳ [${scopeName}] [${suffix}] Chargement: ${targetUrl}`);
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
     
-    // On attend 10 secondes pour que React et les GeoData soient totalement chargés et rendus
-    await new Promise(r => setTimeout(r, 10000));
-
-
-    // Attendre le sélecteur spécifique de la carte
+    // Attendre que le composant signale qu'il est prêt (GeoData chargés et filtrés)
     try {
-        await page.waitForSelector('#vigilance-social-card', { timeout: 30000 });
+        console.log(`⏳ [${scopeName}] Attente du rendu final...`);
+        await page.waitForSelector('.social-fb-container[data-ready="true"]', { timeout: 30000 });
         const title = await page.$eval('#vigilance-social-card h1', el => el.innerText);
-        console.log(`✅ [${scopeName}] Carte détectée avec titre : "${title}"`);
+        console.log(`✅ [${scopeName}] Prêt ! Titre détecté : "${title}"`);
     } catch (e) {
-        console.log(`⚠️ Carte non détectée via sélecteur, tentative d'injection CSS quand même...`);
+        console.log(`⚠️ Timeout data-ready, tentative de capture quand même...`);
     }
+
 
     // Injection CSS (Masquer tout sauf le conteneur de capture)
     const baseStyle = `
