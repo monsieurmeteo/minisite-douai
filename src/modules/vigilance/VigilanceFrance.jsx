@@ -680,6 +680,7 @@ const VigilanceFrance = () => {
 
             <div id="vigilance-capture-full" className="social-capture-container no-display-web">
                 <VigilanceSocialCard
+                    key={`${selectedRegion}-${period}`}
                     geoData={geoData}
                     vigilanceData={vigilanceData}
                     period={period}
@@ -687,6 +688,7 @@ const VigilanceFrance = () => {
                     phenoms={PHENOMENONS}
                     regionId={selectedRegion}
                 />
+
             </div>
 
             <div className="vigilance-text-list-section">

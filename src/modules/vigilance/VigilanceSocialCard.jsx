@@ -9,25 +9,28 @@ const OFFICIAL_COLORS = {
     4: '#d32f2f', // Rouge plus profond
 };
 
-const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms, regionId = null }) => {
-    // Liste des régions pour le filtrage
-    const REGIONS = [
-        { id: 'ARA', name: 'Auvergne-Rhône-Alpes', deps: ['01', '03', '07', '15', '26', '38', '42', '43', '63', '69', '73', '74'] },
-        { id: 'BFC', name: 'Bourgogne-Franche-Comté', deps: ['21', '25', '39', '58', '70', '71', '89', '90'] },
-        { id: 'BRE', name: 'Bretagne', deps: ['22', '29', '35', '56'] },
-        { id: 'CVL', name: 'Centre-Val de Loire', deps: ['18', '28', '36', '37', '41', '45'] },
-        { id: 'COR', name: 'Corse', deps: ['2A', '2B'] },
-        { id: 'GES', name: 'Grand Est', deps: ['08', '10', '51', '52', '54', '55', '57', '67', '68', '88'] },
-        { id: 'HDF', name: 'Hauts-de-France', deps: ['02', '59', '60', '62', '80'] },
-        { id: 'IDF', name: 'Île-de-France', deps: ['75', '77', '78', '91', '92', '93', '94', '95'] },
-        { id: 'NOR', name: 'Normandie', deps: ['14', '27', '50', '61', '76'] },
-        { id: 'NAQ', name: 'Nouvelle-Aquitaine', deps: ['16', '17', '19', '23', '24', '33', '40', '47', '64', '79', '86', '87'] },
-        { id: 'OCC', name: 'Occitanie', deps: ['09', '11', '12', '30', '31', '32', '34', '46', '48', '65', '66', '81', '82'] },
-        { id: 'PDL', name: 'Pays de la Loire', deps: ['44', '49', '53', '72', '85'] },
-        { id: 'PAC', name: 'Provence-Alpes-Côte d\'Azur', deps: ['04', '05', '06', '13', '83', '84'] },
-    ];
+// Liste des régions pour le filtrage
+const REGIONS = [
+    { id: 'ARA', name: 'Auvergne-Rhône-Alpes', deps: ['01', '03', '07', '15', '26', '38', '42', '43', '63', '69', '73', '74'] },
+    { id: 'BFC', name: 'Bourgogne-Franche-Comté', deps: ['21', '25', '39', '58', '70', '71', '89', '90'] },
+    { id: 'BRE', name: 'Bretagne', deps: ['22', '29', '35', '56'] },
+    { id: 'CVL', name: 'Centre-Val de Loire', deps: ['18', '28', '36', '37', '41', '45'] },
+    { id: 'COR', name: 'Corse', deps: ['2A', '2B'] },
+    { id: 'GES', name: 'Grand Est', deps: ['08', '10', '51', '52', '54', '55', '57', '67', '68', '88'] },
+    { id: 'HDF', name: 'Hauts-de-France', deps: ['02', '59', '60', '62', '80'] },
+    { id: 'IDF', name: 'Île-de-France', deps: ['75', '77', '78', '91', '92', '93', '94', '95'] },
+    { id: 'NOR', name: 'Normandie', deps: ['14', '27', '50', '61', '76'] },
+    { id: 'NAQ', name: 'Nouvelle-Aquitaine', deps: ['16', '17', '19', '23', '24', '33', '40', '47', '64', '79', '86', '87'] },
+    { id: 'OCC', name: 'Occitanie', deps: ['09', '11', '12', '30', '31', '32', '34', '46', '48', '65', '66', '81', '82'] },
+    { id: 'PDL', name: 'Pays de la Loire', deps: ['44', '49', '53', '72', '85'] },
+    { id: 'PAC', name: 'Provence-Alpes-Côte d\'Azur', deps: ['04', '05', '06', '13', '83', '84'] },
+];
 
+const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms, regionId = null }) => {
+    console.log(`[SocialCard] Rendering for regionId: ${regionId}`);
     const regionConfig = regionId ? REGIONS.find(r => r.id === regionId) : null;
+    if (regionId && !regionConfig) console.warn(`[SocialCard] ⚠️ Region ${regionId} not found in config!`);
+
 
     // 1. Dédoublonnage des données
     const activeVigilanceMap = new Map();
