@@ -15,6 +15,8 @@ const API_DPOBS = '/api-meteo';          // DPObs (individuel)
 import { supabase } from './supabaseClient';
 // Import de la liste complète des stations connues
 import stationNamesData from '../data/stationNames.json';
+// Import de l'authentification OAuth
+import { meteoAuth } from './meteoFranceAuth';
 
 class MeteoFranceCollector {
     constructor() {
@@ -24,11 +26,15 @@ class MeteoFranceCollector {
         this.stationsHistory = new Map(); // Map de stationId -> Array d'observations (pour les détails)
         this.maxHistorySize = 25;
 
-        const token = import.meta.env.VITE_METEO_MANUAL_TOKEN;
-        if (!token) {
-            console.error('[MeteoCollector] ❌ Token manquant dans les variables d environneement (VITE_METEO_MANUAL_TOKEN)');
+        // Initialisation de l'OAuth avec les credentials du .env
+        const key = import.meta.env.VITE_METEO_CONSUMER_KEY;
+        const secret = import.meta.env.VITE_METEO_CONSUMER_SECRET;
+        
+        if (key && secret) {
+            meteoAuth.initialize(key, secret);
+            console.log('[MeteoCollector] 🔑 OAuth configuré avec succès');
         } else {
-            console.log('[MeteoCollector] 🔑 Token détecté (début):', token.substring(0, 10));
+            console.error('[MeteoCollector] ❌ Credentials OAuth manquants (VITE_METEO_CONSUMER_KEY / SECRET)');
         }
 
         // Charger l'historique au démarrage si possible
@@ -36,14 +42,18 @@ class MeteoFranceCollector {
     }
 
     /**
-     * Obtenir un token valide (token manuel)
+     * Obtenir un token valide via le service OAuth
      */
     async getValidToken() {
-        const token = import.meta.env.VITE_METEO_MANUAL_TOKEN;
-        if (!token) {
-            throw new Error('Token non trouvé. Vérifiez les variables d environnement sur Vercel : VITE_METEO_MANUAL_TOKEN');
+        try {
+            return await meteoAuth.getValidToken();
+        } catch (error) {
+            console.error('[MeteoCollector] ❌ Impossible d\'obtenir un token OAuth:', error);
+            // Fallback sur le token manuel si présent (pour compatibilité temporaire)
+            const manualToken = import.meta.env.VITE_METEO_MANUAL_TOKEN;
+            if (manualToken) return manualToken;
+            throw error;
         }
-        return token;
     }
 
     /**
