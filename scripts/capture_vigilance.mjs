@@ -96,25 +96,29 @@ async function captureScope(page, regionId, periodId, suffix) {
     console.log(`⏳ [${scopeName}] [${suffix}] Chargement: ${targetUrl}`);
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     
-    // On attend un peu que les composants React se stabilisent
-    await new Promise(r => setTimeout(r, 5000));
+    // On attend 10 secondes pour que React et les GeoData soient totalement chargés et rendus
+    await new Promise(r => setTimeout(r, 10000));
+
 
     // Attendre le sélecteur spécifique de la carte
     try {
-        await page.waitForSelector('#vigilance-social-card', { timeout: 20000 });
-        console.log(`✅ Carte détectée pour ${scopeName}`);
+        await page.waitForSelector('#vigilance-social-card', { timeout: 30000 });
+        const title = await page.$eval('#vigilance-social-card h1', el => el.innerText);
+        console.log(`✅ [${scopeName}] Carte détectée avec titre : "${title}"`);
     } catch (e) {
         console.log(`⚠️ Carte non détectée via sélecteur, tentative d'injection CSS quand même...`);
     }
 
-
     // Injection CSS (Masquer tout sauf le conteneur de capture)
     const baseStyle = `
-        .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside, .status-pill, .status-pill-new, .social-badges-overlay-bottom, .social-phenoms-footer-alt, .tabs-official, .dept-selector-inline { display: none !important; }
+        .sidebar, .sidebar-card, .no-capture, .navbar, .top-nav, aside, .status-pill, .status-pill-new, .social-badges-overlay-bottom, .social-phenoms-footer-alt, .tabs-official, .dept-selector-inline, .mobile-header { display: none !important; }
         .social-capture-container { display: block !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 1200px !important; height: 1500px !important; z-index: 999999 !important; background: white !important; margin: 0 !important; padding: 0 !important; }
         body, html { background: white !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; width: 1200px !important; height: 1500px !important; }
     `;
     await page.addStyleTag({ content: baseStyle });
+
+    // Attendre encore 1s après l'injection CSS
+    await new Promise(r => setTimeout(r, 1000));
 
     // --- VERSION 1: CARTE SEULE (SANS TITRE) ---
     await page.addStyleTag({ content: '.social-fb-header { display: none !important; } .social-fb-body { padding-top: 0 !important; } .social-fb-map-area { margin-top: -100px !important; }' });
