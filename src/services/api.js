@@ -34,10 +34,15 @@ export const weatherAPI = {
 
             const { data, error } = await query
                 .order('timestamp', { ascending: false })
-                .limit(1000); // Augmenté à 1000 pour couvrir largement 24h et placé après order
-            if (error) throw error;
+                .limit(400); // Réduit de 1000 à 400 pour éviter les Timeouts Supabase (400 pts = 40h, suffisant pour 24h)
+            
+            if (error) {
+                console.error(`[API] Error fetching history for ${stationId}:`, error);
+                throw error;
+            }
 
             let finalData = data || [];
+            console.log(`[API] Fetched ${finalData.length} records for ${stationId}`);
 
             // FALLBACK ARCHIVES
             if (dateObj && finalData.length === 0) {
