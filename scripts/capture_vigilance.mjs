@@ -5,7 +5,9 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 // Charge les variables d'environnement (local ou GitHub Actions)
+// Déclencheur manuel de capture : 30 avril 2026 - 16:31
 dotenv.config({ path: '.env.local' });
+
 
 // Accepte VITE_SUPABASE_URL ou SUPABASE_URL (compatibilité GitHub Actions)
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -92,14 +94,19 @@ async function captureScope(page, regionId, periodId, suffix) {
     const targetUrl = `${CONFIG.baseUrl}/vigilance?period=${periodId}${regionId ? `&region=${regionId}` : ''}`;
     
     console.log(`⏳ [${scopeName}] [${suffix}] Chargement: ${targetUrl}`);
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    
+    // On attend un peu que les composants React se stabilisent
+    await new Promise(r => setTimeout(r, 5000));
 
-    // Attendre le sélecteur
+    // Attendre le sélecteur spécifique de la carte
     try {
-        await page.waitForSelector('#vigilance-social-card', { timeout: 15000 });
+        await page.waitForSelector('#vigilance-social-card', { timeout: 20000 });
+        console.log(`✅ Carte détectée pour ${scopeName}`);
     } catch (e) {
-        console.log(`⚠️ Timeout sélecteur, tentative d'injection brute...`);
+        console.log(`⚠️ Carte non détectée via sélecteur, tentative d'injection CSS quand même...`);
     }
+
 
     // Injection CSS (Masquer tout sauf le conteneur de capture)
     const baseStyle = `

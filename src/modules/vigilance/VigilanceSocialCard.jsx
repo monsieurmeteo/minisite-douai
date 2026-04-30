@@ -9,12 +9,34 @@ const OFFICIAL_COLORS = {
     4: '#d32f2f', // Rouge plus profond
 };
 
-const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms }) => {
-    // 1. Dédoublonnage des données (Garder uniquement l'entrée la plus récente par département)
+const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms, regionId = null }) => {
+    // Liste des régions pour le filtrage
+    const REGIONS = [
+        { id: 'ARA', name: 'Auvergne-Rhône-Alpes', deps: ['01', '03', '07', '15', '26', '38', '42', '43', '63', '69', '73', '74'] },
+        { id: 'BFC', name: 'Bourgogne-Franche-Comté', deps: ['21', '25', '39', '58', '70', '71', '89', '90'] },
+        { id: 'BRE', name: 'Bretagne', deps: ['22', '29', '35', '56'] },
+        { id: 'CVL', name: 'Centre-Val de Loire', deps: ['18', '28', '36', '37', '41', '45'] },
+        { id: 'COR', name: 'Corse', deps: ['2A', '2B'] },
+        { id: 'GES', name: 'Grand Est', deps: ['08', '10', '51', '52', '54', '55', '57', '67', '68', '88'] },
+        { id: 'HDF', name: 'Hauts-de-France', deps: ['02', '59', '60', '62', '80'] },
+        { id: 'IDF', name: 'Île-de-France', deps: ['75', '77', '78', '91', '92', '93', '94', '95'] },
+        { id: 'NOR', name: 'Normandie', deps: ['14', '27', '50', '61', '76'] },
+        { id: 'NAQ', name: 'Nouvelle-Aquitaine', deps: ['16', '17', '19', '23', '24', '33', '40', '47', '64', '79', '86', '87'] },
+        { id: 'OCC', name: 'Occitanie', deps: ['09', '11', '12', '30', '31', '32', '34', '46', '48', '65', '66', '81', '82'] },
+        { id: 'PDL', name: 'Pays de la Loire', deps: ['44', '49', '53', '72', '85'] },
+        { id: 'PAC', name: 'Provence-Alpes-Côte d\'Azur', deps: ['04', '05', '06', '13', '83', '84'] },
+    ];
+
+    const regionConfig = regionId ? REGIONS.find(r => r.id === regionId) : null;
+
+    // 1. Dédoublonnage des données
     const activeVigilanceMap = new Map();
     vigilanceData.forEach(d => {
         const depCode = d.dep_code?.toString().trim();
         if (d.period === period && depCode && !['FRA', '99', 'METRO', '00'].includes(depCode)) {
+            // Si on est en mode région, on ne garde que les départements de la région
+            if (regionConfig && !regionConfig.deps.includes(depCode)) return;
+
             const existing = activeVigilanceMap.get(depCode);
             if (!existing || new Date(d.last_update) > new Date(existing.last_update)) {
                 activeVigilanceMap.set(depCode, d);
@@ -28,7 +50,6 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
     const activePhenomsList = [];
     phenoms.forEach(p => {
         [4, 3, 2].forEach(lvl => {
-            // On compte les départements où CE phénomène précis est à CE niveau précis
             const count = activeVigilance.filter(d => {
                 const risk = d.risks?.find(r => r.id.toString() === p.id.toString());
                 return risk && parseInt(risk.level) === lvl;
@@ -45,15 +66,26 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
         });
     });
 
-    // Tri par gravité (Rouge > Orange > Jaune)
     activePhenomsList.sort((a, b) => b.maxLvl - a.maxLvl);
-
-    // Phénomène principal pour le titre
     const mainPhenomName = activePhenomsList.length > 0 ? activePhenomsList[0].name.toUpperCase() : "MÉTÉOROLOGIQUE";
 
-    // Projection optimisée pour verticalité
-    const projection = geoConicConformal().fitSize([1100, 1100], geoData);
-    const pathGenerator = geoPath().projection(projection);
+    // 3. Filtrage des GeoData pour le zoom régional
+    const filteredFeatures = React.useMemo(() => {
+        if (!geoData) return [];
+        if (!regionConfig) return geoData.features;
+        return geoData.features.filter(f => regionConfig.deps.includes(f.properties.code));
+    }, [geoData, regionConfig]);
+
+    // Projection optimisée (Zoome si région sélectionnée)
+    const projection = React.useMemo(() => {
+        if (!geoData || filteredFeatures.length === 0) return null;
+        return geoConicConformal().fitSize([1100, 1100], {
+            type: 'FeatureCollection',
+            features: filteredFeatures
+        });
+    }, [geoData, filteredFeatures]);
+
+    const pathGenerator = React.useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);
 
     const mapData = {};
     activeVigilance.forEach(d => {
@@ -70,7 +102,6 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
         }).format(date);
     };
 
-    // On cherche l'heure de début de validité dans les données pour être ultra-précis sur la date affichée
     const now = new Date();
     const fallbackDate = new Date(now);
     if (period === 1) fallbackDate.setDate(now.getDate() + 1);
@@ -80,32 +111,18 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
 
     const targetDateFullStr = getParisDate(effectiveDate);
 
-    const dateStr = lastUpdate ? new Intl.DateTimeFormat('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'Europe/Paris'
-    }).format(new Date(lastUpdate)) : "";
-
-    const timeStr = lastUpdate ? new Intl.DateTimeFormat('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Europe/Paris'
-    }).format(new Date(lastUpdate)) : "";
-
     const headerClass = maxLevel === 4 ? 'bg-red-deep' : maxLevel === 3 ? 'bg-orange-vibrant' : maxLevel === 2 ? 'bg-yellow-bright' : 'bg-green-safe';
 
     return (
         <div className="social-fb-container">
             <div id="vigilance-social-card" className="social-fb-card">
-                {/* 🔝 BLOC 1 - BANDEAU TITRE DYNAMIQUE AVEC DATE ET PHÉNOMÈNE */}
                 <div className={`social-fb-header ${headerClass}`}>
                     <div className="header-top-line">
                         <ShieldAlert size={40} className="header-icon" />
-                        <h1>⚠️ CARTE DE VIGILANCE DU {targetDateFullStr.toUpperCase()}</h1>
+                        <h1>⚠️ VIGILANCE {regionConfig ? regionConfig.name.toUpperCase() : 'NATIONALE'} - {targetDateFullStr.toUpperCase()}</h1>
                     </div>
                     <div className="header-bottom-line">
-                        <span>VIGILANCE {mainPhenomName}</span>
+                        <span>{activePhenomsList.length > 0 ? `RISQUE PRINCIPAL : ${mainPhenomName}` : 'SITUATION CALME'}</span>
                     </div>
                 </div>
 
@@ -124,7 +141,7 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                                 </feMerge>
                             </filter>
                             <g filter="url(#shadow-deep)">
-                                {geoData?.features.map(f => {
+                                {filteredFeatures.map(f => {
                                     const code = f.properties.code;
                                     const level = mapData[code] || 1;
                                     return (
@@ -141,7 +158,6 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                             </g>
                         </svg>
 
-                        {/* Légende Bas Gauche (dans la carte) */}
                         <div className="fb-legend-minimal">
                             {[1, 2, 3, 4].map(lvl => (
                                 <div key={lvl} className="legend-item">
@@ -151,7 +167,6 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                             ))}
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -159,3 +174,4 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
 };
 
 export default VigilanceSocialCard;
+
