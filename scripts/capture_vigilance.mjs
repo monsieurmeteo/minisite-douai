@@ -53,22 +53,49 @@ const REGIONS = [
 async function captureAndUpload() {
     console.log('\n📸 CAPTURE VIGILANCE (FRANCE & RÉGIONS)\n');
 
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
-    });
-    try {
-        const page = await browser.newPage();
+    const periods = [
+        { id: 0, suffix: 'today' },
+        { id: 1, suffix: 'tomorrow' }
+    ];
+
+    for (const period of periods) {
+        // 1. Capture France nationale
+        const browser1 = await puppeteer.launch({
+            headless: "new",
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
+        });
+        try {
+            const page = await browser1.newPage();
+            await page.setViewport(CONFIG.viewport);
+            await captureScope(page, null, period.id, period.suffix);
+        } catch (e) {
+            console.error(`❌ Erreur France [${period.suffix}]:`, e.message);
+        } finally {
+            await browser1.close();
         }
 
-        console.log(`\n✅ TOUTES LES CAPTURES RÉUSSIES!\n`);
-
-    } catch (error) {
-        console.error(`❌ Erreur globale:`, error.message);
-    } finally {
-        await browser.close();
+        // 2. Capture chaque région (navigateur frais pour chaque région)
+        for (const region of REGIONS) {
+            console.log(`\n📍 CAPTURE RÉGION: ${region.name} (${region.id})`);
+            const browser2 = await puppeteer.launch({
+                headless: "new",
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
+            });
+            try {
+                const page = await browser2.newPage();
+                await page.setViewport(CONFIG.viewport);
+                await captureScope(page, region.id, period.id, period.suffix);
+            } catch (e) {
+                console.error(`❌ Erreur ${region.id} [${period.suffix}]:`, e.message);
+            } finally {
+                await browser2.close();
+            }
+        }
     }
+
+    console.log(`\n✅ TOUTES LES CAPTURES TERMINÉES!\n`);
 }
+
 
 async function captureScope(page, regionId, periodId, suffix) {
     const scopeName = regionId ? `vigilance_region_${regionId}` : 'vigilance_france';
