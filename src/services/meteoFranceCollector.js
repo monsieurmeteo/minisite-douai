@@ -546,14 +546,11 @@ class MeteoFranceCollector {
 // Instance singleton
 export const meteoCollector = new MeteoFranceCollector();
 
-// Auto-démarrage au chargement
+// Auto-démarrage au chargement (DÉSACTIVÉ en production pour éviter les prompts Auth sur Chrome)
+// La collecte doit être gérée par les workflows GitHub Actions et non par le client.
 if (typeof window !== 'undefined') {
     meteoCollector.loadHistoryFromStorage();
-    // Toujours démarrer la collecte pour activer la boucle de mise à jour (et l'archivage)
-    // Le collecteur gère lui-même pour ne pas lancer deux intervalles.
-    setTimeout(() => {
-        meteoCollector.startAutoCollection();
-    }, 1000);
 }
+
 
 export default meteoCollector;
