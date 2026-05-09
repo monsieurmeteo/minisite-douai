@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 //   qui n'auraient pas été supprimées (ex: archive en échec)
 // - Limite haute : 700 000 lignes (≈ 1.5 jours × 2000 postes)
 // =========================================================
-const MAX_ROWS_OBSERVATIONS = 700_000;   // Limite haute de sécurité
+const MAX_ROWS_OBSERVATIONS = 1_500_000;   // Limite augmentée pour confort (≈ 3 jours de données)
 const ARCHIVE_THRESHOLD_HOURS = 24;      // Sécurité : on ne touche pas aux dernières 24h (laisse le temps au cron d'archiver)
 
 async function cleanupIfNeeded() {
@@ -94,7 +94,7 @@ async function localSync() {
 
     console.log(`\n📡 Téléchargement des observations de la journée (${today})...`);
     
-    const BATCH = 5000;
+    const BATCH = 1000;
     let allRows = [];
     let from = 0;
     let hasMore = true;
