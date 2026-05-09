@@ -32,7 +32,7 @@ async function runCronArchive() {
         }
 
         const oldestDate = new Date(oldestData[0].timestamp);
-        const stopDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); 
+        const stopDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // Seuil à J-1 (24h) au lieu de J-2
 
         console.log(`[CRON ARCHIVE] Plus vieux record : ${oldestDate.toISOString()}`);
         console.log(`[CRON ARCHIVE] Seuil d'archivage (J-2) : ${stopDate.toISOString()}`);
