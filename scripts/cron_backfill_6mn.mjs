@@ -81,9 +81,6 @@ async function runCronBackfill() {
                         ff: s.ff,
                         fxi: s.fxi10 || s.fxi,
                         rr_per: s.rr_per,
-                        insolh: s.insolh,
-                        ht_neige: s.ht_neige,
-                        pres: s.pres,
                         created_at: new Date().toISOString()
                     })).filter(r => r.t !== null); // On ne garde que les stations avec au moins la temp
                     

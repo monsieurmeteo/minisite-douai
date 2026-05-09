@@ -86,9 +86,6 @@ async function recoverData() {
                         ff: s.ff,
                         fxi: s.fxi10 || s.fxi,
                         rr_per: s.rr_per,
-                        insolh: s.insolh,
-                        ht_neige: s.ht_neige,
-                        pres: s.pres,
                         created_at: new Date().toISOString()
                     })).filter(r => r.t !== null);
                     
