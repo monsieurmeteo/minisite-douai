@@ -63,7 +63,7 @@ async function archiveDay(targetDate) {
     }
 
     // 2. Fetch data and save to a temporary file to avoid RAM issues
-    const BATCH_SIZE = 5000;
+    const BATCH_SIZE = 1000;
     let from = 0;
     let hasMore = true;
     let totalRows = 0;
