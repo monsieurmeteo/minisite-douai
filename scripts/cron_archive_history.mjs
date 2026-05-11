@@ -43,7 +43,26 @@ async function runCronArchive() {
         while (currentDate < stopDate) {
             const dateStr = currentDate.toISOString().split('T')[0];
             console.log(`\n[CRON ARCHIVE] Traitement de la journée : ${dateStr}`);
-            await archiveDay(dateStr);
+            
+            // On traite la journée par tranches de 6h pour éviter les fichiers trop gros (>50Mo)
+            const SLICES = [
+                { id: '00-06', start: '00:00:00Z', end: '05:59:59Z' },
+                { id: '06-12', start: '06:00:00Z', end: '11:59:59Z' },
+                { id: '12-18', start: '12:00:00Z', end: '17:59:59Z' },
+                { id: '18-00', start: '18:00:00Z', end: '23:59:59Z' }
+            ];
+
+            let daySuccess = true;
+            for (const slice of SLICES) {
+                const success = await archiveSlice(dateStr, slice);
+                if (!success) daySuccess = false;
+            }
+
+            if (daySuccess) {
+                console.log(`   ✅ Journée ${dateStr} entièrement archivée.`);
+                await cleanupDaySQL(dateStr);
+            }
+
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
         }
 
@@ -54,33 +73,26 @@ async function runCronArchive() {
     }
 }
 
-async function archiveDay(targetDate) {
-    // 1. Sync daily summaries
-    console.log(`   -> Synchronisation des statistiques quotidiennes (batch_sync)...`);
-    const { error: syncError } = await supabase.rpc('batch_sync_daily_summaries', { target_date: targetDate });
-    if (syncError) {
-        console.warn(`      ⚠️ Avertissement batch_sync: ${syncError.message}`);
-    }
-
-    // 2. Fetch data and save to a temporary file to avoid RAM issues
+async function archiveSlice(targetDate, slice) {
+    console.log(`   -> Archivage tranche ${slice.id}h (${slice.start} - ${slice.end})...`);
+    
+    // 1. Fetch data
     const BATCH_SIZE = 1000;
     let from = 0;
     let hasMore = true;
     let totalRows = 0;
     
-    const tempFilePath = path.join(process.cwd(), `temp_archive_${targetDate}.json`);
+    const tempFilePath = path.join(process.cwd(), `temp_archive_${targetDate}_${slice.id}.json`);
     const writeStream = fs.createWriteStream(tempFilePath);
     writeStream.write('[');
     let isFirst = true;
 
-    console.log(`   -> Téléchargement et création du fichier JSON en local...`);
-    
     while (hasMore) {
         const { data, error } = await supabase
             .from('observations_6mn')
             .select('*')
-            .gte('timestamp', `${targetDate}T00:00:00Z`)
-            .lt('timestamp', `${targetDate}T23:59:59Z`)
+            .gte('timestamp', `${targetDate}T${slice.start}`)
+            .lte('timestamp', `${targetDate}T${slice.end}`)
             .range(from, from + BATCH_SIZE - 1)
             .order('timestamp', { ascending: true });
 
@@ -112,9 +124,9 @@ async function archiveDay(targetDate) {
     });
 
     if (totalRows > 0) {
-        console.log(`   -> ${totalRows} lignes trouvées. Upload vers Supabase Storage...`);
+        console.log(`      ✅ ${totalRows} lignes trouvées. Upload...`);
         const [y, m, d] = targetDate.split('-');
-        const filePath = `6mn/${y}/${m}/${d}.json`;
+        const filePath = `6mn/${y}/${m}/${d}/${slice.id}.json`;
         
         const fileBuffer = fs.readFileSync(tempFilePath);
         const { error: uploadError } = await supabase.storage
@@ -125,33 +137,32 @@ async function archiveDay(targetDate) {
             fs.unlinkSync(tempFilePath);
             throw uploadError;
         }
-
-        console.log(`   -> Fichier sauvegardé. Suppression SQL progressive...`);
-        
-        // Suppression par tranches de 2h
-        for (let hour = 0; hour < 24; hour += 2) {
-            const hStart = `${hour.toString().padStart(2, '0')}:00:00Z`;
-            const hEnd = `${(hour + 2).toString().padStart(2, '0')}:00:00Z`;
-            
-            const { error: deleteError } = await supabase
-                .from('observations_6mn')
-                .delete()
-                .gte('timestamp', `${targetDate}T${hStart}`)
-                .lt('timestamp', `${targetDate}T${hEnd}`);
-                
-            if (deleteError) {
-                console.error(`      ❌ Erreur suppression tranche ${hStart}-${hEnd}`);
-                fs.unlinkSync(tempFilePath);
-                throw deleteError;
-            }
-        }
-        console.log(`   -> Journée ${targetDate} archivée et nettoyée.`);
     } else {
-        console.log(`   -> Aucune donnée pour le ${targetDate}.`);
+        console.log(`      ℹ️ Aucune donnée pour cette tranche.`);
     }
 
     if (fs.existsSync(tempFilePath)) {
         fs.unlinkSync(tempFilePath);
+    }
+    return true;
+}
+
+async function cleanupDaySQL(targetDate) {
+    console.log(`   -> Nettoyage SQL pour le ${targetDate}...`);
+    for (let hour = 0; hour < 24; hour += 2) {
+        const hStart = `${hour.toString().padStart(2, '0')}:00:00Z`;
+        const hEnd = `${(hour + 2).toString().padStart(2, '0')}:00:00Z`;
+        
+        const { error: deleteError } = await supabase
+            .from('observations_6mn')
+            .delete()
+            .gte('timestamp', `${targetDate}T${hStart}`)
+            .lt('timestamp', `${targetDate}T${hEnd}`);
+            
+        if (deleteError) {
+            console.error(`      ❌ Erreur suppression tranche ${hStart}-${hEnd}`);
+            throw deleteError;
+        }
     }
 }
 

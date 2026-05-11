@@ -44,22 +44,32 @@ export const weatherAPI = {
             let finalData = data || [];
             console.log(`[API] Fetched ${finalData.length} records for ${stationId}`);
 
-            // FALLBACK ARCHIVES
+            // FALLBACK ARCHIVES (Slices 00-06, 06-12, 12-18, 18-00)
             if (dateObj && finalData.length === 0) {
                 try {
                     const y = dateObj.getFullYear();
                     const m = String(dateObj.getMonth() + 1).padStart(2, '0');
                     const d = String(dateObj.getDate()).padStart(2, '0');
-                    const filePath = `6mn/${y}/${m}/${d}.json`;
+                    const slices = ['00-06', '06-12', '12-18', '18-00'];
+                    
+                    const slicePromises = slices.map(async (sliceId) => {
+                        const filePath = `6mn/${y}/${m}/${d}/${sliceId}.json`;
+                        const { data: storageData, error: storageError } = await supabase.storage
+                            .from('observations-archives')
+                            .download(filePath);
+                        
+                        if (!storageError && storageData) {
+                            const text = await storageData.text();
+                            return JSON.parse(text);
+                        }
+                        return [];
+                    });
 
-                    const { data: storageData, error: storageError } = await supabase.storage
-                        .from('observations-archives')
-                        .download(filePath);
+                    const allSlicesData = await Promise.all(slicePromises);
+                    const mergedData = allSlicesData.flat();
 
-                    if (!storageError && storageData) {
-                        const text = await storageData.text();
-                        const json = JSON.parse(text);
-                        finalData = json.filter(obs => obs.station_id === stationId);
+                    if (mergedData.length > 0) {
+                        finalData = mergedData.filter(obs => obs.station_id === stationId);
                         finalData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     }
                 } catch (err) {
@@ -83,7 +93,9 @@ export const weatherAPI = {
                 dir: obs.dd,
                 dewpoint: obs.td,
                 pressure: obs.pres,
-                vv: obs.vv
+                vv: obs.vv,
+                sun: obs.insolh,
+                snow_depth: obs.ht_neige
             })).reverse();
         } catch (e) {
             console.error("[API] getStation6mnHistory error:", e);
