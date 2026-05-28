@@ -207,11 +207,6 @@ const WindGustMap = () => {
 
                         stationList = Array.from(uniqueStations.values());
 
-                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                            const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
-                        }
-
                         console.log(`[WindGustMap] ${stationList.length} stations temps réel uniques.`);
                     }
                 } else {
@@ -295,11 +290,6 @@ const WindGustMap = () => {
 
                         stationList = Array.from(uniqueStations.values());
 
-                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                            const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
-                        }
-
                         console.log(`[Diagnostic] ${stationList.length} stations uniques après regroupement.`);
                     }
                 }
@@ -345,7 +335,7 @@ const WindGustMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime, selectedRegionName, windMode]);
+    }, [selectedDate, isRealTime, windMode]);
 
     // Auto-refresh in real-time mode every 3 minutes
     useEffect(() => {
@@ -387,22 +377,30 @@ const WindGustMap = () => {
         return geoData.features.map(f => pathGenerator(f)).join(" ");
     }, [geoData, regionsGeoData, selectedRegionName, pathGenerator]);
 
+    // Filtrage synchrone des stations par région pour éliminer les flashs visuels
+    const visibleStations = useMemo(() => {
+        if (selectedRegionName === "France" || !REGIONS[selectedRegionName]) return stations;
+        const regionDepts = REGIONS[selectedRegionName];
+        return stations.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+    }, [stations, selectedRegionName]);
+
     // Générer les cellules de Voronoi (Pour le mode standard)
     const voronoiCells = useMemo(() => {
-        if (!projection || !stations.length) return [];
+        if (!projection || !visibleStations.length) return [];
         // On projette les stations filtrées
-        const points = stations.map(s => projection([s.lon, s.lat]));
+        const points = visibleStations.map(s => projection([s.lon, s.lat]));
         const delaunay = Delaunay.from(points);
         const voronoi = delaunay.voronoi([0, 0, WIDTH, HEIGHT]);
-        return stations.map((s, i) => ({
+        return visibleStations.map((s, i) => ({
             station: s,
             path: voronoi.renderCell(i)
         }));
-    }, [projection, stations]);
+    }, [projection, visibleStations]);
 
     // --- MOTEUR D'INTERPOLATION POUR LE MODE LISSAGE (Style Modèle Météo) ---
     const interpolatedGrid = useMemo(() => {
-        if (!isSmooth || stations.length < 20 || !projection) return null;
+        // Pour les petites régions, on réduit le seuil de stations requis à 5 au lieu de 20
+        if (!isSmooth || visibleStations.length < 5 || !projection) return null;
 
         const gridResX = 60; // Résolution augmentée pour plus de finesse
         const gridResY = 55;
@@ -420,7 +418,7 @@ const WindGustMap = () => {
                 let valueSum = 0;
 
                 // Algorithme IDW avec puissance 3 pour des contours beaucoup plus nets (bulles)
-                stations.forEach(s => {
+                visibleStations.forEach(s => {
                     const dx = s.lon - geoCoords[0];
                     const dy = s.lat - geoCoords[1];
                     const d2 = dx * dx + dy * dy;
@@ -450,7 +448,7 @@ const WindGustMap = () => {
             }
         }
         return grid;
-    }, [isSmooth, stations, projection]);
+    }, [isSmooth, visibleStations, projection]);
 
     const handleExport = () => {
         const el = document.getElementById("wind-map-container");
@@ -711,7 +709,7 @@ const WindGustMap = () => {
                             />
 
                             <g>
-                                {stations.map(s => {
+                                {visibleStations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
                                     return (
@@ -832,8 +830,8 @@ const WindGustMap = () => {
                             <Wind size={18} style={{ color: windMode === 'direct' ? '#10b981' : '#3b82f6' }} /> Top Rafales
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
-                            {stations.length > 0 ? (
-                                [...stations].sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
+                                {visibleStations.length > 0 ? (
+                                    [...visibleStations].sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
                                     <div key={s.id} style={{
                                         display: 'flex',
                                         justifyContent: 'space-between',

@@ -220,11 +220,6 @@ const RainfallMap = () => {
 
                         stationList = Array.from(uniqueStations.values());
 
-                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                            const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
-                        }
-
                         console.log(`[RainfallMap] ${stationList.length} stations temps réel uniques.`);
                     }
                 } else {
@@ -308,11 +303,6 @@ const RainfallMap = () => {
 
                         stationList = Array.from(uniqueStations.values());
 
-                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                            const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
-                        }
-
                         console.log(`[RainfallMap] ${stationList.length} stations uniques après regroupement.`);
                     }
                 }
@@ -358,7 +348,7 @@ const RainfallMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime, selectedRegionName, rainMode]);
+    }, [selectedDate, isRealTime, rainMode]);
 
     // Auto-refresh in real-time mode every 3 minutes
     useEffect(() => {
@@ -390,19 +380,27 @@ const RainfallMap = () => {
         return geoData.features.map(f => pathGenerator(f)).join(" ");
     }, [geoData, regionsGeoData, selectedRegionName, pathGenerator]);
 
+    // Filtrage synchrone des stations par région pour éliminer les flashs visuels
+    const visibleStations = useMemo(() => {
+        if (selectedRegionName === "France" || !REGIONS[selectedRegionName]) return stations;
+        const regionDepts = REGIONS[selectedRegionName];
+        return stations.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+    }, [stations, selectedRegionName]);
+
     const voronoiCells = useMemo(() => {
-        if (!projection || !stations.length) return [];
-        const points = stations.map(s => projection([s.lon, s.lat]));
+        if (!projection || !visibleStations.length) return [];
+        const points = visibleStations.map(s => projection([s.lon, s.lat]));
         const delaunay = Delaunay.from(points);
         const voronoi = delaunay.voronoi([0, 0, WIDTH, HEIGHT]);
-        return stations.map((s, i) => ({
+        return visibleStations.map((s, i) => ({
             station: s,
             path: voronoi.renderCell(i)
         }));
-    }, [projection, stations]);
+    }, [projection, visibleStations]);
 
     const interpolatedGrid = useMemo(() => {
-        if (!isSmooth || stations.length < 20 || !projection) return null;
+        // Pour les petites régions, on réduit le seuil de stations requis à 5 au lieu de 20
+        if (!isSmooth || visibleStations.length < 5 || !projection) return null;
 
         const gridResX = 60;
         const gridResY = 55;
@@ -419,7 +417,7 @@ const RainfallMap = () => {
                 let weightSum = 0;
                 let valueSum = 0;
 
-                stations.forEach(s => {
+                visibleStations.forEach(s => {
                     const dx = s.lon - geoCoords[0];
                     const dy = s.lat - geoCoords[1];
                     const d2 = dx * dx + dy * dy;
@@ -447,7 +445,7 @@ const RainfallMap = () => {
             }
         }
         return grid;
-    }, [isSmooth, stations, projection]);
+    }, [isSmooth, visibleStations, projection]);
 
     const handleExport = () => {
         const el = document.getElementById("rain-map-container");
@@ -673,7 +671,7 @@ const RainfallMap = () => {
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
                             <g>
-                                {stations.map(s => {
+                                {visibleStations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
                                     return (
@@ -792,8 +790,8 @@ const RainfallMap = () => {
                             <Droplets size={18} style={{ color: '#0ea5e9' }} /> {rainMode === 'cumul' ? 'Top Cumuls' : 'Top Intensités'}
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
-                            {stations.filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).length > 0 ? (
-                                [...stations].filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
+                            {visibleStations.filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).length > 0 ? (
+                                [...visibleStations].filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
                                     <div key={s.id} style={{
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                         padding: '8px 0', borderBottom: i === 14 ? 'none' : '1px solid #f1f5f9'
