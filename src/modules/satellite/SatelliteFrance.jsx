@@ -16,12 +16,42 @@ const SatelliteFrance = () => {
     const [isPlaying, setIsPlaying] = useState(true);
     const [layerType, setLayerType] = useState('infrared'); // 'infrared', 'radar', 'visible', 'natural'
     const [loading, setLoading] = useState(true);
+    const [preloadProgress, setPreloadProgress] = useState(0); // 0-100 pour preload
+    const [isPreloading, setIsPreloading] = useState(false);
     const timerRef = useRef(null);
+    const preloadedImages = useRef({}); // Cache des images préchargées
+
+    // Préchargement de toutes les images pour une animation sans blanc
+    const preloadImages = async (frames, isRadar) => {
+        setIsPreloading(true);
+        setPreloadProgress(0);
+        const cache = {};
+        const total = frames.length;
+
+        await Promise.all(frames.map((ts, i) => {
+            return new Promise((resolve) => {
+                const url = `https://tilecache.rainviewer.com${ts.path}/256/4/8/5/${isRadar ? '2' : '0'}/1_1.png`;
+                const img = new Image();
+                img.onload = img.onerror = () => {
+                    cache[ts.time] = img;
+                    setPreloadProgress(Math.round(((i + 1) / total) * 100));
+                    resolve();
+                };
+                img.src = url;
+            });
+        }));
+
+        preloadedImages.current = cache;
+        setIsPreloading(false);
+        return cache;
+    };
 
     // Chargement des données - RainViewer ou fallback EUMETSAT animé
     useEffect(() => {
         setLoading(true);
         setIsPlaying(false);
+        setTimestamps([]);
+        preloadedImages.current = {};
 
         // Pour visible et natural, on utilise EUMETSAT statique
         if (layerType === 'visible' || layerType === 'natural') {
@@ -33,7 +63,7 @@ const SatelliteFrance = () => {
         // Essayer RainViewer d'abord
         fetch('https://api.rainviewer.com/public/weather-maps.json')
             .then(res => res.json())
-            .then(data => {
+            .then(async data => {
                 let frames = [];
 
                 if (layerType === 'infrared' && data.satellite?.infrared) {
@@ -43,16 +73,19 @@ const SatelliteFrance = () => {
                 }
 
                 if (frames.length > 0) {
-                    // RainViewer a des données
-                    const recentFrames = frames.slice(-12);
+                    // Prendre les 18 dernières frames (environ 3h pour infrarouge à ~10min)
+                    const recentFrames = frames.slice(-18);
                     setTimestamps(recentFrames);
+
+                    // Précharger les images pour éviter les blancs à l'animation
+                    await preloadImages(recentFrames, layerType === 'radar');
+
                     setCurrentIndex(recentFrames.length - 1);
                     setIsPlaying(true);
                 } else if (layerType === 'infrared') {
                     // Pas de données RainViewer - utiliser EUMETSAT statique
                     console.log('📡 RainViewer indisponible, utilisation EUMETSAT statique');
                     setTimestamps([]);
-                    // Le fallback EUMETSAT WMS sera affiché automatiquement
                 } else {
                     setTimestamps([]);
                 }
@@ -65,19 +98,23 @@ const SatelliteFrance = () => {
             });
     }, [layerType]);
 
-    // Animation Player
+    // Animation Player — vitesse augmentée pour plus de fluidité
     useEffect(() => {
-        if (!isPlaying || timestamps.length === 0) {
+        if (!isPlaying || timestamps.length === 0 || isPreloading) {
             if (timerRef.current) clearTimeout(timerRef.current);
             return;
         }
 
+        const isLastFrame = currentIndex === timestamps.length - 1;
+        // Pause légère sur la dernière frame, sinon 500ms
+        const delay = isLastFrame ? 1800 : 500;
+
         timerRef.current = setTimeout(() => {
             setCurrentIndex((prev) => (prev === timestamps.length - 1 ? 0 : prev + 1));
-        }, 600); // 600ms par intervalle
+        }, delay);
 
         return () => clearTimeout(timerRef.current);
-    }, [isPlaying, currentIndex, timestamps]);
+    }, [isPlaying, currentIndex, timestamps, isPreloading]);
 
     const currentTs = timestamps[currentIndex];
 
@@ -85,6 +122,14 @@ const SatelliteFrance = () => {
     const formatTime = (ts) => {
         if (!ts) return '--:--';
         return new Date(ts.time * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Formatage date complète
+    const formatDateTime = (ts) => {
+        if (!ts) return '--';
+        const d = new Date(ts.time * 1000);
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' +
+            d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     };
 
     return (
@@ -97,6 +142,7 @@ const SatelliteFrance = () => {
                         className={`btn-compact ${isPlaying ? 'active' : ''}`}
                         onClick={() => setIsPlaying(true)}
                         title="Lecture"
+                        disabled={isPreloading || timestamps.length === 0}
                     >
                         <Play size={16} fill="currentColor" />
                     </button>
@@ -108,7 +154,8 @@ const SatelliteFrance = () => {
                         <Square size={16} fill="currentColor" />
                     </button>
                     <div className="step-group">
-                        <button className="btn-compact" onClick={() => { setIsPlaying(false); setCurrentIndex((prev) => (prev + 1) % timestamps.length); }}>
+                        <button className="btn-compact" onClick={() => { setIsPlaying(false); setCurrentIndex((prev) => (prev + 1) % timestamps.length); }}
+                            disabled={timestamps.length === 0}>
                             <ChevronRight size={20} />
                         </button>
                     </div>
@@ -122,6 +169,11 @@ const SatelliteFrance = () => {
                         <Clock size={14} />
                         <span>{formatTime(currentTs)}</span>
                     </div>
+                    {timestamps.length > 0 && (
+                        <div className="last-update-tag">
+                            {formatDateTime(timestamps[timestamps.length - 1])} • {timestamps.length} images
+                        </div>
+                    )}
                     <input
                         type="range"
                         min="0"
@@ -143,7 +195,7 @@ const SatelliteFrance = () => {
                     <button
                         className={`btn-compact ${layerType === 'infrared' ? 'active' : ''}`}
                         onClick={() => setLayerType('infrared')}
-                        title="Satellite Infrarouge"
+                        title="Satellite Infrarouge (~10 min)"
                         style={{ width: 'auto', padding: '0 8px', gap: '6px' }}
                     >
                         <Moon size={16} /> <span className="tiny-label" style={{ color: 'inherit' }}>Infrarouge</span>
@@ -175,12 +227,25 @@ const SatelliteFrance = () => {
                 </div>
             </div>
 
-            {/* Loader */}
+            {/* Loader initial */}
             {loading && (
                 <div className="radar-glass-loader">
                     <div className="loader-content">
                         <div className="spinner"></div>
                         <p>Chargement Satellite...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Loader préchargement */}
+            {isPreloading && !loading && (
+                <div className="radar-glass-loader">
+                    <div className="loader-content">
+                        <div className="spinner"></div>
+                        <p>Optimisation de l'animation... {preloadProgress}%</p>
+                        <div className="progress-bar-container" style={{ width: '200px' }}>
+                            <div className="progress-bar-fill" style={{ width: `${preloadProgress}%`, background: '#3b82f6' }}></div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -199,19 +264,19 @@ const SatelliteFrance = () => {
                             <BaseLayer checked name="Carto Dark">
                                 <TileLayer
                                     url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                                    attribution='&copy; CARTO'
+                                    attribution="&copy; CARTO"
                                 />
                             </BaseLayer>
                             <BaseLayer name="Satellite Hybride">
                                 <TileLayer
                                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                                    attribution='&copy; Esri'
+                                    attribution="&copy; Esri"
                                 />
                             </BaseLayer>
                             <BaseLayer name="OpenStreetMap">
                                 <TileLayer
                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    attribution='&copy; OSM'
+                                    attribution="&copy; OSM"
                                 />
                             </BaseLayer>
 
@@ -223,7 +288,7 @@ const SatelliteFrance = () => {
                             </Overlay>
                         </LayersControl>
 
-                        {/* COUCHES DYNAMIQUES */}
+                        {/* COUCHES DYNAMIQUES STATIQUES */}
                         {layerType === 'visible' && (
                             <WMSTileLayer
                                 url="https://eumetview.eumetsat.int/geoserver/wms"
@@ -261,11 +326,12 @@ const SatelliteFrance = () => {
                             />
                         )}
 
-                        {/* Animation RainViewer */}
+                        {/* Animation RainViewer — buffer étendu ±5 frames avec transition CSS */}
                         {timestamps.length > 0 && timestamps.map((ts, index) => {
                             const isVisible = index === currentIndex;
                             const isRadar = layerType === 'radar';
-                            const isBuffered = Math.abs(index - currentIndex) <= 4;
+                            // Buffer étendu : charger ±5 frames autour de l'index courant
+                            const isBuffered = Math.abs(index - currentIndex) <= 5;
                             if (!isBuffered) return null;
 
                             const url = `https://tilecache.rainviewer.com${ts.path}/256/{z}/{x}/{y}/${isRadar ? '2' : '0'}/1_1.png`;
@@ -274,12 +340,14 @@ const SatelliteFrance = () => {
                                 <TileLayer
                                     key={`${layerType}-${ts.time}`}
                                     url={url}
-                                    opacity={isVisible ? (isRadar ? 0.8 : 0.75) : 0}
-                                    zIndex={300}
+                                    opacity={isVisible ? (isRadar ? 0.82 : 0.78) : 0}
+                                    zIndex={isVisible ? 310 : 300}
                                     className="radar-tile-layer-pro"
                                     maxNativeZoom={7}
                                     maxZoom={20}
                                     tileSize={256}
+                                    updateWhenZooming={false}
+                                    keepBuffer={4}
                                 />
                             );
                         })}
@@ -306,14 +374,17 @@ const SatelliteFrance = () => {
                     </MapContainer>
 
                     {/* Légende */}
-                    <div className="map-legend-compact" style={{ width: 'auto', minWidth: '180px' }}>
+                    <div className="map-legend-compact" style={{ width: 'auto', minWidth: '200px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                             <Eye size={14} className="text-slate-500" />
                             <span className="tiny-label">LÉGENDE {layerType.toUpperCase()}</span>
                         </div>
                         {layerType === 'infrared' && (
-                            <div className="legend-numbers" style={{ display: 'block' }}>
-                                Blanc = Nuages froids (Hauts)<br />Gris = Nuages chauds (Bas)
+                            <div className="legend-numbers" style={{ display: 'block', lineHeight: '1.6' }}>
+                                Blanc = Nuages froids (Hauts)<br />Gris = Nuages chauds (Bas)<br />
+                                <span style={{ fontSize: '0.5rem', color: '#94a3b8', fontWeight: 600 }}>
+                                    ⏱ Image toutes les ~10 min
+                                </span>
                             </div>
                         )}
                         {layerType === 'radar' && (
@@ -325,7 +396,18 @@ const SatelliteFrance = () => {
                                     <span>Faible</span>
                                     <span>Intense</span>
                                 </div>
+                                <div style={{ fontSize: '0.5rem', color: '#94a3b8', fontWeight: 600, marginTop: '3px' }}>
+                                    ⏱ Image toutes les ~10 min
+                                </div>
                             </>
+                        )}
+                        {(layerType === 'visible' || layerType === 'natural') && (
+                            <div className="legend-numbers" style={{ display: 'block', lineHeight: '1.6' }}>
+                                Image EUMETSAT temps réel<br />
+                                <span style={{ fontSize: '0.5rem', color: '#94a3b8', fontWeight: 600 }}>
+                                    Source : EUMETSAT (statique)
+                                </span>
+                            </div>
                         )}
                     </div>
                 </div>

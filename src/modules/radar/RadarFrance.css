@@ -300,14 +300,24 @@
 .radar-tile-layer-pro {
     pointer-events: none;
     will-change: opacity;
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.2s ease-out;
+    image-rendering: auto;
 }
 
+.radar-tile-layer-pro.active {
+    /* Force le GPU pour la frame active */
+    transform: translateZ(0);
+}
 
-
-/* On désactive la transition par défaut de Leaflet qui peut causer des clignotements */
+/* On désactive la transition Leaflet générale qui peut causer des clignotements lors des reloads de tuiles */
 .leaflet-layer {
     transition: none !important;
+}
+
+/* Mais on garde la transition d'opacité sur les ImageOverlay radar */
+.leaflet-image-layer {
+    transition: opacity 0.2s ease-out !important;
+    will-change: opacity;
 }
 
 /* Radar Glass Loader */

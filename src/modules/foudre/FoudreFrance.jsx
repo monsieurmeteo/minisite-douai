@@ -232,14 +232,28 @@ const FoudreFrance = () => {
             const today = now.toLocaleDateString('sv-SE');
             const isLiveMode = !isRange && startDate === today;
 
-            console.log(`⚡ Fetching strikes for ${startDate} (Live 24h: ${isLiveMode})...`);
+            // Calcul dynamique de l'offset timezone (ex: UTC+2 en été, UTC+1 en hiver)
+            // getTimezoneOffset() retourne -120 en UTC+2, on veut "+02:00"
+            const tzOffsetMin = -now.getTimezoneOffset();
+            const tzSign = tzOffsetMin >= 0 ? '+' : '-';
+            const tzHours = String(Math.floor(Math.abs(tzOffsetMin) / 60)).padStart(2, '0');
+            const tzMins = String(Math.abs(tzOffsetMin) % 60).padStart(2, '0');
+            const tzString = `${tzSign}${tzHours}:${tzMins}`; // ex: "+02:00" en été
+
+            console.log(`⚡ Fetching strikes for ${startDate} (Live 24h: ${isLiveMode}, TZ: ${tzString})...`);
             let allData = [];
 
             if (isLiveMode) {
-                // En mode LIVE : récupérer aujourd'hui ET hier pour couvrir les 24h glissantes
-                const datesToFetch = [today, new Date(now.getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE')];
+                // En mode LIVE : récupérer aujourd'hui ET hier (+ avant-hier pour couvrir le cas UTC+2)
+                const datesToFetch = [
+                    today,
+                    new Date(now.getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE'),
+                    new Date(now.getTime() - 48 * 60 * 60 * 1000).toLocaleDateString('sv-SE')
+                ];
+                // Dédupliquer
+                const uniqueDates = [...new Set(datesToFetch)];
 
-                for (const date of datesToFetch) {
+                for (const date of uniqueDates) {
                     const ds = date.replace(/-/g, '');
                     const agateUrl = `/api-agate/ORAGE/orage/ws/wsOragesGMaps.php?date=${ds}&heureD=00&heureF=23&pass=jh2kH3,R&_=${Date.now()}`;
 
@@ -269,10 +283,13 @@ const FoudreFrance = () => {
                             console.log(`✅ ${apiData.length} impacts récupérés pour ${date}.`);
                             const parsed = apiData.map((s, i) => {
                                 const isoDate = (s.date || '').replace(/\//g, '-');
-                                const d = new Date(`${isoDate}T${s.heure}+01:00`);
+                                // Utiliser l'offset timezone dynamique (UTC+1 hiver, UTC+2 été)
+                                const d = new Date(`${isoDate}T${s.heure}${tzString}`);
+                                const localH = isNaN(d.getTime()) ? 0 : d.getHours();
                                 return {
                                     lat: parseFloat(s.lat), lon: parseFloat(s.lon),
-                                    time: d.getTime(), h: isNaN(d.getHours()) ? 0 : d.getHours(),
+                                    time: isNaN(d.getTime()) ? 0 : d.getTime(),
+                                    h: localH,
                                     isRecent: (Date.now() - d.getTime()) / 60000 < 15,
                                     id: `live-${date}-${i}`
                                 };
@@ -289,8 +306,8 @@ const FoudreFrance = () => {
                 if (allData.length > 0) {
                     const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
                     const before = allData.length;
-                    allData = allData.filter(s => s.time >= cutoff);
-                    console.log(`📊 Filtrage 24h: ${before} → ${allData.length} impacts`);
+                    allData = allData.filter(s => s.time > 0 && s.time >= cutoff);
+                    console.log(`📊 Filtrage 24h: ${before} → ${allData.length} impacts (TZ: ${tzString})`);
                 }
             }
 
@@ -311,9 +328,11 @@ const FoudreFrance = () => {
                     console.log(`✅ ${data.length} impacts récupérés depuis Supabase.`);
                     allData = data.map((s, i) => {
                         const d = new Date(s.strike_time);
+                        // Utiliser l'heure locale (adaptée au timezone du navigateur)
                         return {
                             lat: parseFloat(s.lat), lon: parseFloat(s.lon),
-                            time: d.getTime(), h: d.getHours(),
+                            time: d.getTime(),
+                            h: d.getHours(), // getHours() retourne l'heure locale
                             isRecent: (Date.now() - d.getTime()) / 60000 < 15,
                             id: s.id || `strike-${i}`
                         };
@@ -924,13 +943,49 @@ const FoudreFrance = () => {
                                 borderRadius: '12px',
                                 border: '1px solid rgba(255, 255, 255, 0.1)',
                                 boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                                width: '210px',
+                                width: '220px',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '10px'
                             }}>
+                                {/* Histogramme horaire 24h */}
                                 <div>
-                                    <div style={{ fontWeight: 1000, fontSize: '0.65rem', color: '#fff', marginBottom: '6px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' }}>Chronologie impacts</div>
+                                    <div style={{ fontWeight: 1000, fontSize: '0.65rem', color: '#fff', marginBottom: '6px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                        {isLive ? '⚡ Impacts sur 24h glissantes' : '⚡ Répartition horaire'}
+                                    </div>
+                                    {(() => {
+                                        const maxCount = Math.max(1, ...hourlyDistribution.map(h => h.count));
+                                        return (
+                                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '40px' }}>
+                                                {hourlyDistribution.map(({ hour, count }) => (
+                                                    <div
+                                                        key={hour}
+                                                        title={`${hour}h : ${count} impacts`}
+                                                        style={{
+                                                            flex: 1,
+                                                            height: count === 0 ? '2px' : `${Math.max(4, (count / maxCount) * 40)}px`,
+                                                            background: count === 0 ? 'rgba(255,255,255,0.08)' : HOUR_COLORS[hour],
+                                                            borderRadius: '2px 2px 0 0',
+                                                            transition: 'height 0.3s ease',
+                                                            cursor: 'default',
+                                                            opacity: count === 0 ? 0.3 : 1
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+                                    {/* Axe des heures */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
+                                        {[0, 6, 12, 18, 23].map(h => (
+                                            <span key={h} style={{ fontSize: '0.42rem', fontWeight: 800, color: '#64748b' }}>{h}h</span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Légende couleurs par heure */}
+                                <div>
+                                    <div style={{ fontWeight: 1000, fontSize: '0.6rem', color: '#94a3b8', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Chronologie</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '3px' }}>
                                         {[0, 4, 8, 12, 16, 20].map((h) => (
                                             <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
@@ -941,8 +996,10 @@ const FoudreFrance = () => {
                                     </div>
                                 </div>
 
-                                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '0.55rem', fontWeight: 800, color: '#94a3b8', marginBottom: '2px', textTransform: 'uppercase' }}>PÉRIODE : {startDate}</div>
+                                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '0.55rem', fontWeight: 800, color: '#94a3b8', marginBottom: '2px', textTransform: 'uppercase' }}>
+                                        {isLive ? 'Dernières 24h' : `Période : ${startDate}`}
+                                    </div>
                                     <span style={{ fontSize: '0.85rem', fontWeight: 1000, color: '#ef4444' }}>TOTAL : {strikes.length.toLocaleString()}</span>
                                 </div>
                             </div>

@@ -166,6 +166,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                             zIndex={isCurrent ? 1000 : 100}
                             className={`radar-tile-layer-pro ${isCurrent ? 'active' : ''}`}
                             style={{ imageRendering: isSmoothed ? 'auto' : 'pixelated' }}
+                            keepBuffer={3}
                         />
                     );
                 })}
@@ -313,6 +314,24 @@ const RadarFrance = () => {
     const [lastRadarUpdate, setLastRadarUpdate] = useState(null);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const timerRef = useRef(null);
+    const preloadedRadar = useRef({}); // Cache des images radar préchargées
+
+    // Préchargement des images radar pour une animation sans blanc
+    const preloadRadarImages = async (frames) => {
+        const cache = {};
+        await Promise.all(frames.map(frame => {
+            return new Promise((resolve) => {
+                const url = frame.imageUrl || `/radar-mf/${frame.filename}`;
+                const img = new Image();
+                img.onload = img.onerror = () => {
+                    cache[frame.filename] = true;
+                    resolve();
+                };
+                img.src = url;
+            });
+        }));
+        preloadedRadar.current = cache;
+    };
 
     useEffect(() => {
         fetch('https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson')
@@ -511,6 +530,8 @@ const RadarFrance = () => {
 
             if (sliced.length > 0) {
                 setLastRadarUpdate(new Date(sliced[sliced.length - 1].time * 1000));
+                // Précharger les images en arrière-plan pour fluidifier l'animation
+                preloadRadarImages(sliced).catch(() => {});
             }
 
             setIsLoadingData(false);
@@ -531,8 +552,8 @@ const RadarFrance = () => {
         }
 
         const isLastFrame = currentIndex === timestamps.length - 1;
-        // Si c'est la dernière image, on attend 4 secondes, sinon 1.2 seconde (divisé par la vitesse)
-        const delay = isLastFrame ? 3000 : (1200 / playbackSpeed);
+        // Si c'est la dernière image, on attend 3 secondes, sinon 900ms (fluidité améliorée)
+        const delay = isLastFrame ? 3000 : (900 / playbackSpeed);
 
         timerRef.current = setTimeout(() => {
             setCurrentIndex((prev) => {

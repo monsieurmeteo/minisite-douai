@@ -108,6 +108,7 @@ const TemperatureMap = () => {
     const [tempMode, setTempMode] = useState("tn"); // "tn" = min, "tx" = max
     const [hoveredStation, setHoveredStation] = useState(null);
     const [useAltScale, setUseAltScale] = useState(false);
+    const [lastDataTimestamp, setLastDataTimestamp] = useState(null); // Heure de la dernière donnée
     const mapContainerRef = useRef(null);
 
     const activeTempScale = useAltScale ? TEMP_SCALE_MF : TEMP_SCALE;
@@ -212,6 +213,9 @@ const TemperatureMap = () => {
 
                     const uniqueStations = new Map();
 
+                    // Capturer le timestamp max pour afficher l'heure de mise à jour
+                    let maxTimestamp = null;
+
                     allData.forEach(s => {
                         const tempVal = tempMode === "tn" ? s.temp_min : s.temp_max;
                         if (tempVal !== null && tempVal !== undefined && !isNaN(tempVal)) {
@@ -221,6 +225,15 @@ const TemperatureMap = () => {
                             const meta = stationsLookup[sid];
                             const lat = meta?.lat || s.lat;
                             const lon = meta?.lon || s.lon;
+
+                            // Capturer le timestamp le plus récent
+                            const ts = s.last_obs_time || s.obs_time || s.timestamp;
+                            if (ts) {
+                                const d = new Date(ts);
+                                if (!isNaN(d) && (!maxTimestamp || d > maxTimestamp)) {
+                                    maxTimestamp = d;
+                                }
+                            }
 
                             if (lat && lon) {
                                 // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
@@ -244,6 +257,10 @@ const TemperatureMap = () => {
                             }
                         }
                     });
+
+                    // Si pas de timestamp dans les données, on prend l'heure courante pour "Temps Réel"
+                    if (!maxTimestamp && isRealTime) maxTimestamp = new Date();
+                    setLastDataTimestamp(maxTimestamp);
 
                     stationList = Array.from(uniqueStations.values());
 
@@ -644,6 +661,13 @@ const TemperatureMap = () => {
                         <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#000', marginTop: '4px' }}>
                             {format(new Date(selectedDate), "EEEE d MMMM yyyy", { locale: fr })}
                         </div>
+                        {lastDataTimestamp && (
+                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#555', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b', flexShrink: 0 }} />
+                                {isRealTime ? 'Mis à jour à ' : 'Dernière obs. à '}
+                                {lastDataTimestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                        )}
                     </div>
 
                     {/* Logo */}
