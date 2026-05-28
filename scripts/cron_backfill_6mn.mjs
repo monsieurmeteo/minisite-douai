@@ -44,12 +44,22 @@ async function runCronBackfill() {
         const token = await getToken();
         console.log(`[CRON BACKFILL] Token Météo-France obtenu.`);
 
-        // On cible la journée de la veille (car le script tourne à 2h du matin)
-        const yesterday = new Date();
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        const dateStr = yesterday.toISOString().split('T')[0];
-        
-        console.log(`[CRON BACKFILL] Récupération des données pour le : ${dateStr}`);
+        // ⚠️ FIX TIMEZONE : on cible "hier en heure locale Paris" (UTC+1/+2)
+        // et non "hier UTC", pour couvrir correctement les heures 00h-02h locales
+        const now = new Date();
+        const yesterdayParis = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const dateStr = new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Europe/Paris'
+        }).format(yesterdayParis);
+
+        // Offset Europe/Paris pour calculer la fenêtre UTC exacte
+        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const utcNow   = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const offsetMs = parisNow.getTime() - utcNow.getTime();
+        const offsetHours = Math.round(offsetMs / (60 * 60 * 1000));
+
+        console.log(`[CRON BACKFILL] Timezone Paris : UTC${offsetHours >= 0 ? '+' : ''}${offsetHours}`);
+        console.log(`[CRON BACKFILL] Récupération des données pour le (Paris) : ${dateStr}`);
         
         let totalInserted = 0;
 
