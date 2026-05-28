@@ -569,7 +569,7 @@ const WindGustMap = () => {
                                 strokeWidth="1.5"
                             />
 
-                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip)" : undefined}>
+                            <g clipPath="url(#france-clip)">
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;

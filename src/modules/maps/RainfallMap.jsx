@@ -535,7 +535,7 @@ const RainfallMap = () => {
 
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
-                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip-rain)" : undefined}>
+                            <g clipPath="url(#france-clip-rain)">
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
