@@ -686,7 +686,7 @@ const RainfallMap = () => {
                                         >
                                             <circle r={3} fill="transparent" />
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                            {showLabels && (s.value > 0 || (s.value === 0 && selectedRegionName !== "France")) && (
+                                            {showLabels && (
                                                 <text
                                                     y={selectedRegionName === "France" ? -6 : 0}
                                                     dy={selectedRegionName === "France" ? 0 : "0.35em"}
@@ -701,7 +701,7 @@ const RainfallMap = () => {
                                                         pointerEvents: 'none', fontFamily: 'sans-serif'
                                                     }}
                                                 >
-                                                    {s.value === 0 ? "0" : (s.value < 10 ? s.value.toFixed(1) : Math.round(s.value))}
+                                                    {Math.round(s.value)}
                                                 </text>
                                             )}
                                         </g>
@@ -725,7 +725,7 @@ const RainfallMap = () => {
                         }}>
                             <div style={{ fontWeight: '800', marginBottom: '2px' }}>{hoveredStation.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Station {hoveredStation.id} — Dpt {hoveredStation.id.substring(0, 2)}</div>
-                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: '#38bdf8' }}>{hoveredStation.value.toFixed(1)} mm</div>
+                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: '#38bdf8' }}>{Math.round(hoveredStation.value)} mm</div>
                         </div>
                     )}
 
@@ -806,7 +806,7 @@ const RainfallMap = () => {
                                             padding: '4px 8px', borderRadius: '6px',
                                             fontSize: '0.85rem', fontWeight: '800'
                                         }}>
-                                            {s.value.toFixed(1)} <small>mm</small>
+                                            {Math.round(s.value)} <small>mm</small>
                                         </div>
                                     </div>
                                 ))
