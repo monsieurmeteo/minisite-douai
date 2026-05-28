@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, ImageOverlay, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl } from 'react-leaflet';
 import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar, Film } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import gifshot from 'gifshot';
@@ -147,26 +147,27 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                     />
                 )}
 
-                {/* Météo-France Radar ImageOverlay */}
+                {/* Radar RainViewer — TileLayer animé */}
                 {timestamps.map((ts, idx) => {
                     const isCurrent = idx === currentIndex;
-                    const isBuffered = Math.abs(idx - currentIndex) <= 2;
+                    const isBuffered = Math.abs(idx - currentIndex) <= 3;
                     if (!isBuffered) return null;
+                    if (!ts.path) return null;
 
-                    const filename = ts.filename;
-                    const bounds = ts.leaflet_bounds;
-                    if (!filename || !bounds) return null;
+                    const host = ts.host || 'https://tilecache.rainviewer.com';
+                    const url = `${host}${ts.path}/256/{z}/{x}/{y}/6/1_1.png`;
 
                     return (
-                        <ImageOverlay
-                            key={filename}
-                            url={ts.imageUrl || `/radar-mf/${filename}`}
-                            bounds={bounds}
+                        <TileLayer
+                            key={`radar-${ts.time}`}
+                            url={url}
                             opacity={isCurrent ? 0.85 : 0}
                             zIndex={isCurrent ? 1000 : 100}
-                            className={`radar-tile-layer-pro ${isCurrent ? 'active' : ''}`}
-                            style={{ imageRendering: isSmoothed ? 'auto' : 'pixelated' }}
-                            keepBuffer={3}
+                            maxNativeZoom={7}
+                            maxZoom={20}
+                            tileSize={256}
+                            updateWhenZooming={false}
+                            keepBuffer={4}
                         />
                     );
                 })}
@@ -432,112 +433,43 @@ const RadarFrance = () => {
     }, [currentPeriod, isArchiveMode, archiveDate]);
 
     const loadArchiveImage = () => {
-        setIsLoadingData(true);
-        try {
-            const d = new Date(archiveDate);
-            const year = d.getUTCFullYear();
-            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(d.getUTCDate()).padStart(2, '0');
-            const hour = String(d.getUTCHours()).padStart(2, '0');
-            const tsStr = `${year}${month}${day}${hour}0000`;
-
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            // Public URL for the archive bucket
-            const url = `${supabaseUrl}/storage/v1/object/public/radar-archive/${year}/${month}/radar_${tsStr}.png`;
-
-            // Set single frame
-            setTimestamps([{
-                time: d.getTime() / 1000,
-                filename: `radar_${tsStr}.png`,
-                imageUrl: url,
-                leaflet_bounds: [
-                    [38.14, -9.965],
-                    [53.67, 17.56]
-                ],
-                iso: d.toISOString()
-            }]);
-            setCurrentIndex(0);
-            setLastRadarUpdate(d);
-            setIsPlaying(false);
-        } catch (e) {
-            console.error("Archive load error", e);
-        } finally {
-            setIsLoadingData(false);
-            setLoading(false);
-        }
+        // Mode archive : on ne peut pas animer, on affiche juste le radar direct
+        fetchTimestamps();
+        setIsPlaying(false);
     };
 
     const fetchTimestamps = async () => {
         setIsLoadingData(true);
         try {
-            // Fetch the manifest - try Supabase first, then local
-            let manifest;
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseManifestUrl = supabaseUrl
-                ? `${supabaseUrl}/storage/v1/object/public/radar-mf/manifest.json?t=${Date.now()}`
-                : null;
+            // Chargement via RainViewer — API publique, fiable, sans clé
+            const res = await fetch(`https://api.rainviewer.com/public/weather-maps.json`);
+            const data = await res.json();
 
-            try {
-                if (supabaseManifestUrl) {
-                    const res = await fetch(supabaseManifestUrl);
-                    if (res.ok) {
-                        manifest = await res.json();
-                    }
-                }
-            } catch (e) {
-                console.log('Supabase manifest not available, trying local...');
-            }
+            const frames = data.radar?.past || [];
+            if (frames.length === 0) throw new Error('Aucune frame radar RainViewer disponible');
 
-            if (!manifest) {
-                const response = await fetch(`/radar-mf/manifest.json?t=${Date.now()}`);
-                manifest = await response.json();
-            }
-
-            if (!manifest.frames || manifest.frames.length === 0) {
-                throw new Error('No radar frames available in manifest');
-            }
-
-            // Determine base URL for images
-            const baseUrl = manifest.base_url || '/radar-mf/';
-
-            // Build timestamp objects with everything the UI needs
-            const framesToSet = manifest.frames.map(frame => {
-                // Parse timestamp string YYYYMMDDHHMMSS to unix
-                const ts = frame.timestamp;
-                const year = parseInt(ts.substring(0, 4));
-                const month = parseInt(ts.substring(4, 6)) - 1;
-                const day = parseInt(ts.substring(6, 8));
-                const hour = parseInt(ts.substring(8, 10));
-                const min = parseInt(ts.substring(10, 12));
-                const sec = parseInt(ts.substring(12, 14));
-                const date = new Date(Date.UTC(year, month, day, hour, min, sec));
-
-                return {
-                    time: date.getTime() / 1000,
-                    filename: frame.filename,
-                    imageUrl: `${baseUrl}${frame.filename}`,
-                    leaflet_bounds: manifest.leaflet_bounds,
-                    iso: date.toISOString(),
-                };
-            });
-
-            // Apply period filter
+            // Appliquer le filtre de période
             const count = PERIODS.find(p => p.id === currentPeriod)?.count || 12;
-            const sliced = framesToSet.slice(-count);
+            const sliced = frames.slice(-count);
 
-            setTimestamps(sliced);
-            setCurrentIndex(sliced.length - 1);
+            // Construire les timestamps compatibles avec le composant
+            const framesToSet = sliced.map(frame => ({
+                time: frame.time,
+                path: frame.path,
+                host: data.host,
+            }));
 
-            if (sliced.length > 0) {
-                setLastRadarUpdate(new Date(sliced[sliced.length - 1].time * 1000));
-                // Précharger les images en arrière-plan pour fluidifier l'animation
-                preloadRadarImages(sliced).catch(() => {});
+            setTimestamps(framesToSet);
+            setCurrentIndex(framesToSet.length - 1);
+
+            if (framesToSet.length > 0) {
+                setLastRadarUpdate(new Date(framesToSet[framesToSet.length - 1].time * 1000));
             }
 
             setIsLoadingData(false);
             setLoading(false);
         } catch (error) {
-            console.error('Erreur chargement radar Météo-France:', error);
+            console.error('Erreur chargement radar RainViewer:', error);
             setTimestamps([]);
             setCurrentIndex(0);
             setIsLoadingData(false);
