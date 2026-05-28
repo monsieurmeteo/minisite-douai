@@ -33,15 +33,9 @@ async function getToken() {
 
 async function recoverData() {
     console.log('--- DEEP BACKFILL STARTING ---');
-    const token = await getToken();
-    console.log('Token MF obtained.');
-
     const dates = [
-        '2026-05-05',
-        '2026-05-06',
-        '2026-05-07',
-        '2026-05-08',
-        '2026-05-09'
+        '2026-05-09',
+        '2026-05-10'
     ];
 
     let totalInserted = 0;
@@ -49,7 +43,6 @@ async function recoverData() {
     for (const dateStr of dates) {
         console.log(`\nProcessing date: ${dateStr}`);
         
-        // Prevent fetching future hours for today
         const now = new Date();
         const isToday = dateStr === now.toISOString().split('T')[0];
         const currentHour = now.getUTCHours();
@@ -66,12 +59,14 @@ async function recoverData() {
                 const targetTime = `${dateStr}T${hStr}:${mStr}:00Z`;
                 
                 try {
+                    // Refresh token for every request to bypass weird 401s
+                    const token = await getToken();
+                    
                     const resp = await fetch(`https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/stations/infrahoraire-6m?date=${targetTime}&format=json`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     
                     if (!resp.ok) {
-                        // 204 No Content is normal for missing data
                         if (resp.status !== 204) console.log(`   [SKIP] ${targetTime} (HTTP ${resp.status})`);
                         continue;
                     }
@@ -95,9 +90,7 @@ async function recoverData() {
                     for (let i = 0; i < rows.length; i += 500) {
                         const batch = rows.slice(i, i + 500);
                         const { error } = await supabase
-                            .from('observations_6mn')
-                            .upsert(batch, { onConflict: 'station_id, timestamp' });
-                            
+                            .from('observations_6mn').upsert(batch, { onConflict: 'station_id, timestamp' });
                         if (error) throw error;
                         batchCount += batch.length;
                     }
@@ -105,7 +98,7 @@ async function recoverData() {
                     totalInserted += batchCount;
                     console.log(`   ✅ ${targetTime}: ${batchCount} stations traitées.`);
                     
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, 1000));
                     
                 } catch (err) {
                     console.error(`   ❌ Erreur pour ${targetTime}:`, err.message);

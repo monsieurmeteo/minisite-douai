@@ -172,7 +172,7 @@ const VectorRegionPreview = () => {
                             if (!data || data.length === 0) break;
                             allData.push(...data);
                         }
-                        result = { data: allData.filter(o => regionDepts.includes(o.station_id?.substring(0, 2))) };
+                        result = { data: allData.filter(o => regionDepts.includes(o.station_id?.startsWith("20") ? "2A" : o.station_id?.substring(0, 2))) };
                     }
                     if (result.error) throw result.error;
                     rawObs = (result.data || []).map(s => ({ ...s, wind_speed: s.wind_mean_max }));
@@ -196,7 +196,7 @@ const VectorRegionPreview = () => {
                         from += 1000;
                     }
 
-                    const filtered = allData.filter(o => regionDepts.includes(o.station_id?.substring(0, 2)));
+                    const filtered = allData.filter(o => regionDepts.includes(o.station_id?.startsWith("20") ? "2A" : o.station_id?.substring(0, 2)));
                     const agg = {};
                     filtered.forEach(o => {
                         if (!agg[o.station_id]) agg[o.station_id] = { station_id: o.station_id, temp_min: o.t, temp_max: o.t, wind_speed: o.ff, wind_gust_max: o.fxi, rain_total: o.rr_per || 0, wind_dir: o.dd };

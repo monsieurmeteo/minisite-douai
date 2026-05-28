@@ -355,7 +355,7 @@ const MonthlyMapsHub = () => {
 
             if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
                 const regionDepts = REGIONS[selectedRegionName];
-                finalList = finalList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                finalList = finalList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
             }
 
             // Tri
@@ -379,7 +379,7 @@ const MonthlyMapsHub = () => {
 
     useEffect(() => {
         if (daysInMonth.length > 0) loadMonthlyData();
-    }, [selectedMonth, selectedYear, activeParam]);
+    }, [selectedMonth, selectedYear, activeParam, selectedRegionName]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;

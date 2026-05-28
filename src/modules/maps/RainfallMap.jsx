@@ -34,8 +34,18 @@ const RAIN_SCALE = [
     { min: 500, max: Infinity, color: '#f0f0f0', label: '> 500' },
 ];
 
+const RAIN_SCALE_LIVE = [
+    { min: 0, max: 0.2, color: '#ffffff', label: '< 0.2' },
+    { min: 0.2, max: 0.6, color: '#dcf0dc', label: '0.2 - 0.6' },
+    { min: 0.6, max: 1.2, color: '#a3d4a3', label: '0.6 - 1.2' },
+    { min: 1.2, max: 2.5, color: '#8cd5ff', label: '1.2 - 2.5' },
+    { min: 2.5, max: 5.0, color: '#3399ff', label: '2.5 - 5.0' },
+    { min: 5.0, max: 10.0, color: '#cc00cc', label: '5.0 - 10' },
+    { min: 10.0, max: Infinity, color: '#6600aa', label: '> 10' },
+];
+
 const getRainColor = (value, scale = RAIN_SCALE) => {
-    if (value === null || value === undefined || value < 0.5) return '#ffffff';
+    if (value === null || value === undefined || value <= 0) return '#ffffff';
     const range = scale.find(r => value >= r.min && value < r.max);
     return range ? range.color : scale[scale.length - 1].color;
 };
@@ -77,6 +87,7 @@ const RainfallMap = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isRealTime, setIsRealTime] = useState(true);
+    const [rainMode, setRainMode] = useState("cumul"); // "cumul" ou "direct"
     const [mapTitle, setMapTitle] = useState("Cumuls de pluie en 24h");
     const [showLabels, setShowLabels] = useState(true);
     const [showRegions, setShowRegions] = useState(true);
@@ -87,7 +98,7 @@ const RainfallMap = () => {
     const [lastDataTimestamp, setLastDataTimestamp] = useState(null);
     const mapContainerRef = useRef(null);
 
-    const activeRainScale = useAltScale ? RAIN_SCALE_MF : RAIN_SCALE;
+    const activeRainScale = rainMode === 'direct' ? RAIN_SCALE_LIVE : (useAltScale ? RAIN_SCALE_MF : RAIN_SCALE);
 
     const WIDTH = 1000;
     const HEIGHT = 900;
@@ -121,8 +132,21 @@ const RainfallMap = () => {
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
-        setIsRealTime(selectedDate === today);
-    }, [selectedDate]);
+        const realTime = selectedDate === today;
+        setIsRealTime(realTime);
+        if (!realTime && rainMode === "direct") {
+            setRainMode("cumul");
+        }
+    }, [selectedDate, rainMode]);
+
+    // Auto-update title when mode changes
+    useEffect(() => {
+        if (rainMode === "cumul") {
+            setMapTitle("Cumuls de pluie en 24h");
+        } else {
+            setMapTitle("Intensité de pluie en Temps Réel (6 mn)");
+        }
+    }, [rainMode]);
 
     const loadData = async () => {
         setLoading(true);
@@ -133,40 +157,91 @@ const RainfallMap = () => {
             let stationList = [];
 
             try {
-                let allData = [];
-                let from = 0;
-                const batchSize = 1000;
-                let hasMore = true;
+                if (rainMode === "direct") {
+                    console.log("[RainfallMap] Chargement des précipitations en temps réel...");
+                    let liveData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
 
-                while (hasMore) {
-                    const { data, error: rpcError } = await supabase
-                        .rpc('get_daily_extremes_fast', {
-                            target_date: selectedDate,
-                            dept_codes: []
-                        })
-                        .range(from, from + batchSize - 1);
-
-                    if (rpcError) break;
-                    if (data && data.length > 0) {
-                        allData.push(...data);
-                        if (data.length < batchSize) hasMore = false;
-                        else from += batchSize;
-                    } else {
-                        hasMore = false;
-                    }
-                }
-
-                if (allData.length < 300) {
-                    console.log(`[RainfallMap] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
-                    allData = [];
-                    from = 0;
-                    hasMore = true;
                     while (hasMore) {
-                        const { data, error: rpcError } = await supabase
-                            .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                        const { data, error: liveError } = await supabase
+                            .rpc('get_france_live')
                             .range(from, from + batchSize - 1);
 
-                        if (rpcError) throw rpcError;
+                        if (liveError) throw liveError;
+                        if (data && data.length > 0) {
+                            liveData.push(...data);
+                            if (data.length < batchSize) hasMore = false;
+                            else from += batchSize;
+                        } else {
+                            hasMore = false;
+                        }
+                    }
+
+                    if (liveData && liveData.length > 0) {
+                        let maxTimestamp = null;
+                        liveData.forEach(item => {
+                            if (item.obs_time) {
+                                const d = new Date(item.obs_time);
+                                if (!maxTimestamp || d > maxTimestamp) {
+                                    maxTimestamp = d;
+                                }
+                            }
+                        });
+                        setLastDataTimestamp(maxTimestamp);
+
+                        const uniqueStations = new Map();
+                        liveData.forEach(s => {
+                            const rainVal = s.rain; // Precipitation in last 6 minutes is 'rain' in get_france_live
+                            if (rainVal !== null && rainVal !== undefined && !isNaN(rainVal)) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat;
+                                const lon = meta?.lon;
+
+                                if (lat && lon) {
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+                                    const existing = uniqueStations.get(geoKey);
+                                    if (!existing || rainVal > existing.value) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: rainVal,
+                                            name: stationNamesData[sid] || meta?.name || sid
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+                        }
+
+                        console.log(`[RainfallMap] ${stationList.length} stations temps réel uniques.`);
+                    }
+                } else {
+                    let allData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
+
+                    while (hasMore) {
+                        const { data, error: rpcError } = await supabase
+                            .rpc('get_daily_extremes_fast', {
+                                target_date: selectedDate,
+                                dept_codes: []
+                            })
+                            .range(from, from + batchSize - 1);
+
+                        if (rpcError) break;
                         if (data && data.length > 0) {
                             allData.push(...data);
                             if (data.length < batchSize) hasMore = false;
@@ -175,51 +250,71 @@ const RainfallMap = () => {
                             hasMore = false;
                         }
                     }
-                }
 
-                if (allData.length > 0) {
-                    console.log(`[RainfallMap] ${allData.length} stations traitées pour le ${selectedDate}`);
+                    if (allData.length < 300) {
+                        console.log(`[RainfallMap] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
+                        allData = [];
+                        from = 0;
+                        hasMore = true;
+                        while (hasMore) {
+                            const { data, error: rpcError } = await supabase
+                                .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                                .range(from, from + batchSize - 1);
 
-                    const uniqueStations = new Map();
-
-                    allData.forEach(s => {
-                        const rain = s.rain_total;
-                        if (rain !== null && rain !== undefined && rain >= 0) {
-                            let sid = String(s.station_id);
-                            if (sid.length === 7) sid = "0" + sid;
-
-                            const dept = sid.substring(0, 2);
-                            rainMap[dept] = Math.max(rainMap[dept] || 0, rain);
-
-                            const meta = stationsLookup[sid];
-                            const lat = meta?.lat || s.lat;
-                            const lon = meta?.lon || s.lon;
-
-                            if (lat && lon) {
-                                // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
-                                const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
-
-                                if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < rain) {
-                                    uniqueStations.set(geoKey, {
-                                        id: sid,
-                                        lat,
-                                        lon,
-                                        value: rain,
-                                        name: stationNamesData[sid] || meta?.name || s.station_name || sid
-                                    });
-                                }
+                            if (rpcError) throw rpcError;
+                            if (data && data.length > 0) {
+                                allData.push(...data);
+                                if (data.length < batchSize) hasMore = false;
+                                else from += batchSize;
+                            } else {
+                                hasMore = false;
                             }
                         }
-                    });
-
-                    stationList = Array.from(uniqueStations.values());
-
-                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                        const regionDepts = REGIONS[selectedRegionName];
-                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
                     }
 
-                    console.log(`[RainfallMap] ${stationList.length} stations uniques après regroupement.`);
+                    if (allData.length > 0) {
+                        console.log(`[RainfallMap] ${allData.length} stations traitées pour le ${selectedDate}`);
+
+                        const uniqueStations = new Map();
+
+                        allData.forEach(s => {
+                            const rain = s.rain_total;
+                            if (rain !== null && rain !== undefined && rain >= 0) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+
+                                const dept = sid.substring(0, 2);
+                                rainMap[dept] = Math.max(rainMap[dept] || 0, rain);
+
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat || s.lat;
+                                const lon = meta?.lon || s.lon;
+
+                                if (lat && lon) {
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+
+                                    if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < rain) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: rain,
+                                            name: stationNamesData[sid] || meta?.name || s.station_name || sid
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+                        }
+
+                        console.log(`[RainfallMap] ${stationList.length} stations uniques après regroupement.`);
+                    }
                 }
             } catch (err) {
                 console.error("[RainfallMap] Erreur critique de chargement:", err);
@@ -244,10 +339,14 @@ const RainfallMap = () => {
                     console.warn("Erreur fetch latest obs timestamp:", err);
                 }
             }
-            setLastDataTimestamp(maxTimestamp);
+            if (rainMode === "direct" && !maxTimestamp && stationList.length > 0) {
+                // Si on est en direct, on a déjà extrait setLastDataTimestamp plus haut
+            } else {
+                setLastDataTimestamp(maxTimestamp);
+            }
 
             if (stationList.length === 0) {
-                setError("Aucune donnée de pluie archivée pour cette date.");
+                setError(rainMode === "direct" ? "Aucune précipitation en cours sur les 6 dernières minutes." : "Aucune donnée de pluie archivée pour cette date.");
             }
         } catch (err) {
             console.error("Erreur chargement données pluie:", err);
@@ -259,7 +358,17 @@ const RainfallMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime]);
+    }, [selectedDate, isRealTime, selectedRegionName, rainMode]);
+
+    // Auto-refresh in real-time mode every 3 minutes
+    useEffect(() => {
+        if (rainMode !== "direct" || !isRealTime) return;
+        const interval = setInterval(() => {
+            console.log("[RainfallMap] Auto-refreshing real-time rain observations...");
+            loadData();
+        }, 3 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [rainMode, isRealTime, selectedDate]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;
@@ -376,7 +485,7 @@ const RainfallMap = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Droplets style={{ color: '#0ea5e9' }} size={28} /> Pluie 24h : {selectedRegionName}
+                            <Droplets style={{ color: '#0ea5e9' }} size={28} /> {rainMode === 'cumul' ? 'Pluie 24h' : 'Pluie Direct'} : {selectedRegionName}
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b' }}></div>
@@ -387,6 +496,34 @@ const RainfallMap = () => {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '10px' }}>
+                        {/* Sélecteur Cumul / Temps Réel */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '12px', padding: '3px' }}>
+                            {isRealTime && (
+                                <button
+                                    onClick={() => setRainMode('direct')}
+                                    style={{
+                                        padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                        fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                        background: rainMode === 'direct' ? '#0ea5e9' : 'transparent',
+                                        color: rainMode === 'direct' ? 'white' : '#64748b'
+                                    }}
+                                >
+                                    Temps Réel
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setRainMode('cumul')}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                    fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                    background: rainMode === 'cumul' ? '#0ea5e9' : 'transparent',
+                                    color: rainMode === 'cumul' ? 'white' : '#64748b'
+                                }}
+                            >
+                                Cumul 24h
+                            </button>
+                        </div>
+
                         <div style={{ position: 'relative' }}>
                             <select
                                 value={selectedRegionName}
@@ -551,7 +688,7 @@ const RainfallMap = () => {
                                         >
                                             <circle r={3} fill="transparent" />
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                            {showLabels && s.value >= 0.1 && (
+                                            {showLabels && s.value > 0 && (
                                                 <text
                                                     y={selectedRegionName === "France" ? -6 : 0}
                                                     dy={selectedRegionName === "France" ? 0 : "0.35em"}
@@ -559,14 +696,14 @@ const RainfallMap = () => {
                                                     style={{
                                                         fontSize: selectedRegionName === "France" ? '14px' : '28px', 
                                                         fontWeight: 'bold',
-                                                        fill: s.value > 50 ? '#fff' : '#000',
-                                                        stroke: s.value > 50 ? '#000' : '#fff',
+                                                        fill: s.value > (rainMode === 'direct' ? 5 : 50) ? '#fff' : '#000',
+                                                        stroke: s.value > (rainMode === 'direct' ? 5 : 50) ? '#000' : '#fff',
                                                         strokeWidth: selectedRegionName === "France" ? '2px' : '4px', 
                                                         paintOrder: 'stroke',
                                                         pointerEvents: 'none', fontFamily: 'sans-serif'
                                                     }}
                                                 >
-                                                    {Math.round(s.value)}
+                                                    {rainMode === 'direct' ? s.value.toFixed(1) : Math.round(s.value)}
                                                 </text>
                                             )}
                                         </g>
@@ -624,7 +761,7 @@ const RainfallMap = () => {
                         gap: '2px', flexWrap: 'wrap'
                     }}>
                         <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000', marginRight: '6px' }}>mm</span>
-                        {activeRainScale.filter(r => r.min >= 0.5 && r.max !== Infinity).map(range => (
+                        {activeRainScale.filter(r => r.min >= (rainMode === 'direct' ? 0.2 : 0.5) && r.max !== Infinity).map(range => (
                             <div key={range.min} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                 <div style={{ width: '24px', height: '14px', background: range.color, border: '0.5px solid rgba(0,0,0,0.3)' }} />
                                 <span style={{ fontSize: '7px', fontWeight: '800', color: '#000', marginTop: '1px' }}>{range.min}</span>
@@ -637,10 +774,10 @@ const RainfallMap = () => {
                     {/* Légende */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                         <h3 style={{ margin: '0 0 12px', fontSize: '0.9rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
-                            Cumul de Pluie (mm)
+                            {rainMode === 'cumul' ? 'Cumul de Pluie (mm)' : 'Précipitations (mm / 6mn)'}
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                            {activeRainScale.filter(r => r.min >= 0.5 || r.min === 0).map(range => (
+                            {activeRainScale.filter(r => r.min >= (rainMode === 'direct' ? 0.2 : 0.5) || r.min === 0).map(range => (
                                 <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: range.color, border: '1px solid rgba(0,0,0,0.1)' }}></div>
                                     <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>
@@ -652,11 +789,11 @@ const RainfallMap = () => {
                     {/* Top Pluies */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ margin: '0 0 15px', fontSize: '1rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Droplets size={18} style={{ color: '#0ea5e9' }} /> Top Cumuls
+                            <Droplets size={18} style={{ color: '#0ea5e9' }} /> {rainMode === 'cumul' ? 'Top Cumuls' : 'Top Intensités'}
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
-                            {stations.filter(s => s.value >= 1).length > 0 ? (
-                                [...stations].filter(s => s.value >= 1).sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
+                            {stations.filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).length > 0 ? (
+                                [...stations].filter(s => s.value >= (rainMode === 'direct' ? 0.2 : 1)).sort((a, b) => b.value - a.value).slice(0, 15).map((s, i) => (
                                     <div key={s.id} style={{
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                         padding: '8px 0', borderBottom: i === 14 ? 'none' : '1px solid #f1f5f9'
@@ -667,11 +804,11 @@ const RainfallMap = () => {
                                         </div>
                                         <div style={{
                                             background: getRainColor(s.value, activeRainScale),
-                                            color: s.value > 50 ? 'white' : '#1e293b',
+                                            color: s.value > (rainMode === 'direct' ? 5 : 50) ? 'white' : '#1e293b',
                                             padding: '4px 8px', borderRadius: '6px',
                                             fontSize: '0.85rem', fontWeight: '800'
                                         }}>
-                                            {Math.round(s.value)} <small>mm</small>
+                                            {s.value.toFixed(1)} <small>mm</small>
                                         </div>
                                     </div>
                                 ))
@@ -686,7 +823,9 @@ const RainfallMap = () => {
                         <Info style={{ color: '#0369a1' }} size={20} />
                         <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369a1', lineHeight: '1.4' }}>
                             Données issues des stations automatiques du réseau Météo-France.
-                            La valeur affichée est le cumul de pluie (RR) sur 24 heures.
+                            {rainMode === 'cumul' 
+                                ? " La valeur affichée est le cumul de pluie (RR) sur 24 heures." 
+                                : " La valeur affichée correspond aux précipitations relevées au cours des 6 dernières minutes."}
                         </p>
                     </div>
                 </div>

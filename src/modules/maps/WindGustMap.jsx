@@ -30,10 +30,27 @@ const WIND_SCALE = [
     { min: 180, max: Infinity, color: '#e6d8ff', label: '> 180' },
 ];
 
-const getWindColor = (value) => {
-    if (value === null || value === undefined || value < 30) return '#ffffff';
-    const range = WIND_SCALE.find(r => value >= r.min && value < r.max);
-    return range ? range.color : '#e6d8ff';
+const WIND_SCALE_LIVE = [
+    { min: 0, max: 20, color: '#ffffff', label: '< 20' },
+    { min: 20, max: 30, color: '#e6f2ff', label: '20 - 30' },
+    { min: 30, max: 40, color: '#cce6ff', label: '30 - 40' },
+    { min: 40, max: 50, color: '#99ccff', label: '40 - 50' },
+    { min: 50, max: 60, color: '#66b2ff', label: '50 - 60' },
+    { min: 60, max: 70, color: '#fef0b9', label: '60 - 70' },
+    { min: 70, max: 80, color: '#fde492', label: '70 - 80' },
+    { min: 80, max: 90, color: '#fccb70', label: '80 - 90' },
+    { min: 90, max: 100, color: '#fbaf53', label: '90 - 100' },
+    { min: 100, max: 110, color: '#f88e36', label: '100 - 110' },
+    { min: 110, max: 120, color: '#f26829', label: '110 - 120' },
+    { min: 120, max: 130, color: '#e23b30', label: '120 - 130' },
+    { min: 130, max: 140, color: '#c61d5f', label: '130 - 140' },
+    { min: 140, max: Infinity, color: '#a02c91', label: '> 140' },
+];
+
+const getWindColor = (value, scale = WIND_SCALE) => {
+    if (value === null || value === undefined || value <= 0) return '#ffffff';
+    const range = scale.find(r => value >= r.min && value < r.max);
+    return range ? range.color : scale[scale.length - 1].color;
 };
 
 const WindGustMap = () => {
@@ -96,10 +113,26 @@ const WindGustMap = () => {
     }, []);
 
     // Déterminer si on est en temps réel
+    const [windMode, setWindMode] = useState("max"); // "max" ou "direct"
+    const activeWindScale = windMode === 'direct' ? WIND_SCALE_LIVE : WIND_SCALE;
+
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
-        setIsRealTime(selectedDate === today);
-    }, [selectedDate]);
+        const realTime = selectedDate === today;
+        setIsRealTime(realTime);
+        if (!realTime && windMode === "direct") {
+            setWindMode("max");
+        }
+    }, [selectedDate, windMode]);
+
+    // Auto-update title when mode changes
+    useEffect(() => {
+        if (windMode === "max") {
+            setMapTitle("Rafales de vent maximales");
+        } else {
+            setMapTitle("Rafales de vent en Temps Réel");
+        }
+    }, [windMode]);
 
     const loadData = async () => {
         setLoading(true);
@@ -109,44 +142,93 @@ const WindGustMap = () => {
             let gustMap = {};
             let stationList = [];
 
-            // Mise en œuvre du chargement paginé complet (boucle while hasMore) et du mode de secours Full Scan.
             try {
-                // 1. Tenter le mode RAPIDE avec pagination complète
-                let allData = [];
-                let from = 0;
-                const batchSize = 1000;
-                let hasMore = true;
+                if (windMode === "direct") {
+                    console.log("[WindGustMap] Chargement des rafales en temps réel...");
+                    let liveData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
 
-                while (hasMore) {
-                    const { data, error: rpcError } = await supabase
-                        .rpc('get_daily_extremes_fast', {
-                            target_date: selectedDate,
-                            dept_codes: []
-                        })
-                        .range(from, from + batchSize - 1);
-
-                    if (rpcError) break;
-                    if (data && data.length > 0) {
-                        allData.push(...data);
-                        if (data.length < batchSize) hasMore = false;
-                        else from += batchSize;
-                    } else {
-                        hasMore = false;
-                    }
-                }
-
-                // 2. Fallback vers le mode COMPLET si les données sont trop peu nombreuses (signe d'un résumé non généré)
-                if (allData.length < 300) { // On monte le seuil car on attend ~500 stations Radome strictes
-                    console.log(`[Diagnostic] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
-                    allData = [];
-                    from = 0;
-                    hasMore = true;
                     while (hasMore) {
-                        const { data, error: rpcError } = await supabase
-                            .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                        const { data, error: liveError } = await supabase
+                            .rpc('get_france_live')
                             .range(from, from + batchSize - 1);
 
-                        if (rpcError) throw rpcError;
+                        if (liveError) throw liveError;
+                        if (data && data.length > 0) {
+                            liveData.push(...data);
+                            if (data.length < batchSize) hasMore = false;
+                            else from += batchSize;
+                        } else {
+                            hasMore = false;
+                        }
+                    }
+
+                    if (liveData && liveData.length > 0) {
+                        let maxTimestamp = null;
+                        liveData.forEach(item => {
+                            if (item.obs_time) {
+                                const d = new Date(item.obs_time);
+                                if (!maxTimestamp || d > maxTimestamp) {
+                                    maxTimestamp = d;
+                                }
+                            }
+                        });
+                        setLastDataTimestamp(maxTimestamp);
+
+                        const uniqueStations = new Map();
+                        liveData.forEach(s => {
+                            // Wind gust is 'gust' in get_france_live, with fallback to 'wind'
+                            const gustVal = s.gust !== null && s.gust !== undefined ? s.gust : s.wind;
+                            if (gustVal !== null && gustVal !== undefined && !isNaN(gustVal)) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat;
+                                const lon = meta?.lon;
+
+                                if (lat && lon) {
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+                                    const existing = uniqueStations.get(geoKey);
+                                    if (!existing || gustVal > existing.value) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: gustVal,
+                                            name: stationNamesData[sid] || meta?.name || sid
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+                        }
+
+                        console.log(`[WindGustMap] ${stationList.length} stations temps réel uniques.`);
+                    }
+                } else {
+                    let allData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
+
+                    while (hasMore) {
+                        const { data, error: rpcError } = await supabase
+                            .rpc('get_daily_extremes_fast', {
+                                target_date: selectedDate,
+                                dept_codes: []
+                            })
+                            .range(from, from + batchSize - 1);
+
+                        if (rpcError) break;
                         if (data && data.length > 0) {
                             allData.push(...data);
                             if (data.length < batchSize) hasMore = false;
@@ -155,61 +237,77 @@ const WindGustMap = () => {
                             hasMore = false;
                         }
                     }
-                }
 
-                if (allData.length > 0) {
-                    console.log(`[Diagnostic] ${allData.length} stations traitées pour le ${selectedDate}`);
+                    if (allData.length < 300) {
+                        console.log(`[Diagnostic] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
+                        allData = [];
+                        from = 0;
+                        hasMore = true;
+                        while (hasMore) {
+                            const { data, error: rpcError } = await supabase
+                                .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                                .range(from, from + batchSize - 1);
 
-                    // Pour éviter les "taches" (micro-cellules Voronoi), on fusionne les stations
-                    // qui ont exactement les mêmes coordonnées.
-                    const uniqueStations = new Map();
-
-                    allData.forEach(s => {
-                        const gust = s.wind_gust_max;
-                        if (gust !== null && gust !== undefined && gust > 0) {
-                            let sid = String(s.station_id);
-                            if (sid.length === 7) sid = "0" + sid;
-
-                            const dept = sid.substring(0, 2);
-                            gustMap[dept] = Math.max(gustMap[dept] || 0, gust);
-
-                            const meta = stationsLookup[sid];
-                            const lat = meta?.lat || s.lat;
-                            const lon = meta?.lon || s.lon;
-
-                            if (lat && lon) {
-                                // Clé unique basée sur les coordonnées (précision 0.05 degré ~ 5km pour correspondre au Générateur)
-                                // Cela élimine les "taches" dues à des stations trop rapprochées.
-                                const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
-
-                                if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < gust) {
-                                    uniqueStations.set(geoKey, {
-                                        id: sid,
-                                        lat,
-                                        lon,
-                                        value: gust,
-                                        name: stationNamesData[sid] || meta?.name || s.station_name || sid
-                                    });
-                                }
+                            if (rpcError) throw rpcError;
+                            if (data && data.length > 0) {
+                                allData.push(...data);
+                                if (data.length < batchSize) hasMore = false;
+                                else from += batchSize;
+                            } else {
+                                hasMore = false;
                             }
                         }
-                    });
-
-                    stationList = Array.from(uniqueStations.values());
-
-                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                        const regionDepts = REGIONS[selectedRegionName];
-                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
                     }
 
-                    console.log(`[Diagnostic] ${stationList.length} stations uniques après regroupement.`);
+                    if (allData.length > 0) {
+                        console.log(`[Diagnostic] ${allData.length} stations traitées pour le ${selectedDate}`);
+
+                        const uniqueStations = new Map();
+
+                        allData.forEach(s => {
+                            const gust = s.wind_gust_max;
+                            if (gust !== null && gust !== undefined && gust > 0) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+
+                                const dept = sid.substring(0, 2);
+                                gustMap[dept] = Math.max(gustMap[dept] || 0, gust);
+
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat || s.lat;
+                                const lon = meta?.lon || s.lon;
+
+                                if (lat && lon) {
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+
+                                    if (!uniqueStations.has(geoKey) || uniqueStations.get(geoKey).value < gust) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: gust,
+                                            name: stationNamesData[sid] || meta?.name || s.station_name || sid
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+                        }
+
+                        console.log(`[Diagnostic] ${stationList.length} stations uniques après regroupement.`);
+                    }
                 }
             } catch (err) {
                 console.error("[WindGustMap] Erreur critique de chargement:", err);
             }
 
             setDeptData(gustMap);
-            // Trier par valeur décroissante pour le tableau
             setStations(stationList.sort((a, b) => b.value - a.value));
 
             // Capturer le timestamp max pour afficher l'heure de mise à jour
@@ -228,10 +326,14 @@ const WindGustMap = () => {
                     console.warn("Erreur fetch latest obs timestamp:", err);
                 }
             }
-            setLastDataTimestamp(maxTimestamp);
+            if (windMode === "direct" && !maxTimestamp && stationList.length > 0) {
+                // En temps réel on utilise déjà le timestamp du obs_time extrait plus haut
+            } else {
+                setLastDataTimestamp(maxTimestamp);
+            }
 
             if (stationList.length === 0) {
-                setError("Aucune rafale archivée pour cette date.");
+                setError(windMode === "direct" ? "Aucune donnée de vent en direct disponible." : "Aucune rafale archivée pour cette date.");
             }
         } catch (err) {
             console.error("Erreur chargement données vent:", err);
@@ -243,7 +345,17 @@ const WindGustMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime]);
+    }, [selectedDate, isRealTime, selectedRegionName, windMode]);
+
+    // Auto-refresh in real-time mode every 3 minutes
+    useEffect(() => {
+        if (windMode !== "direct" || !isRealTime) return;
+        const interval = setInterval(() => {
+            console.log("[WindGustMap] Auto-refreshing real-time wind gust observations...");
+            loadData();
+        }, 3 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [windMode, isRealTime, selectedDate]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;
@@ -376,7 +488,8 @@ const WindGustMap = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Wind className="text-blue-500" size={28} /> Rafales : {selectedRegionName}
+                            <Wind style={{ color: windMode === 'direct' ? '#10b981' : '#3b82f6' }} size={28} />
+                            {windMode === 'direct' ? 'Rafales Direct' : 'Rafales Max'} : {selectedRegionName}
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b' }}></div>
@@ -387,6 +500,34 @@ const WindGustMap = () => {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '10px' }}>
+                        {/* Sélecteur Max / Temps Réel */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '12px', padding: '3px' }}>
+                            {isRealTime && (
+                                <button
+                                    onClick={() => setWindMode('direct')}
+                                    style={{
+                                        padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                        fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                        background: windMode === 'direct' ? '#3b82f6' : 'transparent',
+                                        color: windMode === 'direct' ? 'white' : '#64748b'
+                                    }}
+                                >
+                                    Temps Réel
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setWindMode('max')}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                    fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                    background: windMode === 'max' ? '#3b82f6' : 'transparent',
+                                    color: windMode === 'max' ? 'white' : '#64748b'
+                                }}
+                            >
+                                Max Journée
+                            </button>
+                        </div>
+
                         {/* Sélecteur de Région */}
                         <div style={{ position: 'relative' }}>
                             <select
@@ -522,7 +663,7 @@ const WindGustMap = () => {
                                                 y={p.y - 1}
                                                 width={p.w + 2}
                                                 height={p.h + 2}
-                                                fill={getWindColor(p.val)}
+                                                fill={getWindColor(p.val, activeWindScale)}
                                                 fillOpacity={p.opacity}
                                             />
                                         ))}
@@ -534,7 +675,7 @@ const WindGustMap = () => {
                                             <path
                                                 key={`cell-${cell.station.id}-${idx}`}
                                                 d={cell.path}
-                                                fill={getWindColor(cell.station.value)}
+                                                fill={getWindColor(cell.station.value, activeWindScale)}
                                                 style={{ transition: 'fill 0.4s ease' }}
                                             />
                                         ))}
@@ -586,7 +727,7 @@ const WindGustMap = () => {
                                             <circle r={3} fill="transparent" />
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
 
-                                            {showLabels && (
+                                            {showLabels && s.value !== null && s.value !== undefined && (
                                                 <text
                                                     y={selectedRegionName === "France" ? -6 : 0}
                                                     dy={selectedRegionName === "France" ? 0 : "0.35em"}
@@ -594,8 +735,8 @@ const WindGustMap = () => {
                                                     style={{
                                                         fontSize: selectedRegionName === "France" ? '14px' : '28px',
                                                         fontWeight: 'bold',
-                                                        fill: s.value > 100 ? '#fff' : '#000',
-                                                        stroke: s.value > 100 ? '#000' : '#fff',
+                                                        fill: s.value > (windMode === 'direct' ? 60 : 100) ? '#fff' : '#000',
+                                                        stroke: s.value > (windMode === 'direct' ? 60 : 100) ? '#000' : '#fff',
                                                         strokeWidth: selectedRegionName === "France" ? '2px' : '4px',
                                                         paintOrder: 'stroke',
                                                         pointerEvents: 'none',
@@ -660,7 +801,7 @@ const WindGustMap = () => {
                         gap: '2px', flexWrap: 'wrap'
                     }}>
                         <span style={{ fontSize: '10px', fontWeight: '1000', color: '#000', marginRight: '6px' }}>km/h</span>
-                        {WIND_SCALE.filter(r => r.min >= 60).map(range => (
+                        {activeWindScale.filter(r => r.min >= (windMode === 'direct' ? 20 : 60) && r.max !== Infinity).map(range => (
                             <div key={range.min} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                 <div style={{ width: '28px', height: '14px', background: range.color, border: '0.5px solid rgba(0,0,0,0.3)' }} />
                                 <span style={{ fontSize: '8px', fontWeight: '800', color: '#000', marginTop: '1px' }}>{range.min}</span>
@@ -673,10 +814,10 @@ const WindGustMap = () => {
                     {/* Légende */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                         <h3 style={{ margin: '0 0 12px', fontSize: '0.9rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
-                            Vitesse Rafales (km/h)
+                            {windMode === 'direct' ? 'Vent Temps Réel (km/h)' : 'Vitesse Rafales (km/h)'}
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                            {WIND_SCALE.map(range => (
+                            {activeWindScale.map(range => (
                                 <div key={range.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: range.color, border: '1px solid rgba(0,0,0,0.05)' }}></div>
                                     <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>{range.label}</span>
@@ -688,7 +829,7 @@ const WindGustMap = () => {
                     {/* Top Rafales */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ margin: '0 0 15px', fontSize: '1rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Wind size={18} className="text-blue-500" /> Top Rafales
+                            <Wind size={18} style={{ color: windMode === 'direct' ? '#10b981' : '#3b82f6' }} /> Top Rafales
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
                             {stations.length > 0 ? (
@@ -702,11 +843,11 @@ const WindGustMap = () => {
                                     }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '180px' }}>
                                             <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
-                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Dpt {s.id.substring(0, 2)}</span>
+                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Dpt {s.id.substring(0, 2)}</span>
                                         </div>
                                         <div style={{
-                                            background: getWindColor(s.value),
-                                            color: s.value > 100 ? 'white' : '#1e293b',
+                                            background: getWindColor(s.value, activeWindScale),
+                                            color: s.value > (windMode === 'direct' ? 60 : 100) ? 'white' : '#1e293b',
                                             padding: '4px 8px',
                                             borderRadius: '6px',
                                             fontSize: '0.85rem',
@@ -726,8 +867,11 @@ const WindGustMap = () => {
                     <div style={{ background: '#e0f2fe', borderRadius: '20px', padding: '15px', display: 'flex', gap: '12px' }}>
                         <Info className="text-blue-600" size={20} style={{ shrink: 0 }} />
                         <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369a1', lineHeight: '1.4' }}>
-                            Données issues des stations automatiques du réseau Météo-France.
-                            La valeur affichée est la rafale maximale (FXI) enregistrée par département.
+                            {windMode === 'direct' ? (
+                                "Données issues des stations automatiques du réseau Météo-France en temps réel (mesures sur les 6 dernières minutes). La valeur affichée est la rafale ou vitesse moyenne maximale enregistrée récemment."
+                            ) : (
+                                "Données issues des stations automatiques du réseau Météo-France. La valeur affichée est la rafale maximale (FXI) enregistrée par département sur la journée."
+                            )}
                         </p>
                     </div>
                 </div>

@@ -238,7 +238,7 @@ const TemperatureMap = () => {
 
                         if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
                             const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
                         }
 
                         console.log(`[TemperatureMap] ${stationList.length} stations temps réel uniques.`);
@@ -353,7 +353,7 @@ const TemperatureMap = () => {
 
                         if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
                             const regionDepts = REGIONS[selectedRegionName];
-                            stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
                         }
 
                         console.log(`[TemperatureMap] ${stationList.length} stations uniques après regroupement.`);
@@ -379,7 +379,7 @@ const TemperatureMap = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedDate, isRealTime, tempMode]);
+    }, [selectedDate, isRealTime, tempMode, selectedRegionName]);
 
     // Auto-refresh in real-time mode every 3 minutes
     useEffect(() => {
