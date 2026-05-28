@@ -701,7 +701,7 @@ const RainfallMap = () => {
                                                         pointerEvents: 'none', fontFamily: 'sans-serif'
                                                     }}
                                                 >
-                                                    {rainMode === 'direct' ? s.value.toFixed(1) : Math.round(s.value)}
+                                                    {s.value === 0 ? "0" : (s.value < 10 ? s.value.toFixed(1) : Math.round(s.value))}
                                                 </text>
                                             )}
                                         </g>
