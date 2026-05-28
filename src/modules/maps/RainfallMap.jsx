@@ -91,6 +91,7 @@ const RainfallMap = () => {
     const [mapTitle, setMapTitle] = useState("Cumuls de pluie en 24h");
     const [showLabels, setShowLabels] = useState(true);
     const [showRegions, setShowRegions] = useState(true);
+    const [showOnlyRain, setShowOnlyRain] = useState(false);
     const [isSmooth, setIsSmooth] = useState(true);
     const [selectedRegionName, setSelectedRegionName] = useState("France");
     const [hoveredStation, setHoveredStation] = useState(null);
@@ -382,10 +383,16 @@ const RainfallMap = () => {
 
     // Filtrage synchrone des stations par région pour éliminer les flashs visuels
     const visibleStations = useMemo(() => {
-        if (selectedRegionName === "France" || !REGIONS[selectedRegionName]) return stations;
-        const regionDepts = REGIONS[selectedRegionName];
-        return stations.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
-    }, [stations, selectedRegionName]);
+        let result = stations;
+        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+            const regionDepts = REGIONS[selectedRegionName];
+            result = result.filter(s => regionDepts.includes(s.id.startsWith("20") ? "2A" : s.id.substring(0, 2)));
+        }
+        if (showOnlyRain) {
+            result = result.filter(s => s.value > 0);
+        }
+        return result;
+    }, [stations, selectedRegionName, showOnlyRain]);
 
     const voronoiCells = useMemo(() => {
         if (!projection || !visibleStations.length) return [];
@@ -551,6 +558,9 @@ const RainfallMap = () => {
                             </button>
                             <button onClick={() => setUseAltScale(!useAltScale)} style={{ ...navBtnStyle, background: useAltScale ? '#f3e8ff' : 'transparent', color: useAltScale ? '#7c3aed' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: '1px solid #e2e8f0' }}>
                                 {useAltScale ? 'MODÈLE MF' : 'STANDARD'}
+                            </button>
+                            <button onClick={() => setShowOnlyRain(!showOnlyRain)} style={{ ...navBtnStyle, background: showOnlyRain ? '#dcfce7' : 'transparent', color: showOnlyRain ? '#16a34a' : '#64748b', fontSize: '0.75rem', fontWeight: '800', padding: '6px 10px', border: `1px solid ${showOnlyRain ? '#86efac' : '#e2e8f0'}` }}>
+                                💧 PLUIE SEULT
                             </button>
                         </div>
 
