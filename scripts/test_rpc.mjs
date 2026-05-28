@@ -35,6 +35,9 @@ async function test() {
     }
 
     console.log("RPC Success! Total data count:", allData.length);
+    if (allData.length > 0) {
+        console.log("Sample record:", allData[0]);
+    }
 }
 
 test();

@@ -686,7 +686,7 @@ const RainfallMap = () => {
                                         >
                                             <circle r={3} fill="transparent" />
                                             <circle r={0.6} fill="black" fillOpacity="0.2" />
-                                            {showLabels && s.value > 0 && (
+                                            {showLabels && (s.value > 0 || (s.value === 0 && selectedRegionName !== "France")) && (
                                                 <text
                                                     y={selectedRegionName === "France" ? -6 : 0}
                                                     dy={selectedRegionName === "France" ? 0 : "0.35em"}
