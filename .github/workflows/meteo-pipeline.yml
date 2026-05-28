@@ -1,75 +1,51 @@
 name: Pipeline Modeles Meteo
 
 on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'ecmwf | icon-eu | all'
+        required: false
+        default: 'all'
   schedule:
     - cron: '30 7 * * *'
     - cron: '30 19 * * *'
     - cron: '15 3,6,9,12,15,18,21 * * *'
-  workflow_dispatch:
-    inputs:
-      model:
-        description: 'Modele a lancer: ecmwf | icon-eu | all'
-        required: false
-        default: 'all'
 
 jobs:
-  meteo-pipeline:
+  pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system libs (GEOS, PROJ for cartopy)
+      - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libgeos-dev libproj-dev proj-data proj-bin \
-            libeccodes-dev libeccodes-tools
+          sudo apt-get install -y libgeos-dev libproj-dev proj-data proj-bin libeccodes-dev libeccodes-tools
 
-      - name: Setup Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: scripts/meteo/requirements.txt
 
-      - name: Install Python dependencies
-        working-directory: scripts/meteo
+      - name: Install Python packages
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r scripts/meteo/requirements.txt
 
-      - name: Check imports
-        working-directory: scripts/meteo
-        run: |
-          python -c "import cartopy; print('cartopy OK:', cartopy.__version__)"
-          python -c "import cfgrib; print('cfgrib OK')"
-          python -c "import xarray; print('xarray OK')"
-
-      - name: Run ECMWF pipeline
+      - name: Run pipeline
         working-directory: scripts/meteo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python run_pipeline.py ecmwf
+        run: python run_pipeline.py ${{ github.event.inputs.model || 'all' }}
         continue-on-error: true
 
-      - name: Run ICON-EU pipeline
-        working-directory: scripts/meteo
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python run_pipeline.py icon-eu
-        continue-on-error: true
-
-      - name: Cleanup files older than 48h
+      - name: Cleanup old files
         working-directory: scripts/meteo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python cleanup_supabase.py
-
-      - name: Summary
-        run: echo "Pipeline done - $(date -u '+%Y-%m-%d %H:%M UTC')"
