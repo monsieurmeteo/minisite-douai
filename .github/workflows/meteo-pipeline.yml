@@ -1,0 +1,97 @@
+name: Pipeline Modèles Météo
+
+on:
+  schedule:
+    # ECMWF run 00h UTC → dispo ~07h30 UTC
+    - cron: '30 7 * * *'
+    # ECMWF run 12h UTC → dispo ~19h30 UTC
+    - cron: '30 19 * * *'
+    # ICON-EU toutes les 3h (runs 00,03,06,09,12,15,18,21 UTC + délai 3h)
+    - cron: '15 3,6,9,12,15,18,21,0 * * *'
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Modèle à lancer (ecmwf / icon-eu / all)'
+        required: false
+        default: 'all'
+      run_hour:
+        description: 'Heure du run (0,6,12,18... ou vide = auto)'
+        required: false
+        default: ''
+
+jobs:
+  meteo-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installer dépendances système (GEOS, PROJ pour cartopy)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgeos-dev libproj-dev proj-data proj-bin \
+            libeccodes-dev libeccodes-tools
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/meteo/requirements.txt
+
+      - name: Installer dépendances Python
+        working-directory: scripts/meteo
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Vérification cartopy + eccodes
+        working-directory: scripts/meteo
+        run: |
+          python -c "import cartopy; print('cartopy OK:', cartopy.__version__)"
+          python -c "import cfgrib; print('cfgrib OK:', cfgrib.__version__)"
+          python -c "import xarray; print('xarray OK:', xarray.__version__)"
+
+      - name: Lancer pipeline ECMWF
+        if: >
+          github.event.inputs.model == 'ecmwf' ||
+          github.event.inputs.model == 'all' ||
+          (github.event_name == 'schedule' && (
+            contains(github.event.schedule, '30 7') ||
+            contains(github.event.schedule, '30 19')
+          ))
+        working-directory: scripts/meteo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python run_pipeline.py ecmwf
+        continue-on-error: true
+
+      - name: Lancer pipeline ICON-EU
+        if: >
+          github.event.inputs.model == 'icon-eu' ||
+          github.event.inputs.model == 'all' ||
+          (github.event_name == 'schedule' && contains(github.event.schedule, '15'))
+        working-directory: scripts/meteo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python run_pipeline.py icon-eu
+        continue-on-error: true
+
+      - name: Nettoyage fichiers > 48h
+        working-directory: scripts/meteo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python cleanup_supabase.py
+
+      - name: Résumé
+        run: |
+          echo "✅ Pipeline terminé — $(date -u '+%Y-%m-%d %H:%M UTC')"

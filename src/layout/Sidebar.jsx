@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3
+  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3, CloudLightning
 } from 'lucide-react';
 import clsx from 'clsx';
 import { DEPARTMENTS } from '../data/departments';
@@ -125,6 +125,12 @@ export default function Sidebar({ isOpen, onClose }) {
         <NavLink to="/search" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Search size={18} />
           <span>Ma Ville</span>
+        </NavLink>
+
+        <div className="nav-divider-label">MODÈLE MÉTÉO</div>
+        <NavLink to="/modele" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <CloudLightning size={18} style={{ color: '#16a34a' }} />
+          <span>Modèle Météo</span>
         </NavLink>
 
         <div className="nav-divider-label">CARTES</div>
