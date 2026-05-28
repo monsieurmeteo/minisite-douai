@@ -410,7 +410,9 @@ class MeteoFranceCollector {
                 pres: obs.pres ?? null,
                 fxi: fxiKmh,
                 dd: obs.dd ?? null,
-                vv: obs.vv ?? null
+                vv: obs.vv ?? null,
+                insolh: obs.insolh ?? null,
+                ht_neige: obs.ht_neige ?? null
             };
         });
 

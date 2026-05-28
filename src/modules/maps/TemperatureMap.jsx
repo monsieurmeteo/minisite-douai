@@ -146,12 +146,22 @@ const TemperatureMap = () => {
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
-        setIsRealTime(selectedDate === today);
-    }, [selectedDate]);
+        const realTime = selectedDate === today;
+        setIsRealTime(realTime);
+        if (!realTime && tempMode === "actuelle") {
+            setTempMode("tn");
+        }
+    }, [selectedDate, tempMode]);
 
     // Auto-update title when mode changes
     useEffect(() => {
-        setMapTitle(tempMode === "tn" ? "Températures minimales" : "Températures maximales");
+        if (tempMode === "tn") {
+            setMapTitle("Températures minimales");
+        } else if (tempMode === "tx") {
+            setMapTitle("Températures maximales");
+        } else {
+            setMapTitle("Températures en Temps Réel");
+        }
     }, [tempMode]);
 
     const loadData = async () => {
@@ -162,42 +172,76 @@ const TemperatureMap = () => {
             let stationList = [];
 
             try {
-                // Pagination complète pour ne pas être bloqué à 1000 résultats
-                let allData = [];
-                let from = 0;
-                const batchSize = 1000;
-                let hasMore = true;
+                if (tempMode === "actuelle") {
+                    console.log("[TemperatureMap] Chargement des températures en temps réel...");
+                    const { data: liveData, error: liveError } = await supabase.rpc('get_france_live');
+                    if (liveError) throw liveError;
 
-                while (hasMore) {
-                    const { data, error: rpcError } = await supabase
-                        .rpc('get_daily_extremes_fast', {
-                            target_date: selectedDate,
-                            dept_codes: []
-                        })
-                        .range(from, from + batchSize - 1);
+                    if (liveData && liveData.length > 0) {
+                        let maxTimestamp = null;
+                        liveData.forEach(item => {
+                            if (item.obs_time) {
+                                const d = new Date(item.obs_time);
+                                if (!maxTimestamp || d > maxTimestamp) {
+                                    maxTimestamp = d;
+                                }
+                            }
+                        });
+                        setLastDataTimestamp(maxTimestamp);
 
-                    if (rpcError) break;
-                    if (data && data.length > 0) {
-                        allData.push(...data);
-                        if (data.length < batchSize) hasMore = false;
-                        else from += batchSize;
-                    } else {
-                        hasMore = false;
+                        const uniqueStations = new Map();
+                        liveData.forEach(s => {
+                            const tempVal = s.t; // Current temperature is 't' in get_france_live
+                            if (tempVal !== null && tempVal !== undefined && !isNaN(tempVal)) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
+
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat;
+                                const lon = meta?.lon;
+
+                                if (lat && lon) {
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+                                    const existing = uniqueStations.get(geoKey);
+                                    // Use the first one or keep it simple
+                                    if (!existing) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: tempVal,
+                                            name: stationNamesData[sid] || meta?.name || sid
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                        }
+
+                        console.log(`[TemperatureMap] ${stationList.length} stations temps réel uniques.`);
                     }
-                }
+                } else {
+                    // Pagination complète pour ne pas être bloqué à 1000 résultats
+                    let allData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
 
-                // Fallback vers le mode COMPLET si données insuffisantes
-                if (allData.length < 300) {
-                    console.log(`[TemperatureMap] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
-                    allData = [];
-                    from = 0;
-                    hasMore = true;
                     while (hasMore) {
                         const { data, error: rpcError } = await supabase
-                            .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                            .rpc('get_daily_extremes_fast', {
+                                target_date: selectedDate,
+                                dept_codes: []
+                            })
                             .range(from, from + batchSize - 1);
 
-                        if (rpcError) throw rpcError;
+                        if (rpcError) break;
                         if (data && data.length > 0) {
                             allData.push(...data);
                             if (data.length < batchSize) hasMore = false;
@@ -206,81 +250,103 @@ const TemperatureMap = () => {
                             hasMore = false;
                         }
                     }
-                }
 
-                if (allData.length > 0) {
-                    console.log(`[TemperatureMap] ${allData.length} stations traitées pour le ${selectedDate}`);
+                    // Fallback vers le mode COMPLET si données insuffisantes
+                    if (allData.length < 300) {
+                        console.log(`[TemperatureMap] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
+                        allData = [];
+                        from = 0;
+                        hasMore = true;
+                        while (hasMore) {
+                            const { data, error: rpcError } = await supabase
+                                .rpc('get_daily_extremes_full', { target_date: selectedDate })
+                                .range(from, from + batchSize - 1);
 
-                    const uniqueStations = new Map();
-
-                    // Capturer le timestamp max pour afficher l'heure de mise à jour
-                    let maxTimestamp = null;
-                    if (isRealTime) {
-                        try {
-                            const { data: latestObs } = await supabase
-                                .from('observations_6mn')
-                                .select('timestamp')
-                                .order('timestamp', { ascending: false })
-                                .limit(1);
-                            if (latestObs && latestObs[0]) {
-                                maxTimestamp = new Date(latestObs[0].timestamp);
+                            if (rpcError) throw rpcError;
+                            if (data && data.length > 0) {
+                                allData.push(...data);
+                                if (data.length < batchSize) hasMore = false;
+                                else from += batchSize;
+                            } else {
+                                hasMore = false;
                             }
-                        } catch (err) {
-                            console.warn("Erreur fetch latest obs timestamp:", err);
                         }
                     }
 
-                    allData.forEach(s => {
-                        const tempVal = tempMode === "tn" ? s.temp_min : s.temp_max;
-                        if (tempVal !== null && tempVal !== undefined && !isNaN(tempVal)) {
-                            let sid = String(s.station_id);
-                            if (sid.length === 7) sid = "0" + sid;
+                    if (allData.length > 0) {
+                        console.log(`[TemperatureMap] ${allData.length} stations traitées pour le ${selectedDate}`);
 
-                            const meta = stationsLookup[sid];
-                            const lat = meta?.lat || s.lat;
-                            const lon = meta?.lon || s.lon;
+                        const uniqueStations = new Map();
 
-                            if (lat && lon) {
-                                // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
-                                const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+                        // Capturer le timestamp max pour afficher l'heure de mise à jour
+                        let maxTimestamp = null;
+                        if (isRealTime) {
+                            try {
+                                const { data: latestObs } = await supabase
+                                    .from('observations_6mn')
+                                    .select('timestamp')
+                                    .order('timestamp', { ascending: false })
+                                    .limit(1);
+                                if (latestObs && latestObs[0]) {
+                                    maxTimestamp = new Date(latestObs[0].timestamp);
+                                }
+                            } catch (err) {
+                                      console.warn("Erreur fetch latest obs timestamp:", err);
+                            }
+                        }
 
-                                const existing = uniqueStations.get(geoKey);
-                                // Pour Tn on garde la plus basse, pour Tx la plus haute
-                                const shouldReplace = tempMode === "tn"
-                                    ? (!existing || tempVal < existing.value)
-                                    : (!existing || tempVal > existing.value);
+                        allData.forEach(s => {
+                            const tempVal = tempMode === "tn" ? s.temp_min : s.temp_max;
+                            if (tempVal !== null && tempVal !== undefined && !isNaN(tempVal)) {
+                                let sid = String(s.station_id);
+                                if (sid.length === 7) sid = "0" + sid;
 
-                                if (shouldReplace) {
-                                    uniqueStations.set(geoKey, {
-                                        id: sid,
-                                        lat,
-                                        lon,
-                                        value: tempVal,
-                                        name: stationNamesData[sid] || meta?.name || s.station_name || sid
-                                    });
+                                const meta = stationsLookup[sid];
+                                const lat = meta?.lat || s.lat;
+                                const lon = meta?.lon || s.lon;
+
+                                if (lat && lon) {
+                                    // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
+                                    const geoKey = `${(Math.round(lat * 20) / 20).toFixed(2)}_${(Math.round(lon * 20) / 20).toFixed(2)}`;
+
+                                    const existing = uniqueStations.get(geoKey);
+                                    // Pour Tn on garde la plus basse, pour Tx la plus haute
+                                    const shouldReplace = tempMode === "tn"
+                                        ? (!existing || tempVal < existing.value)
+                                        : (!existing || tempVal > existing.value);
+
+                                    if (shouldReplace) {
+                                        uniqueStations.set(geoKey, {
+                                            id: sid,
+                                            lat,
+                                            lon,
+                                            value: tempVal,
+                                            name: stationNamesData[sid] || meta?.name || s.station_name || sid
+                                        });
+                                    }
                                 }
                             }
+                        });
+
+                        // On n'affiche l'heure que si on a un vrai timestamp issu des données
+                        // (pas de fallback à new Date() pour ne pas afficher l'heure courante)
+                        setLastDataTimestamp(maxTimestamp);
+
+                        stationList = Array.from(uniqueStations.values());
+
+                        if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
+                            const regionDepts = REGIONS[selectedRegionName];
+                            stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
                         }
-                    });
 
-                    // On n'affiche l'heure que si on a un vrai timestamp issu des données
-                    // (pas de fallback à new Date() pour ne pas afficher l'heure courante)
-                    setLastDataTimestamp(maxTimestamp);
-
-                    stationList = Array.from(uniqueStations.values());
-
-                    if (selectedRegionName !== "France" && REGIONS[selectedRegionName]) {
-                        const regionDepts = REGIONS[selectedRegionName];
-                        stationList = stationList.filter(s => regionDepts.includes(s.id.substring(0, 2)));
+                        console.log(`[TemperatureMap] ${stationList.length} stations uniques après regroupement.`);
                     }
-
-                    console.log(`[TemperatureMap] ${stationList.length} stations uniques après regroupement.`);
                 }
             } catch (err) {
                 console.error("[TemperatureMap] Erreur critique de chargement:", err);
             }
 
-            // Tri : Tn par valeur croissante (les plus froides en premier), Tx par valeur décroissante
+            // Tri : Tn par valeur croissante (les plus froides en premier), Tx/Actuelle par valeur décroissante
             setStations(stationList.sort((a, b) => tempMode === "tn" ? a.value - b.value : b.value - a.value));
 
             if (stationList.length === 0) {
@@ -297,6 +363,16 @@ const TemperatureMap = () => {
     useEffect(() => {
         loadData();
     }, [selectedDate, isRealTime, tempMode]);
+
+    // Auto-refresh in real-time mode every 3 minutes
+    useEffect(() => {
+        if (tempMode !== "actuelle" || !isRealTime) return;
+        const interval = setInterval(() => {
+            console.log("[TemperatureMap] Auto-refreshing real-time observations...");
+            loadData();
+        }, 3 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [tempMode, isRealTime, selectedDate]);
 
     const projection = useMemo(() => {
         if (!geoData) return null;
@@ -381,7 +457,7 @@ const TemperatureMap = () => {
         if (!el) return;
         html2canvas(el, { scale: 2, useCORS: true }).then(canvas => {
             const link = document.createElement("a");
-            link.download = `carte-${tempMode === "tn" ? "tn" : "tx"}-${selectedDate}.png`;
+            link.download = `carte-${tempMode}-${selectedDate}.png`;
             link.href = canvas.toDataURL();
             link.click();
         });
@@ -408,8 +484,8 @@ const TemperatureMap = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Thermometer style={{ color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} size={28} />
-                            {tempMode === 'tn' ? 'Tn' : 'Tx'} : {selectedRegionName}
+                            <Thermometer style={{ color: tempMode === 'tn' ? '#3b82f6' : tempMode === 'tx' ? '#ef4444' : '#10b981' }} size={28} />
+                            {tempMode === 'tn' ? 'Tn' : tempMode === 'tx' ? 'Tx' : 'Actuelle'} : {selectedRegionName}
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b' }}></div>
@@ -420,8 +496,21 @@ const TemperatureMap = () => {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '10px' }}>
-                        {/* Sélecteur Tn / Tx */}
+                        {/* Sélecteur Tn / Tx / Actuelle */}
                         <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '12px', padding: '3px' }}>
+                            {isRealTime && (
+                                <button
+                                    onClick={() => setTempMode('actuelle')}
+                                    style={{
+                                        padding: '6px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                        fontWeight: '800', fontSize: '0.85rem', transition: 'all 0.2s',
+                                        background: tempMode === 'actuelle' ? '#10b981' : 'transparent',
+                                        color: tempMode === 'actuelle' ? 'white' : '#64748b'
+                                    }}
+                                >
+                                    Temps Réel
+                                </button>
+                            )}
                             <button
                                 onClick={() => setTempMode('tn')}
                                 style={{
@@ -483,7 +572,7 @@ const TemperatureMap = () => {
                         <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', padding: '6px', borderRadius: '14px' }}>
                             <button onClick={() => changeDate(-1)} style={navBtnStyle}><ChevronLeft size={20} /></button>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-                                <Calendar size={18} style={{ marginRight: '10px', color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} />
+                                <Calendar size={18} style={{ marginRight: '10px', color: tempMode === 'tn' ? '#3b82f6' : tempMode === 'tx' ? '#ef4444' : '#10b981' }} />
                                 <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e293b' }}>{format(new Date(selectedDate), "dd MMM yyyy", { locale: fr })}</span>
                                 <input
                                     type="date"
@@ -533,7 +622,7 @@ const TemperatureMap = () => {
                 }}>
                     {loading && (
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-                            <div className="loader" style={{ width: '48px', height: '48px', border: '5px solid #e2e8f0', borderTopColor: tempMode === 'tn' ? '#3b82f6' : '#ef4444', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                            <div className="loader" style={{ width: '48px', height: '48px', border: '5px solid #e2e8f0', borderTopColor: tempMode === 'tn' ? '#3b82f6' : tempMode === 'tx' ? '#ef4444' : '#10b981', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                             <p style={{ marginTop: '20px', fontWeight: '700', color: '#1e40af', fontSize: '1.1rem' }}>Saisie des mesures météo...</p>
                         </div>
                     )}
@@ -656,7 +745,7 @@ const TemperatureMap = () => {
                         }}>
                             <div style={{ fontWeight: '800', marginBottom: '2px' }}>{hoveredStation.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Station {hoveredStation.id} — Dpt {hoveredStation.id.substring(0, 2)}</div>
-                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: tempMode === 'tn' ? '#38bdf8' : '#f87171' }}>{hoveredStation.value.toFixed(1)} °C</div>
+                            <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: '900', color: tempMode === 'tn' ? '#38bdf8' : tempMode === 'tx' ? '#f87171' : '#34d399' }}>{hoveredStation.value.toFixed(1)} °C</div>
                         </div>
                     )}
 
@@ -703,7 +792,7 @@ const TemperatureMap = () => {
                     {/* Légende Panneau Latéral */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                         <h3 style={{ margin: '0 0 12px', fontSize: '0.9rem', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
-                            {tempMode === 'tn' ? 'Temp. Minimale (°C)' : 'Temp. Maximale (°C)'}
+                            {tempMode === 'tn' ? 'Temp. Minimale (°C)' : tempMode === 'tx' ? 'Temp. Maximale (°C)' : 'Temp. Actuelle (°C)'}
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
                             {activeTempScale.filter(r => r.min !== -Infinity).map(range => (
@@ -718,8 +807,8 @@ const TemperatureMap = () => {
                     {/* Top Températures */}
                     <div style={{ background: 'white', borderRadius: '20px', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ margin: '0 0 15px', fontSize: '1rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Thermometer size={18} style={{ color: tempMode === 'tn' ? '#3b82f6' : '#ef4444' }} />
-                            {tempMode === 'tn' ? 'Top Froid (Tn)' : 'Top Chaleur (Tx)'}
+                            <Thermometer size={18} style={{ color: tempMode === 'tn' ? '#3b82f6' : tempMode === 'tx' ? '#ef4444' : '#10b981' }} />
+                            {tempMode === 'tn' ? 'Top Froid (Tn)' : tempMode === 'tx' ? 'Top Chaleur (Tx)' : 'Top Températures (Actuelle)'}
                         </h3>
                         <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scrollbar">
                             {stations.length > 0 ? (
@@ -749,13 +838,15 @@ const TemperatureMap = () => {
                     </div>
 
                     {/* Infos API */}
-                    <div style={{ background: tempMode === 'tn' ? '#dbeafe' : '#fee2e2', borderRadius: '20px', padding: '15px', display: 'flex', gap: '12px' }}>
-                        <Info style={{ color: tempMode === 'tn' ? '#1d4ed8' : '#dc2626' }} size={20} />
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: tempMode === 'tn' ? '#1e40af' : '#991b1b', lineHeight: '1.4' }}>
+                    <div style={{ background: tempMode === 'tn' ? '#dbeafe' : tempMode === 'tx' ? '#fee2e2' : '#d1fae5', borderRadius: '20px', padding: '15px', display: 'flex', gap: '12px' }}>
+                        <Info style={{ color: tempMode === 'tn' ? '#1d4ed8' : tempMode === 'tx' ? '#dc2626' : '#059669' }} size={20} />
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: tempMode === 'tn' ? '#1e40af' : tempMode === 'tx' ? '#991b1b' : '#065f46', lineHeight: '1.4' }}>
                             Données issues des stations automatiques du réseau Météo-France.
                             {tempMode === 'tn'
                                 ? " La valeur affichée est la température minimale (Tn) enregistrée sur 24h."
-                                : " La valeur affichée est la température maximale (Tx) enregistrée sur 24h."
+                                : tempMode === 'tx'
+                                ? " La valeur affichée est la température maximale (Tx) enregistrée sur 24h."
+                                : " La valeur affichée est la température instantanée mesurée en temps réel (mise à jour toutes les 6 minutes)."
                             }
                         </p>
                     </div>

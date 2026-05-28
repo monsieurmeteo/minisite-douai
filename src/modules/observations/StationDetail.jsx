@@ -97,6 +97,15 @@ export default function StationDetail() {
                                 parsedNormals.records.maxRain.vals = vals.map(v => parseFloat(v.replace(',', '.')));
                                 parsedNormals.records.maxRain.dates = dates;
                             }
+                            // Records Wind (FXI)
+                            if (line.includes('Vitesse maximale du vent (m/s)') || line.includes('Vitesse du vent maximale (m/s)')) {
+                                const vals = lines[idx + 2].split(';').map(v => v.trim()).filter(v => v !== '' && !isNaN(v.replace(',', '.')));
+                                const dates = lines[idx + 3].split(';').map(v => v.trim()).filter(v => v !== '' && !v.includes('Date'));
+                                parsedNormals.records.maxWind = {
+                                    vals: vals.map(v => parseFloat(v.replace(',', '.')) * 3.6), // Convert m/s to km/h
+                                    dates: dates
+                                };
+                            }
                         });
 
                         if (parsedNormals.tx.length === 12) {
@@ -292,15 +301,11 @@ export default function StationDetail() {
         if (!fullHistory.length) return {};
 
         // --- CALCULS Journée Civile (00h-24h Locale) ---
-        // Pour correspondre à l'affichage "Aujourd'hui" attendu par le grand public
         const startOfDay = new Date(selectedDate);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // On a besoin des données J-1 seulement si OMM, mais pour Civil, fullHistory suffit si on est J.
-        // Si on navigue dans le passé, fullHistory contient la journée demandée.
-        // combinedHistory est plus sûr.
         const combinedHistory = [...yesterdayHistory, ...fullHistory];
 
         const obsCivil = combinedHistory.filter(o => {
@@ -310,11 +315,11 @@ export default function StationDetail() {
 
         // Extraction Tx (Civil)
         const txVals = obsCivil.map(o => o.temp).filter(v => v !== null);
-        const tx = txVals.length > 0 ? Math.max(...txVals) : -Infinity;
+        const tx = txVals.length > 0 ? Math.max(...txVals) : null;
 
         // Extraction Tn (Civil)
         const tnVals = obsCivil.map(o => o.temp).filter(v => v !== null);
-        const tn = tnVals.length > 0 ? Math.min(...tnVals) : Infinity;
+        const tn = tnVals.length > 0 ? Math.min(...tnVals) : null;
 
         // Rafale Max (Civil)
         const gusts = obsCivil.map(h => h.gust).filter(g => g !== null);
@@ -323,11 +328,27 @@ export default function StationDetail() {
         // RR (Civil)
         const totalRain = obsCivil.reduce((acc, h) => acc + (h.rain > 0 ? h.rain : 0), 0);
 
+        // Soleil (Civil)
+        const totalSun = obsCivil.reduce((acc, h) => acc + (h.sun > 0 ? h.sun : 0), 0);
+
+        // Humidité Moyenne
+        const hums = obsCivil.map(o => o.hum).filter(v => v !== null);
+        const avgHum = hums.length > 0 ? hums.reduce((a, b) => a + b, 0) / hums.length : null;
+
+        // Pression
+        const pressures = obsCivil.map(o => o.pressure).filter(v => v !== null);
+        const maxPres = pressures.length > 0 ? Math.max(...pressures) : null;
+        const minPres = pressures.length > 0 ? Math.min(...pressures) : null;
+
         return {
-            maxT: tx !== -Infinity ? tx : null,
-            minT: tn !== Infinity ? tn : null,
+            maxT: tx,
+            minT: tn,
             maxGust: maxGust,
             totalRain: totalRain,
+            totalSun: totalSun,
+            avgHum: avgHum,
+            maxPres: maxPres,
+            minPres: minPres,
             minVis: obsCivil.map(o => o.vv).filter(v => v !== null).length > 0 ? Math.min(...obsCivil.map(o => o.vv).filter(v => v !== null)) : null
         };
     }, [fullHistory, yesterdayHistory, selectedDate]);
@@ -512,14 +533,14 @@ export default function StationDetail() {
                         <div className="stat-card">
                             <span className="label">Température maximale</span>
                             <span className="value red">
-                                {typeof stats.maxT === 'number' && !isNaN(stats.maxT) && stats.maxT !== -Infinity ? stats.maxT.toFixed(1) : '--'}°C
+                                {typeof stats.maxT === 'number' && !isNaN(stats.maxT) ? stats.maxT.toFixed(1) : '--'}°C
                             </span>
                             <span className="sub">Aujourd'hui</span>
                         </div>
                         <div className="stat-card">
                             <span className="label">Température minimale</span>
                             <span className="value blue">
-                                {typeof stats.minT === 'number' && !isNaN(stats.minT) && stats.minT !== Infinity ? stats.minT.toFixed(1) : '--'}°C
+                                {typeof stats.minT === 'number' && !isNaN(stats.minT) ? stats.minT.toFixed(1) : '--'}°C
                             </span>
                             <span className="sub">Aujourd'hui</span>
                         </div>
@@ -529,7 +550,34 @@ export default function StationDetail() {
                             <span className="sub">Aujourd'hui</span>
                         </div>
                         <div className="stat-card">
+                            <span className="label">Cumul Pluie</span>
+                            <span className="value" style={{ color: '#0ea5e9' }}>
+                                {typeof stats.totalRain === 'number' && !isNaN(stats.totalRain) ? stats.totalRain.toFixed(1) : '--'} mm
+                            </span>
                             <span className="sub">Cumul 24h</span>
+                        </div>
+                        <div className="stat-card">
+                            <span className="label">Ensoleillement</span>
+                            <span className="value" style={{ color: '#eab308' }}>
+                                {typeof stats.totalSun === 'number' && !isNaN(stats.totalSun) ? (stats.totalSun / 60).toFixed(1) : '--'} h
+                            </span>
+                            <span className="sub">Aujourd'hui</span>
+                        </div>
+                        <div className="stat-card">
+                            <span className="label">Humidité Moyenne</span>
+                            <span className="value" style={{ color: '#10b981' }}>
+                                {typeof stats.avgHum === 'number' && !isNaN(stats.avgHum) ? Math.round(stats.avgHum) : '--'}%
+                            </span>
+                            <span className="sub">Aujourd'hui</span>
+                        </div>
+                        <div className="stat-card">
+                            <span className="label">Pression (min/max)</span>
+                            <div className="value-range" style={{ fontSize: '1rem', fontWeight: 'bold', color: '#64748b' }}>
+                                <span>{stats.minPres?.toFixed(1) || '--'}</span>
+                                <small style={{ margin: '0 4px', opacity: 0.5 }}>/</small>
+                                <span>{stats.maxPres?.toFixed(1) || '--'}</span>
+                            </div>
+                            <span className="sub">hPa aujourd'hui</span>
                         </div>
                         <div className="stat-card">
                             <span className="label">Visibilité minimale</span>

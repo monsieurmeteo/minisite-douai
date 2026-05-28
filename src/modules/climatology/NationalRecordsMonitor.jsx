@@ -64,6 +64,7 @@ export default function NationalRecordsMonitor() {
                 const tnDay = row.tn_day ?? row.temp;
                 const windDay = row.gust_day ?? 0;
                 const rainDay = row.rain_day ?? 0;
+                const sunDay = (row.sun_day ?? 0) / 60; // Convert minutes to hours if needed, or use as is
 
                 const anoTx = (txDay !== null && txNorm !== null) ? txDay - txNorm : null;
                 const anoTn = (tnDay !== null && tnNorm !== null) ? tnDay - tnNorm : null;
@@ -90,7 +91,7 @@ export default function NationalRecordsMonitor() {
                     txDay, tnDay, txNorm, tnNorm,
                     anoTx, anoTn, currentAno,
                     recTx, recTn, recWind, recRain,
-                    windDay, rainDay,
+                    windDay, rainDay, sunDay,
                     isBroken,
                     brokenType: {
                         tx: isBrokenMax,
@@ -262,6 +263,7 @@ export default function NationalRecordsMonitor() {
                                 <th onClick={() => handleSort('tnDay')} className="right">Min (Tn) <SortIcon colKey="tnDay" /></th>
                                 <th onClick={() => handleSort('windDay')} className="right">Rafale <SortIcon colKey="windDay" /></th>
                                 <th onClick={() => handleSort('rainDay')} className="right">Pluie 24h <SortIcon colKey="rainDay" /></th>
+                                <th onClick={() => handleSort('sunDay')} className="right">Soleil <SortIcon colKey="sunDay" /></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -315,6 +317,11 @@ export default function NationalRecordsMonitor() {
                                         <div className="flex flex-col items-end">
                                             {renderCell(s.rainDay, 1, ' mm', `val-rain ${getRainClass(s.rainDay)} ${s.brokenType.rain ? 'broken-val' : ''}`)}
                                             {s.recRain && <small className="text-[10px] opacity-50">Rec: {s.recRain}</small>}
+                                        </div>
+                                    </td>
+                                    <td className="right">
+                                        <div className="flex flex-col items-end">
+                                            {renderCell(s.sunDay, 1, ' h', 'val-sun')}
                                         </div>
                                     </td>
 

@@ -160,6 +160,10 @@ const DailyExtremes = () => {
                     const sid = String(item.station_id);
                     return {
                         ...item,
+                        sun_total: item.sun_total || 0,
+                        snow_depth: item.snow_depth || 0,
+                        hum_avg: item.hum_avg || null,
+                        pres_avg: item.pres_min && item.pres_max ? (item.pres_min + item.pres_max) / 2 : null,
                         stationName: stationNamesData[sid] || sid,
                         altitude: stationsMetadata[sid] ?? item.altitude ?? null,
                         dept: sid.substring(0, 2)
@@ -538,6 +542,8 @@ const DailyExtremes = () => {
                                             <th onClick={() => handleSort(sortConfig.key === 'temp_max' ? 'vis_min' : 'temp_max')} className="right">Tx <SortIcon colKey="temp_max" /></th>
                                             <th onClick={() => handleSort('rain_total')} className="right">Pluie 24h <SortIcon colKey="rain_total" /></th>
                                             <th onClick={() => handleSort('wind_gust_max')} className="right">Rafale (H) <SortIcon colKey="wind_gust_max" /></th>
+                                            <th onClick={() => handleSort('sun_total')} className="right">Soleil <SortIcon colKey="sun_total" /></th>
+                                            <th onClick={() => handleSort('pres_avg')} className="right">Pres. Moy <SortIcon colKey="pres_avg" /></th>
                                             <th onClick={() => handleSort('vis_min')} className="right">Vis Mini <SortIcon colKey="vis_min" /></th>
                                         </>
                                     )}
@@ -616,6 +622,8 @@ const DailyExtremes = () => {
                                                             )}
                                                         </div>
                                                     </td>
+                                                    <td className="right">{renderCell(row.sun_total ? row.sun_total / 60 : null, 1, 'h', 'val-sun')}</td>
+                                                    <td className="right">{renderCell(row.pres_avg, 1, 'hPa', 'val-pres')}</td>
                                                     <td className="right">{renderCell(row.vis_min ? row.vis_min / 1000 : null, 1, 'km', `val-vis ${getVisClass(row.vis_min)}`)}</td>
                                                 </>
                                             )}

@@ -101,7 +101,7 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
                 return t >= startOfDay.getTime() && t <= endOfDay.getTime();
             });
 
-            let tx = null, tn = null, rr = 0;
+            let tx = null, tn = null, rr = 0, fxi = null, ff = null;
 
             const tvs = dayObs.map(o => o.t).filter(v => v != null);
             if (tvs.length > 0) {
@@ -112,8 +112,15 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
             // RR : Somme des rr_per (cumul 6mn) sur la journée civile
             rr = dayObs.reduce((sum, o) => sum + (o.rr_per > 0 ? o.rr_per : 0), 0);
 
+            // Vent
+            const fxiVals = dayObs.map(o => o.fxi).filter(v => v != null);
+            if (fxiVals.length > 0) fxi = Math.max(...fxiVals);
+
+            const ffVals = dayObs.map(o => o.ff).filter(v => v != null);
+            if (ffVals.length > 0) ff = ffVals.reduce((a, b) => a + b, 0) / ffVals.length;
+
             const isValid = dayObs.length >= 100; // ~10 obs/h * 24h ≈ 240, on valide dès 100
-            results.push({ day: d, tx, tn, rr, sun: 0, isValid });
+            results.push({ day: d, tx, tn, rr, sun: 0, fxi, ff, isValid });
         }
         return results;
     };
@@ -145,7 +152,7 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
 
 
 
-            let tx = null, tn = null, rr = 0;
+            let tx = null, tn = null, rr = 0, fxi = null, ff = null;
 
             // Données 6mn : on utilise directement t
             const txVals = obsTx.map(o => o.t).filter(v => v != null);
@@ -158,11 +165,17 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
 
             if (isValid) {
                 rr = obsTx.reduce((sum, o) => sum + (o.rr_per > 0 ? o.rr_per : 0), 0);
+                
+                const fxiVals = obsTx.map(o => o.fxi).filter(v => v != null);
+                if (fxiVals.length > 0) fxi = Math.max(...fxiVals);
+
+                const ffVals = obsTx.map(o => o.ff).filter(v => v != null);
+                if (ffVals.length > 0) ff = ffVals.reduce((a, b) => a + b, 0) / ffVals.length;
             } else if (obsTx.length >= 100) {
                 rr = obsTx.reduce((sum, o) => sum + (o.rr_per > 0 ? o.rr_per : 0), 0);
             }
 
-            results.push({ day: d, tx, tn, rr, sun: 0, isValid });
+            results.push({ day: d, tx, tn, rr, sun: 0, fxi, ff, isValid });
         }
         return results;
     };
@@ -176,6 +189,8 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
         const rrs = daily.map(d => d.rr).filter(v => v != null);
         const suns = daily.map(d => d.sun).filter(v => v != null);
 
+        const fxis = daily.map(d => d.fxi).filter(v => v != null);
+
         return {
             isFull: valids.length >= 20,
             count: valids.length,
@@ -183,6 +198,7 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
             meanTn: tns.length ? tns.reduce((a, b) => a + b, 0) / tns.length : null,
             totalRr: rrs.reduce((a, b) => a + b, 0),
             totalSun: suns.reduce((a, b) => a + b, 0),
+            maxGust: fxis.length ? Math.max(...fxis) : null,
             rainDays: daily.filter(d => d.rr >= 1).length
         };
     };
@@ -302,6 +318,8 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
                             <th>{aggMode === 'omm' ? 'Tx (06-06 TU)' : 'Tx (0-24h)'}</th>
                             <th>{aggMode === 'omm' ? 'Tn (18-18 TU)' : 'Tn (0-24h)'}</th>
                             <th>{aggMode === 'omm' ? 'RR (06-06 TU)' : 'RR (0-24h)'}</th>
+                            <th>Rafale (km/h)</th>
+                            <th>Vent moy.</th>
                             <th>Soleil (h)</th>
                         </tr>
                     </thead>
@@ -312,6 +330,8 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
                                 <td className={`tx-col ${d.tx >= 25 ? 'is-hot' : ''}`}>{d.tx !== null ? d.tx.toFixed(1) + '°' : '-'}</td>
                                 <td className={`tn-col ${d.tn <= 0 ? 'is-frost' : ''}`}>{d.tn !== null ? d.tn.toFixed(1) + '°' : '-'}</td>
                                 <td className="rr-col">{d.rr > 0 ? d.rr.toFixed(1) + ' mm' : (d.tx !== null ? '0.0 mm' : '-')}</td>
+                                <td className="wind-col" style={{ fontWeight: d.fxi >= 60 ? 'bold' : 'normal', color: d.fxi >= 100 ? '#ef4444' : 'inherit' }}>{d.fxi !== null ? Math.round(d.fxi) : '-'}</td>
+                                <td className="wind-col">{d.ff !== null ? Math.round(d.ff) : '-'}</td>
                                 <td className="sun-col">{d.tx !== null ? d.sun.toFixed(1) + ' h' : '-'}</td>
                             </tr>
                         ))}
@@ -323,6 +343,8 @@ export default function MonthlyClimateTable({ stationId, stationName }) {
                                 <td>{stats.meanTx?.toFixed(1)}°</td>
                                 <td>{stats.meanTn?.toFixed(1)}°</td>
                                 <td>{stats.totalRr?.toFixed(1)} mm</td>
+                                <td>{stats.maxGust ? stats.maxGust + ' km/h' : '-'}</td>
+                                <td>-</td>
                                 <td>{stats.totalSun?.toFixed(1)} h</td>
                             </tr>
                         </tfoot>
