@@ -52,7 +52,7 @@ async function runCronCollect() {
         // Météo-France publie généralement avec 25 à 30 min de décalage.
         const now = new Date();
         const startPoint = new Date(Math.floor(now.getTime() / 360000) * 360000 - 96 * 60000); 
-        const limitDate = new Date(now.getTime() - 15 * 60000); 
+        const limitDate = new Date(now.getTime() - 1 * 60000); 
 
         const slotsToFetch = [];
         let reader = new Date(startPoint);
