@@ -226,14 +226,15 @@ const TemperatureMap = () => {
                             const lat = meta?.lat || s.lat;
                             const lon = meta?.lon || s.lon;
 
-                            // Capturer le timestamp le plus récent
-                            const ts = s.last_obs_time || s.obs_time || s.timestamp;
-                            if (ts) {
-                                const d = new Date(ts);
-                                if (!isNaN(d) && (!maxTimestamp || d > maxTimestamp)) {
-                                    maxTimestamp = d;
-                                }
-                            }
+                    // Capturer le timestamp le plus récent à partir de wind_gust_time
+                    // (seul champ horodaté retourné par la RPC get_daily_extremes_fast)
+                    const ts = s.wind_gust_time;
+                    if (ts) {
+                        const d = new Date(ts);
+                        if (!isNaN(d) && (!maxTimestamp || d > maxTimestamp)) {
+                            maxTimestamp = d;
+                        }
+                    }
 
                             if (lat && lon) {
                                 // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
@@ -258,8 +259,8 @@ const TemperatureMap = () => {
                         }
                     });
 
-                    // Si pas de timestamp dans les données, on prend l'heure courante pour "Temps Réel"
-                    if (!maxTimestamp && isRealTime) maxTimestamp = new Date();
+                    // On n'affiche l'heure que si on a un vrai timestamp issu des données
+                    // (pas de fallback à new Date() pour ne pas afficher l'heure courante)
                     setLastDataTimestamp(maxTimestamp);
 
                     stationList = Array.from(uniqueStations.values());
@@ -664,8 +665,7 @@ const TemperatureMap = () => {
                         {lastDataTimestamp && (
                             <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#555', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b', flexShrink: 0 }} />
-                                {isRealTime ? 'Mis à jour à ' : 'Dernière obs. à '}
-                                {lastDataTimestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                Dernière obs. à {lastDataTimestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                         )}
                     </div>
