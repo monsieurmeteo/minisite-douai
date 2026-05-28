@@ -3,7 +3,7 @@ name: Synchronisation Résumés Quotidiens
 on:
   schedule:
     # Toutes les 15 minutes (0, 15, 30, 45)
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:

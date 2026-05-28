@@ -57,10 +57,10 @@ Deno.serve(async (req) => {
             return data.access_token;
         };
 
-        // 2. Determine Rolling Lookback Slots (Rolling 96 minutes window shifted by 15 minutes for publication lag)
+        // 2. Determine Rolling Lookback Slots (Rolling 96 minutes window shifted by 1 minute for publication lag)
         const now = new Date();
         const startPoint = new Date(Math.floor(now.getTime() / 360000) * 360000 - 96 * 60000); 
-        const limitDate = new Date(now.getTime() - 15 * 60000); 
+        const limitDate = new Date(now.getTime() - 1 * 60000); 
 
         const slotsToFetch: Date[] = [];
         let reader = new Date(startPoint);
