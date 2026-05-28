@@ -1,181 +1,250 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { MapContainer, TileLayer, ImageOverlay, ZoomControl } from 'react-leaflet';
 import '../radar/RadarFrance.css';
-import { Satellite, CloudRain, Wind, Thermometer, Eye, ExternalLink } from 'lucide-react';
+import { Satellite, RefreshCw, Play, Square, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Windy.com Embed — widget natif, animation fluide sans gestion de tuiles
-// Documentation : https://api.windy.com/point-forecast
-// Embed gratuit, aucune clé API requise pour l'affichage
+// EUMETSAT WMS GetMap — 1 seule image par frame (pas de tuiles)
+// Préchargé en cache navigateur → setUrl() instantané → 0 saccade
 // ─────────────────────────────────────────────────────────────────────────────
+const WMS_BASE = 'https://view.eumetsat.int/geoserver/wms';
 
-const WINDY_BASE = 'https://embed.windy.com/embed.html';
+// Boîte englobante Europe/France — EPSG:4326 WMS 1.3.0 : minLat,minLon,maxLat,maxLon
+const BBOX_WMS  = '36,-16,57,20';
+const IMG_W     = 900;
+const IMG_H     = 700;
+// Bounds Leaflet : [[minLat, minLon], [maxLat, maxLon]]
+const BOUNDS    = [[36, -16], [57, 20]];
 
-const LAT  = 46.4;
-const LON  = 2.5;
-const ZOOM = 5;
+const LAYERS = {
+    infrared: { wms: 'msg_fes:ir108',                    label: 'Infrarouge',  step: 15, count: 12, color: '#6366f1', opacity: 0.9 },
+    visible:  { wms: 'msg_fes:vis06',                    label: 'Visible',     step: 15, count: 10, color: '#f59e0b', opacity: 0.9 },
+    natural:  { wms: 'mumi:wideareacoverage_rgb_natural', label: 'Couleurs',    step: 60, count:  6, color: '#10b981', opacity: 0.88 },
+};
 
-const OVERLAYS = [
-    {
-        key: 'satellite',
-        label: 'Satellite IR',
-        icon: <Satellite size={16} />,
-        overlay: 'satellite',
-        description: 'Image infrarouge Meteosat — nuages et systèmes en temps réel',
-        color: '#6366f1',
-    },
-    {
-        key: 'rain',
-        label: 'Radar pluie',
-        icon: <CloudRain size={16} />,
-        overlay: 'rain',
-        description: 'Précipitations radar — animé toutes les 10 min',
-        color: '#0ea5e9',
-    },
-    {
-        key: 'rainAccumulation',
-        label: 'Cumul pluie',
-        icon: <CloudRain size={16} />,
-        overlay: 'rainAccumulation',
-        description: 'Cumul de précipitations sur 24h',
-        color: '#06b6d4',
-    },
-    {
-        key: 'wind',
-        label: 'Vent',
-        icon: <Wind size={16} />,
-        overlay: 'wind',
-        description: 'Vents en surface — particules animées',
-        color: '#10b981',
-    },
-    {
-        key: 'temp',
-        label: 'Température',
-        icon: <Thermometer size={16} />,
-        overlay: 'temp',
-        description: 'Température en surface',
-        color: '#f59e0b',
-    },
-    {
-        key: 'clouds',
-        label: 'Nuages',
-        icon: <Eye size={16} />,
-        overlay: 'clouds',
-        description: 'Couverture nuageuse totale',
-        color: '#94a3b8',
-    },
-];
+// Génère N timestamps ISO en remontant depuis maintenant
+const genTimestamps = (stepMin, count) => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    now.setMinutes(Math.floor(now.getMinutes() / stepMin) * stepMin);
+    return Array.from({ length: count }, (_, i) => {
+        const d = new Date(now - (count - 1 - i) * stepMin * 60000);
+        return d.toISOString().slice(0, 19) + 'Z';
+    });
+};
 
-const buildWindyUrl = (overlay) =>
-    `${WINDY_BASE}?type=map` +
-    `&location=coordinates` +
-    `&lat=${LAT}&lon=${LON}&zoom=${ZOOM}` +
-    `&overlay=${overlay}` +
-    `&product=ecmwf` +
-    `&level=surface` +
-    `&metricRain=mm` +
-    `&metricTemp=%C2%B0C` +
-    `&metricWind=km%2Fh` +
-    `&message=true`;
+const buildUrl = (wmsLayer, time) =>
+    `${WMS_BASE}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
+    `&LAYERS=${encodeURIComponent(wmsLayer)}&STYLES=` +
+    `&CRS=EPSG%3A4326&BBOX=${BBOX_WMS}` +
+    `&WIDTH=${IMG_W}&HEIGHT=${IMG_H}` +
+    `&FORMAT=image%2Fpng&TRANSPARENT=TRUE` +
+    `&TIME=${encodeURIComponent(time)}`;
 
+// Préchargement : remplit le cache navigateur pour que setUrl() soit instantané
+const preload = (url) =>
+    new Promise(resolve => {
+        const img = new window.Image();
+        img.onload = img.onerror = () => resolve(url);
+        img.src = url;
+    });
+
+// Formate un timestamp ISO en heure locale lisible
+const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 const SatelliteFrance = () => {
-    const [activeKey, setActiveKey] = useState('satellite');
-    const [loading, setLoading]     = useState(true);
-    const iframeRef = useRef(null);
+    const center = [46.5, 2.5];
+    const zoom   = 5;
 
-    const active = OVERLAYS.find(o => o.key === activeKey);
-    const windyUrl = buildWindyUrl(active.overlay);
+    const [layerKey,      setLayerKey]      = useState('infrared');
+    const [urls,          setUrls]          = useState([]);
+    const [timestamps,    setTimestamps]    = useState([]);
+    const [currentIndex,  setCurrentIndex]  = useState(0);
+    const [isPlaying,     setIsPlaying]     = useState(false);
+    const [loading,       setLoading]       = useState(true);
+    const [progress,      setProgress]      = useState(0);
+    const [speed,         setSpeed]         = useState(600); // ms entre frames
 
-    // Montrer un loader pendant le chargement de l'iframe
-    const handleLoad = () => setLoading(false);
+    const overlayRef = useRef(null);
+    const timerRef   = useRef(null);
+    const urlsRef    = useRef([]);
 
-    // Forcer le rechargement de l'iframe quand on change d'overlay
-    useEffect(() => {
+    const layer = LAYERS[layerKey];
+
+    // ── Chargement + préchargement ────────────────────────────────────────────
+    const loadFrames = useCallback(async () => {
         setLoading(true);
-    }, [activeKey]);
+        setProgress(0);
+        setIsPlaying(false);
+        clearInterval(timerRef.current);
+
+        const ts   = genTimestamps(layer.step, layer.count);
+        const list = ts.map(t => buildUrl(layer.wms, t));
+
+        setTimestamps(ts);
+        setUrls(list);
+        urlsRef.current = list;
+
+        // Mise à jour progressive de la barre
+        for (let i = 0; i < list.length; i++) {
+            await preload(list[i]);
+            setProgress(Math.round(((i + 1) / list.length) * 100));
+        }
+
+        setCurrentIndex(list.length - 1);
+        // Afficher la dernière frame dès la fin du chargement
+        if (overlayRef.current) overlayRef.current.setUrl(list[list.length - 1]);
+        setLoading(false);
+        setIsPlaying(true);
+    }, [layerKey]);
+
+    useEffect(() => { loadFrames(); }, [loadFrames]);
+
+    // ── Animation : setUrl() depuis le cache → instantané ────────────────────
+    useEffect(() => {
+        clearInterval(timerRef.current);
+        if (!isPlaying || urls.length === 0) return;
+
+        timerRef.current = setInterval(() => {
+            setCurrentIndex(prev => {
+                const next = (prev + 1) % urlsRef.current.length;
+                if (overlayRef.current) overlayRef.current.setUrl(urlsRef.current[next]);
+                return next;
+            });
+        }, speed);
+
+        return () => clearInterval(timerRef.current);
+    }, [isPlaying, urls, speed]);
+
+    // ── Navigation manuelle ───────────────────────────────────────────────────
+    const goTo = (idx) => {
+        const i = Math.max(0, Math.min(idx, urls.length - 1));
+        setCurrentIndex(i);
+        if (overlayRef.current) overlayRef.current.setUrl(urls[i]);
+    };
 
     return (
         <div className="radar-container">
-            {/* BARRE DE CONTRÔLE */}
+            {/* ── BARRE DE CONTRÔLE ── */}
             <div className="radar-controls-compact" style={{ gap: '6px', flexWrap: 'wrap' }}>
-                {/* Boutons de couches */}
-                {OVERLAYS.map(({ key, label, icon, color }) => (
-                    <button
-                        key={key}
-                        className={`btn-compact ${activeKey === key ? 'active' : ''}`}
-                        onClick={() => setActiveKey(key)}
+
+                {/* Boutons de couche */}
+                {Object.entries(LAYERS).map(([key, { label, color }]) => (
+                    <button key={key}
+                        className={`btn-compact ${layerKey === key ? 'active' : ''}`}
+                        onClick={() => setLayerKey(key)}
                         style={{
-                            width: 'auto',
-                            padding: '0 12px',
-                            gap: '6px',
-                            fontWeight: '800',
-                            fontSize: '0.75rem',
-                            background: activeKey === key ? color : 'transparent',
-                            color:      activeKey === key ? '#fff'  : '#64748b',
-                            border:     `1px solid ${activeKey === key ? color : '#e2e8f0'}`,
-                            borderRadius: '8px',
-                            transition: 'all 0.2s',
-                        }}
-                    >
-                        {icon}
-                        <span>{label}</span>
+                            width: 'auto', padding: '0 12px', gap: '6px',
+                            background: layerKey === key ? color : 'transparent',
+                            color:      layerKey === key ? '#fff'  : '#64748b',
+                            border:    `1px solid ${layerKey === key ? color : '#e2e8f0'}`,
+                            borderRadius: '8px', transition: 'all 0.2s',
+                        }}>
+                        <Satellite size={14} />
+                        <span style={{ fontWeight: 800, fontSize: '0.73rem' }}>{label}</span>
                     </button>
                 ))}
 
                 <div className="control-divider" />
 
-                {/* Description de la couche active */}
-                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '600', flex: 1 }}>
-                    {active.description}
-                </span>
+                {/* Navigation frame */}
+                <button className="btn-compact" onClick={() => { setIsPlaying(false); goTo(currentIndex - 1); }}
+                    style={{ width: 28, padding: 0 }} disabled={loading}>
+                    <ChevronLeft size={14} />
+                </button>
 
-                {/* Lien externe Windy */}
-                <a
-                    href={`https://www.windy.com/?${active.overlay},${LAT},${LON},${ZOOM}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: '4px',
-                        fontSize: '0.7rem', fontWeight: '700', color: '#0ea5e9',
-                        textDecoration: 'none',
-                    }}
-                    title="Ouvrir dans Windy"
-                >
-                    <ExternalLink size={14} /> Windy.com
-                </a>
+                <button className="btn-compact" onClick={() => setIsPlaying(p => !p)}
+                    style={{ width: 28, padding: 0 }} disabled={loading}>
+                    {isPlaying ? <Square size={13} /> : <Play size={13} />}
+                </button>
+
+                <button className="btn-compact" onClick={() => { setIsPlaying(false); goTo(currentIndex + 1); }}
+                    style={{ width: 28, padding: 0 }} disabled={loading}>
+                    <ChevronRight size={14} />
+                </button>
+
+                {/* Vitesse */}
+                <select value={speed} onChange={e => setSpeed(Number(e.target.value))}
+                    style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 6px',
+                             borderRadius: '6px', border: '1px solid #e2e8f0',
+                             background: '#f8fafc', color: '#475569', cursor: 'pointer' }}>
+                    <option value={1000}>x0.5</option>
+                    <option value={600}>x1</option>
+                    <option value={300}>x2</option>
+                    <option value={150}>x4</option>
+                </select>
+
+                <button className="btn-compact" onClick={loadFrames}
+                    style={{ width: 28, padding: 0 }} title="Actualiser">
+                    <RefreshCw size={14} />
+                </button>
+
+                {/* Heure courante */}
+                <span style={{ marginLeft: 'auto', fontSize: '0.72rem',
+                               fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+                    {loading
+                        ? `Chargement ${progress}%`
+                        : `${fmtTime(timestamps[currentIndex])} UTC  (${currentIndex + 1}/${urls.length})`}
+                </span>
             </div>
 
-            {/* CARTE WINDY EMBED */}
+            {/* ── CARTE ── */}
             <div className="radar-main-content SINGLE">
-                <div className="radar-map-wrapper" style={{ position: 'relative' }}>
+                <div className="radar-map-wrapper">
 
-                    {/* Loader pendant l'initialisation */}
+                    {/* Loader avec barre de progression */}
                     {loading && (
                         <div className="radar-glass-loader">
                             <div className="loader-content">
                                 <div className="spinner" />
-                                <p>Chargement {active.label}...</p>
-                                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
-                                    Connexion à Windy.com
+                                <p style={{ marginBottom: 8 }}>Préchargement {layer.label}…</p>
+                                <div style={{ width: 180, height: 6, background: '#e2e8f0',
+                                              borderRadius: 3, overflow: 'hidden' }}>
+                                    <div style={{ width: `${progress}%`, height: '100%',
+                                                  background: layer.color, borderRadius: 3,
+                                                  transition: 'width 0.3s' }} />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
+                                    {progress}% — {Math.round(progress * layer.count / 100)} / {layer.count} images
                                 </span>
                             </div>
                         </div>
                     )}
 
-                    <iframe
-                        ref={iframeRef}
-                        key={activeKey}
-                        src={windyUrl}
-                        onLoad={handleLoad}
-                        title={`Carte météo — ${active.label}`}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            border: 'none',
-                            display: 'block',
-                        }}
-                        allow="fullscreen"
-                        allowFullScreen
-                    />
+                    <MapContainer center={center} zoom={zoom}
+                        style={{ height: '100%', width: '100%' }}
+                        minZoom={4} maxZoom={8} zoomControl={false}>
+
+                        {/* Fond relief — ni noir ni trop coloré */}
+                        <TileLayer
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}"
+                            attribution="&copy; Esri" />
+
+                        {/* Image satellite WMS préchargée (1 image = 0 saccade) */}
+                        {urls.length > 0 && (
+                            <ImageOverlay
+                                ref={overlayRef}
+                                url={urls[currentIndex] || urls[0]}
+                                bounds={BOUNDS}
+                                opacity={layer.opacity}
+                                zIndex={400}
+                            />
+                        )}
+
+                        {/* Labels / frontières par-dessus */}
+                        <TileLayer
+                            url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+                            zIndex={600}
+                            opacity={0.85}
+                        />
+
+                        <ZoomControl position="bottomright" />
+                    </MapContainer>
                 </div>
             </div>
         </div>
