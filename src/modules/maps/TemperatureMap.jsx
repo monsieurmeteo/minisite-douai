@@ -215,6 +215,20 @@ const TemperatureMap = () => {
 
                     // Capturer le timestamp max pour afficher l'heure de mise à jour
                     let maxTimestamp = null;
+                    if (isRealTime) {
+                        try {
+                            const { data: latestObs } = await supabase
+                                .from('observations_6mn')
+                                .select('timestamp')
+                                .order('timestamp', { ascending: false })
+                                .limit(1);
+                            if (latestObs && latestObs[0]) {
+                                maxTimestamp = new Date(latestObs[0].timestamp);
+                            }
+                        } catch (err) {
+                            console.warn("Erreur fetch latest obs timestamp:", err);
+                        }
+                    }
 
                     allData.forEach(s => {
                         const tempVal = tempMode === "tn" ? s.temp_min : s.temp_max;
@@ -225,16 +239,6 @@ const TemperatureMap = () => {
                             const meta = stationsLookup[sid];
                             const lat = meta?.lat || s.lat;
                             const lon = meta?.lon || s.lon;
-
-                    // Capturer le timestamp le plus récent à partir de wind_gust_time
-                    // (seul champ horodaté retourné par la RPC get_daily_extremes_fast)
-                    const ts = s.wind_gust_time;
-                    if (ts) {
-                        const d = new Date(ts);
-                        if (!isNaN(d) && (!maxTimestamp || d > maxTimestamp)) {
-                            maxTimestamp = d;
-                        }
-                    }
 
                             if (lat && lon) {
                                 // Agrégation: regrouper les stations trop proches (0.05 degré ~ 5km) pour correspondre au Générateur
@@ -597,7 +601,7 @@ const TemperatureMap = () => {
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
                             {/* Points des Stations et Valeurs */}
-                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip-temp)" : undefined}>
+                            <g clipPath="url(#france-clip-temp)">
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;

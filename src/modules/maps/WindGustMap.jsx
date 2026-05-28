@@ -52,6 +52,7 @@ const WindGustMap = () => {
     const [isSmooth, setIsSmooth] = useState(true);
     const [selectedRegionName, setSelectedRegionName] = useState("France");
     const [hoveredStation, setHoveredStation] = useState(null);
+    const [lastDataTimestamp, setLastDataTimestamp] = useState(null);
     const mapContainerRef = useRef(null);
 
     const WIDTH = 1000;
@@ -210,6 +211,24 @@ const WindGustMap = () => {
             setDeptData(gustMap);
             // Trier par valeur décroissante pour le tableau
             setStations(stationList.sort((a, b) => b.value - a.value));
+
+            // Capturer le timestamp max pour afficher l'heure de mise à jour
+            let maxTimestamp = null;
+            if (isRealTime) {
+                try {
+                    const { data: latestObs } = await supabase
+                        .from('observations_6mn')
+                        .select('timestamp')
+                        .order('timestamp', { ascending: false })
+                        .limit(1);
+                    if (latestObs && latestObs[0]) {
+                        maxTimestamp = new Date(latestObs[0].timestamp);
+                    }
+                } catch (err) {
+                    console.warn("Erreur fetch latest obs timestamp:", err);
+                }
+            }
+            setLastDataTimestamp(maxTimestamp);
 
             if (stationList.length === 0) {
                 setError("Aucune rafale archivée pour cette date.");
@@ -550,7 +569,7 @@ const WindGustMap = () => {
                                 strokeWidth="1.5"
                             />
 
-                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip)" : undefined}>
+                            <g clipPath="url(#france-clip)">
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
@@ -611,13 +630,19 @@ const WindGustMap = () => {
                         </div>
                     )}
 
-                    {/* Bloc Titre Image (Style épuré et pro) */}
-                    <div style={{ position: 'absolute', bottom: '55px', left: '30px', padding: '12px 20px', background: 'rgba(255,255,255,0.85)', borderRadius: '8px', border: '1px solid #000' }}>
-                        <div style={{ fontSize: '1.6rem', fontWeight: '1000', color: '#000', textTransform: 'uppercase', lineHeight: '1.2' }}>{mapTitle}</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#000', marginTop: '4px' }}>
-                            {format(new Date(selectedDate), "EEEE d MMMM yyyy", { locale: fr })}
-                        </div>
-                    </div>
+                     {/* Bloc Titre Image (Style épuré et pro) */}
+                     <div style={{ position: 'absolute', bottom: '55px', left: '30px', padding: '12px 20px', background: 'rgba(255,255,255,0.85)', borderRadius: '8px', border: '1px solid #000' }}>
+                         <div style={{ fontSize: '1.6rem', fontWeight: '1000', color: '#000', textTransform: 'uppercase', lineHeight: '1.2' }}>{mapTitle}</div>
+                         <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#000', marginTop: '4px' }}>
+                             {format(new Date(selectedDate), "EEEE d MMMM yyyy", { locale: fr })}
+                         </div>
+                         {lastDataTimestamp && (
+                             <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#555', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                 <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRealTime ? '#10b981' : '#f59e0b', flexShrink: 0 }} />
+                                 Dernière obs. à {lastDataTimestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                             </div>
+                         )}
+                     </div>
 
                     {/* Logo Personnel (Bas Droite) */}
                     <div style={{ position: 'absolute', bottom: '55px', right: '30px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>

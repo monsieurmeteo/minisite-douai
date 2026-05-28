@@ -22,6 +22,14 @@ jobs:
     - name: Install dependencies
       run: npm install @supabase/supabase-js dotenv
 
+    - name: Run Collect Script
+      env:
+        VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        MF_CONSUMER_KEY: ${{ secrets.MF_CONSUMER_KEY }}
+        MF_CONSUMER_SECRET: ${{ secrets.MF_CONSUMER_SECRET }}
+      run: node scripts/cron_collect_6mn.mjs
+
     - name: Run Sync Script
       env:
         VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
