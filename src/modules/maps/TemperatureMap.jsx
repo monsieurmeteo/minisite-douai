@@ -174,8 +174,25 @@ const TemperatureMap = () => {
             try {
                 if (tempMode === "actuelle") {
                     console.log("[TemperatureMap] Chargement des températures en temps réel...");
-                    const { data: liveData, error: liveError } = await supabase.rpc('get_france_live');
-                    if (liveError) throw liveError;
+                    let liveData = [];
+                    let from = 0;
+                    const batchSize = 1000;
+                    let hasMore = true;
+
+                    while (hasMore) {
+                        const { data, error: liveError } = await supabase
+                            .rpc('get_france_live')
+                            .range(from, from + batchSize - 1);
+
+                        if (liveError) throw liveError;
+                        if (data && data.length > 0) {
+                            liveData.push(...data);
+                            if (data.length < batchSize) hasMore = false;
+                            else from += batchSize;
+                        } else {
+                            hasMore = false;
+                        }
+                    }
 
                     if (liveData && liveData.length > 0) {
                         let maxTimestamp = null;
