@@ -63,20 +63,22 @@ const SatelliteFrance = () => {
                         host: data.host,
                     }));
                     setTimestamps(frames);
-                    setCurrentIndex(frames.length - 1);
+                    setCurrentIndex(Math.max(0, frames.length - 1));
                     setLastRefresh(new Date());
                     setLoading(false);
-                    setIsPlaying(frames.length > 0);
+                    // Attendre 1.5s avant de lancer l'animation pour laisser les tuiles charger
+                    setTimeout(() => setIsPlaying(frames.length > 0), 1500);
                 })
                 .catch(() => { setTimestamps([]); setLoading(false); });
         } else {
             // EUMETSAT WMS animé
             const frames = generateTimestamps(cfg.step, 9);
             setTimestamps(frames);
-            setCurrentIndex(frames.length - 1);
+            setCurrentIndex(Math.max(0, frames.length - 1));
             setLastRefresh(new Date());
             setLoading(false);
-            setIsPlaying(true);
+            // Attendre 2s avant animation pour que les tuiles de la frame courante chargent
+            setTimeout(() => setIsPlaying(true), 2000);
         }
     }, [layerType]);
 
@@ -89,9 +91,11 @@ const SatelliteFrance = () => {
             return;
         }
         const isLast = currentIndex === timestamps.length - 1;
+        // 1000ms par frame pour EUMETSAT (tuiles WMS plus lentes), 600ms pour RainViewer
+        const delay = isLast ? 2500 : (layerType === 'radar' ? 600 : 1000);
         timerRef.current = setTimeout(() => {
             setCurrentIndex(p => p >= timestamps.length - 1 ? 0 : p + 1);
-        }, isLast ? 2200 : 700);
+        }, delay);
         return () => clearTimeout(timerRef.current);
     }, [isPlaying, currentIndex, timestamps]);
 
@@ -204,22 +208,30 @@ const SatelliteFrance = () => {
                             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                             attribution="&copy; CARTO" />
 
-                        {/* ── EUMETSAT WMS animé (infrared, visible, natural) ── */}
-                        {layerType !== 'radar' && currentTs && (
-                            <WMSTileLayer
-                                key={`${layerType}-${currentTs.time}`}
-                                url={EUMETSAT_WMS}
-                                layers={cfg.name}
-                                styles=""
-                                format="image/png"
-                                transparent={true}
-                                version="1.3.0"
-                                time={currentTs.iso}
-                                opacity={0.88}
-                                zIndex={300}
-                                attribution="&copy; EUMETSAT"
-                            />
-                        )}
+                        {/* ── EUMETSAT WMS animé : toutes les frames en buffer, on change juste l'opacité ── */}
+                        {layerType !== 'radar' && timestamps.map((ts, idx) => {
+                            const isCurrent = idx === currentIndex;
+                            // Pré-charger ±2 frames autour de la frame courante
+                            const isBuffered = Math.abs(idx - currentIndex) <= 2;
+                            if (!isBuffered) return null;
+                            return (
+                                <WMSTileLayer
+                                    key={`${layerType}-${ts.time}`}
+                                    url={EUMETSAT_WMS}
+                                    layers={cfg.name}
+                                    styles=""
+                                    format="image/png"
+                                    transparent={true}
+                                    version="1.3.0"
+                                    time={ts.iso}
+                                    opacity={isCurrent ? 0.88 : 0}
+                                    zIndex={isCurrent ? 310 : 300}
+                                    attribution="&copy; EUMETSAT"
+                                    keepBuffer={4}
+                                    updateWhenZooming={false}
+                                />
+                            );
+                        })}
 
                         {/* Frontières par-dessus le satellite */}
                         <TileLayer

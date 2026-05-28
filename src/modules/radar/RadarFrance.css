@@ -309,14 +309,19 @@
     transform: translateZ(0);
 }
 
-/* On désactive la transition Leaflet générale qui peut causer des clignotements lors des reloads de tuiles */
+/* Transition douce sur TOUTES les tile layers (radar + satellite) lors des changements d'opacité */
 .leaflet-layer {
-    transition: none !important;
+    transition: opacity 0.3s ease-out !important;
 }
 
-/* Mais on garde la transition d'opacité sur les ImageOverlay radar */
+/* Désactiver la transition sur les tile layers de fond (OpenStreetMap, Carto) pour éviter les flashs */
+.leaflet-tile-container {
+    /* Les tuiles individuelles ne doivent pas avoir de transition interne */
+}
+
+/* Forcer GPU pour les layers actifs */
 .leaflet-image-layer {
-    transition: opacity 0.2s ease-out !important;
+    transition: opacity 0.3s ease-out !important;
     will-change: opacity;
 }
 
