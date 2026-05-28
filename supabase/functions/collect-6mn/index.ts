@@ -158,6 +158,14 @@ Deno.serve(async (req) => {
             }
         }
 
+        if (totalInserted > 0) {
+            console.log(`[CRON] Déclenchement de la synchronisation des résumés daily_summaries...`);
+            const todayStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris' }).format(new Date());
+            const { error: syncError } = await supabase.rpc('batch_sync_daily_summaries', { target_date: todayStr });
+            if (syncError) console.error("   ❌ Erreur sync RPC :", syncError.message);
+            else console.log("   ✅ Synchronisation des résumés terminée avec succès.");
+        }
+
         return new Response(
             JSON.stringify({ success: true, processed: slotsToFetch.length, inserted: totalInserted }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

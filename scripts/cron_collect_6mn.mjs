@@ -159,6 +159,14 @@ async function runCronCollect() {
             }
         }
 
+        if (totalInserted > 0) {
+            console.log(`\n[CRON COLLECT] 🔄 Déclenchement de la synchronisation des résumés daily_summaries...`);
+            const todayStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris' }).format(new Date());
+            const { error: syncError } = await supabase.rpc('batch_sync_daily_summaries', { target_date: todayStr });
+            if (syncError) console.error("   ❌ Erreur sync RPC :", syncError.message);
+            else console.log("   ✅ Synchronisation des résumés terminée avec succès.");
+        }
+
         console.log(`\n[CRON COLLECT] ✅ TERMINÉ. Total des données injectées : ${totalInserted}`);
     } catch (err) {
         console.error('\n[CRON COLLECT] ❌ ERREUR :', err.message || err);
