@@ -10,10 +10,17 @@ import { Play, Square, ChevronRight, Clock, Eye, Moon, CloudRain, Globe, Refresh
 const EUMETSAT_WMS = 'https://view.eumetsat.int/geoserver/wms';
 
 const LAYERS = {
-    infrared: { name: 'msg_fes:ir108',               step: 15, label: 'Infrarouge IR 10.8µm' },
-    visible:  { name: 'msg_fes:vis06',               step: 15, label: 'Visible VIS 0.6µm'    },
-    natural:  { name: 'mumi:wideareacoverage_rgb_natural', step: 60, label: 'Couleurs naturelles' },
-    radar:    { name: null,                           step: 10, label: 'Radar précipitations' },
+    infrared: { name: 'msg_fes:ir108',                    step: 15, label: 'Infrarouge IR 10.8µm', basemap: 'dark'    },
+    visible:  { name: 'msg_fes:vis06',                    step: 15, label: 'Visible VIS 0.6µm',    basemap: 'relief'  },
+    natural:  { name: 'mumi:wideareacoverage_rgb_natural', step: 60, label: 'Couleurs naturelles',  basemap: 'relief'  },
+    radar:    { name: null,                               step: 10, label: 'Radar précipitations',  basemap: 'dark'    },
+};
+
+// Fonds de carte disponibles
+const BASEMAPS = {
+    dark:    { label: 'Nuit (Recommandé)', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',       labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png' },
+    relief:  { label: 'Relief / Terrain',   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', labels: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png' },
+    light:   { label: 'Clair',              url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',      labels: null },
 };
 
 // Génère une série de timestamps ISO en remontant N frames depuis maintenant
@@ -44,7 +51,12 @@ const SatelliteFrance = () => {
     const [isPlaying, setIsPlaying]     = useState(false);
     const [loading, setLoading]         = useState(true);
     const [lastRefresh, setLastRefresh] = useState(null);
+    const [basemapKey, setBasemapKey]   = useState(null); // null = auto selon couche
     const timerRef = useRef(null);
+
+    // Basemap effective : manuel si défini, sinon auto selon couche
+    const effectiveBasemap = basemapKey || LAYERS[layerType]?.basemap || 'dark';
+    const basemap = BASEMAPS[effectiveBasemap];
 
     // ── Chargement des frames ───────────────────────────────────────────────
     const loadFrames = useCallback(() => {
@@ -173,7 +185,7 @@ const SatelliteFrance = () => {
                     ].map(({ key, icon, label }) => (
                         <button key={key}
                             className={`btn-compact ${layerType === key ? 'active' : ''}`}
-                            onClick={() => setLayerType(key)}
+                            onClick={() => { setLayerType(key); setBasemapKey(null); }} // reset basemap en auto
                             style={{ width: 'auto', padding: '0 8px', gap: '6px' }}>
                             {icon}
                             <span className="tiny-label" style={{ color: 'inherit' }}>{label}</span>
@@ -183,6 +195,17 @@ const SatelliteFrance = () => {
                         style={{ width: 'auto', padding: '0 8px', gap: '6px' }} title="Actualiser">
                         <RefreshCw size={14} />
                     </button>
+                    {/* Sélecteur de fond */}
+                    <select
+                        value={basemapKey || effectiveBasemap}
+                        onChange={e => setBasemapKey(e.target.value)}
+                        style={{ fontSize: '0.65rem', fontWeight: '700', padding: '3px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f1f5f9', color: '#475569', cursor: 'pointer' }}
+                        title="Fond de carte"
+                    >
+                        {Object.entries(BASEMAPS).map(([k, b]) => (
+                            <option key={k} value={k}>{b.label}{(!basemapKey && LAYERS[layerType]?.basemap === k) ? ' ★' : ''}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -203,10 +226,11 @@ const SatelliteFrance = () => {
                         style={{ height: '100%', width: '100%', background: '#111' }}
                         minZoom={4} zoomControl={false}>
 
-                        {/* Fond sombre */}
+                        {/* Fond de carte adapté selon le mode */}
                         <TileLayer
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                            attribution="&copy; CARTO" />
+                            key={`base-${effectiveBasemap}`}
+                            url={basemap.url}
+                            attribution="&copy; CARTO / ESRI" />
 
                         {/* ── EUMETSAT WMS animé : toutes les frames en buffer, on change juste l'opacité ── */}
                         {layerType !== 'radar' && timestamps.map((ts, idx) => {
@@ -233,12 +257,14 @@ const SatelliteFrance = () => {
                             );
                         })}
 
-                        {/* Frontières par-dessus le satellite */}
-                        <TileLayer
-                            url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-                            zIndex={500}
-                            opacity={0.9}
-                        />
+                        {/* Labels et frontières par-dessus le satellite */}
+                        {basemap.labels && (
+                            <TileLayer
+                                url={basemap.labels}
+                                zIndex={500}
+                                opacity={0.9}
+                            />
+                        )}
 
                         {/* ── RADAR RainViewer ── */}
                         {layerType === 'radar' && timestamps.map((ts, idx) => {

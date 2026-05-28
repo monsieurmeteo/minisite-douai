@@ -41,9 +41,10 @@ const RADAR_SCHEMES = [
 ];
 
 const MAP_STYLES = {
-    SATELLITE: { name: 'Météo-Satellite (Réel)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
-    RELIEF: { name: 'Météo-Expert (Relief)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
-    STANDARD: { name: 'Villes & Frontières', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
+    DARK:      { name: 'Nuit Expert (Recommandé)', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
+    RELIEF:    { name: 'Relief / Terrain',           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}' },
+    SATELLITE: { name: 'Photo satellite',             url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
+    STANDARD:  { name: 'Villes & Frontières',       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
 };
 
 const MAIN_STATIONS = [
@@ -290,7 +291,7 @@ const RadarFrance = () => {
     const [currentZone, setCurrentZone] = useState('METROPOLE');
     const [deptGeojson, setDeptGeojson] = useState(null);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [mapStyle, setMapStyle] = useState('SATELLITE');
+    const [mapStyle, setMapStyle] = useState('DARK');
     const [overlayType, setOverlayType] = useState('NONE');
     const [currentPeriod, setCurrentPeriod] = useState('2H');
     const [showCities, setShowCities] = useState(true);
