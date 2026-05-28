@@ -601,7 +601,7 @@ const TemperatureMap = () => {
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
                             {/* Points des Stations et Valeurs */}
-                            <g clipPath="url(#france-clip-temp)">
+                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip-temp)" : undefined}>
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;

@@ -653,7 +653,7 @@ const MonthlyMapsHub = () => {
 
                             <path d={combinedPath} fill="none" stroke="black" strokeWidth="1.5" />
 
-                            <g clipPath="url(#france-clip-monthly)">
+                            <g clipPath={selectedRegionName === "France" ? "url(#france-clip-monthly)" : undefined}>
                                 {stations.map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords) return null;
