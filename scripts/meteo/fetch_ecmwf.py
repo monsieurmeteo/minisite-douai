@@ -1,9 +1,11 @@
 """
 Telecharge les donnees ECMWF Open Data (gratuit, CC-4.0).
-Pas de compte requis. Librairie : pip install ecmwf-opendata
+Necessite un compte gratuit sur https://api.ecmwf.int
+Variables d'env : ECMWF_API_KEY, ECMWF_API_EMAIL
 """
 import os
 import sys
+import json
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -15,6 +17,20 @@ except ImportError:
     sys.exit(1)
 
 from config import MODELS, PARAMETERS, ACTIVE_PARAMETERS
+
+# Configure credentials ECMWF depuis variables d'environnement
+ECMWF_KEY   = os.environ.get('ECMWF_API_KEY', '')
+ECMWF_EMAIL = os.environ.get('ECMWF_API_EMAIL', '')
+
+if ECMWF_KEY and ECMWF_EMAIL:
+    rc_path = Path.home() / '.ecmwfapirc'
+    rc_content = json.dumps({
+        "url": "https://api.ecmwf.int/v1",
+        "key": ECMWF_KEY,
+        "email": ECMWF_EMAIL
+    }, indent=2)
+    rc_path.write_text(rc_content)
+    logging.getLogger('ecmwf').info(f"Credentials ECMWF configures pour {ECMWF_EMAIL}")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [ECMWF] %(message)s')
 log = logging.getLogger('ecmwf')

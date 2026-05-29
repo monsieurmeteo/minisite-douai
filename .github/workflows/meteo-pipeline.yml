@@ -35,12 +35,22 @@ jobs:
           pip install --upgrade pip
           pip install -r scripts/meteo/requirements.txt
 
-      - name: Run pipeline
+      - name: Run ECMWF pipeline
         working-directory: scripts/meteo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python run_pipeline.py ${{ github.event.inputs.model || 'all' }}
+          ECMWF_API_KEY: ${{ secrets.ECMWF_API_KEY }}
+          ECMWF_API_EMAIL: ${{ secrets.ECMWF_API_EMAIL }}
+        run: python run_pipeline.py ecmwf
+        continue-on-error: true
+
+      - name: Run ICON-EU pipeline
+        working-directory: scripts/meteo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python run_pipeline.py icon-eu
         continue-on-error: true
 
       - name: Cleanup old files
@@ -49,3 +59,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python cleanup_supabase.py
+
+      - name: Done
+        run: echo "Pipeline done - $(date -u '+%Y-%m-%d %H:%M UTC')"
