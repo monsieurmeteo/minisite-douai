@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3
+  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3, Wind
 } from 'lucide-react';
 import clsx from 'clsx';
 import { DEPARTMENTS } from '../data/departments';
@@ -137,6 +137,10 @@ export default function Sidebar({ isOpen, onClose }) {
         <NavLink to="/radar" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Radio size={18} style={{ color: '#0ea5e9' }} />
           <span>Radar Pluie</span>
+        </NavLink>
+        <NavLink to="/windy" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Wind size={18} style={{ color: '#10b981' }} />
+          <span>Module Windy</span>
         </NavLink>
         <NavLink to="/carte-rafales" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <MapIcon size={18} style={{ color: '#8b5cf6' }} />

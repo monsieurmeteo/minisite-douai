@@ -17,9 +17,9 @@ const IMG_H     = 700;
 const BOUNDS    = [[36, -16], [57, 20]];
 
 const LAYERS = {
-    infrared: { wms: 'msg_fes:ir108',                    label: 'Infrarouge',  step: 15, count: 12, color: '#6366f1', opacity: 0.9 },
-    visible:  { wms: 'msg_fes:vis06',                    label: 'Visible',     step: 15, count: 10, color: '#f59e0b', opacity: 0.9 },
-    natural:  { wms: 'mumi:wideareacoverage_rgb_natural', label: 'Couleurs',    step: 60, count:  6, color: '#10b981', opacity: 0.88 },
+    infrared: { wms: 'msg_fes:ir108',                    label: 'Infrarouge',  step: 15, count: 20, color: '#6366f1', opacity: 0.9 },
+    visible:  { wms: 'msg_fes:vis06',                    label: 'Visible',     step: 15, count: 16, color: '#f59e0b', opacity: 0.9 },
+    natural:  { wms: 'mumi:wideareacoverage_rgb_natural', label: 'Couleurs',    step: 60, count:  10, color: '#10b981', opacity: 0.88 },
 };
 
 // Génère N timestamps ISO en remontant depuis maintenant
@@ -70,7 +70,6 @@ const SatelliteFrance = () => {
     const [progress,      setProgress]      = useState(0);
     const [speed,         setSpeed]         = useState(600); // ms entre frames
 
-    const overlayRef = useRef(null);
     const timerRef   = useRef(null);
     const urlsRef    = useRef([]);
 
@@ -90,32 +89,36 @@ const SatelliteFrance = () => {
         setUrls(list);
         urlsRef.current = list;
 
-        // Mise à jour progressive de la barre
-        for (let i = 0; i < list.length; i++) {
-            await preload(list[i]);
-            setProgress(Math.round(((i + 1) / list.length) * 100));
-        }
+        // Préchargement asynchrone non bloquant pour le cache
+        let loadedCount = 0;
+        list.forEach(url => {
+            preload(url).then(() => {
+                loadedCount++;
+                setProgress(Math.round((loadedCount / list.length) * 100));
+                if (loadedCount === list.length) {
+                    setLoading(false);
+                }
+            }).catch(() => {
+                loadedCount++;
+                if (loadedCount === list.length) {
+                    setLoading(false);
+                }
+            });
+        });
 
         setCurrentIndex(list.length - 1);
-        // Afficher la dernière frame dès la fin du chargement
-        if (overlayRef.current) overlayRef.current.setUrl(list[list.length - 1]);
-        setLoading(false);
         setIsPlaying(true);
     }, [layerKey]);
 
     useEffect(() => { loadFrames(); }, [loadFrames]);
 
-    // ── Animation : setUrl() depuis le cache → instantané ────────────────────
+    // ── Animation : changement d'opacités directes à 60 FPS ───────────────────
     useEffect(() => {
         clearInterval(timerRef.current);
         if (!isPlaying || urls.length === 0) return;
 
         timerRef.current = setInterval(() => {
-            setCurrentIndex(prev => {
-                const next = (prev + 1) % urlsRef.current.length;
-                if (overlayRef.current) overlayRef.current.setUrl(urlsRef.current[next]);
-                return next;
-            });
+            setCurrentIndex(prev => (prev + 1) % urlsRef.current.length);
         }, speed);
 
         return () => clearInterval(timerRef.current);
@@ -125,7 +128,6 @@ const SatelliteFrance = () => {
     const goTo = (idx) => {
         const i = Math.max(0, Math.min(idx, urls.length - 1));
         setCurrentIndex(i);
-        if (overlayRef.current) overlayRef.current.setUrl(urls[i]);
     };
 
     return (
@@ -184,6 +186,31 @@ const SatelliteFrance = () => {
                     <RefreshCw size={14} />
                 </button>
 
+                <div className="control-divider" />
+
+                {/* Timeline Range Slider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexGrow: 1, minWidth: '150px' }}>
+                    <input
+                        type="range"
+                        min="0"
+                        max={urls.length - 1}
+                        value={currentIndex}
+                        onChange={(e) => {
+                            setCurrentIndex(parseInt(e.target.value));
+                            setIsPlaying(false);
+                        }}
+                        style={{
+                            flexGrow: 1,
+                            height: '6px',
+                            borderRadius: '3px',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            accentColor: layer.color
+                        }}
+                        disabled={loading}
+                    />
+                </div>
+
                 {/* Heure courante */}
                 <span style={{ marginLeft: 'auto', fontSize: '0.72rem',
                                fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
@@ -225,16 +252,22 @@ const SatelliteFrance = () => {
                             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}"
                             attribution="&copy; Esri" />
 
-                        {/* Image satellite WMS préchargée (1 image = 0 saccade) */}
-                        {urls.length > 0 && (
-                            <ImageOverlay
-                                ref={overlayRef}
-                                url={urls[currentIndex] || urls[0]}
-                                bounds={BOUNDS}
-                                opacity={layer.opacity}
-                                zIndex={400}
-                            />
-                        )}
+                        {/* Images satellites WMS superposées (transition d'opacités à 60 FPS sans clignotement) */}
+                        {urls.map((url, idx) => {
+                            const isCurrent = idx === currentIndex;
+                            const isBuffered = Math.abs(idx - currentIndex) <= 4 || idx === 0 || idx === urls.length - 1;
+                            if (!isBuffered) return null;
+
+                            return (
+                                <ImageOverlay
+                                    key={url}
+                                    url={url}
+                                    bounds={BOUNDS}
+                                    opacity={isCurrent ? layer.opacity : 0}
+                                    zIndex={isCurrent ? 400 : 390}
+                                />
+                            );
+                        })}
 
                         {/* Labels / frontières par-dessus */}
                         <TileLayer

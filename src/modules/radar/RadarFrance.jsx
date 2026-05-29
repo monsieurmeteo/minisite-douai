@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl } from 'react-leaflet';
-import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar, Film } from 'lucide-react';
+import { MapContainer, TileLayer, ImageOverlay, useMap, Marker, Popup, GeoJSON, Tooltip, ScaleControl } from 'react-leaflet';
+import { Play, ChevronRight, Clock, Globe, Map as MapIcon, Layers, Square, Download, Thermometer, Wind, Zap, Calendar, Film, Radio } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import gifshot from 'gifshot';
 import L from 'leaflet';
@@ -106,7 +106,7 @@ function MapController({ lat, lon, zoom }) {
     return null;
 }
 
-const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, showCities, deptGeojson, overlayType, observations, lightningStrikes, selectedCity }) => {
+const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, showCities, deptGeojson, overlayType, observations, lightningStrikes, selectedCity, radarSource }) => {
     const radarScheme = 6; // Fixed Arc-en-Ciel HD
     const isSmoothed = false; // Fixed sharp pixels
     const showRoads = false; // Fixed no roads
@@ -149,7 +149,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                 )}
 
                 {/* Radar RainViewer — TileLayer animé */}
-                {timestamps.map((ts, idx) => {
+                {radarSource === 'rainviewer' && timestamps.map((ts, idx) => {
                     const isCurrent = idx === currentIndex;
                     const isBuffered = Math.abs(idx - currentIndex) <= 3;
                     if (!isBuffered) return null;
@@ -160,7 +160,7 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
 
                     return (
                         <TileLayer
-                            key={`radar-${ts.time}`}
+                            key={`radar-rv-${ts.time}`}
                             url={url}
                             opacity={isCurrent ? 0.85 : 0}
                             zIndex={isCurrent ? 1000 : 100}
@@ -169,6 +169,28 @@ const RadarMap = ({ zone, currentZoneId, timestamps, currentIndex, mapStyle, sho
                             tileSize={256}
                             updateWhenZooming={false}
                             keepBuffer={4}
+                        />
+                    );
+                })}
+
+                {/* Radar Météo-France — ImageOverlay animé */}
+                {radarSource === 'meteofrance' && timestamps.map((ts, idx) => {
+                    const isCurrent = idx === currentIndex;
+                    const isBuffered = Math.abs(idx - currentIndex) <= 3;
+                    if (!isBuffered) return null;
+
+                    const filename = ts.filename;
+                    const bounds = ts.leaflet_bounds;
+                    if (!filename || !bounds) return null;
+
+                    return (
+                        <ImageOverlay
+                            key={`radar-mf-${filename}`}
+                            url={ts.imageUrl || `/radar-mf/${filename}`}
+                            bounds={bounds}
+                            className="radar-tile-pro"
+                            opacity={isCurrent ? 0.85 : 0}
+                            zIndex={isCurrent ? 1000 : 100}
                         />
                     );
                 })}
@@ -293,6 +315,7 @@ const RadarFrance = () => {
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [mapStyle, setMapStyle] = useState('DARK');
     const [overlayType, setOverlayType] = useState('NONE');
+    const [radarSource, setRadarSource] = useState('rainviewer'); // 'rainviewer' or 'meteofrance'
     const [currentPeriod, setCurrentPeriod] = useState('2H');
     const [showCities, setShowCities] = useState(true);
     const [isArchiveMode, setIsArchiveMode] = useState(false);
@@ -431,7 +454,7 @@ const RadarFrance = () => {
         } else {
             fetchTimestamps();
         }
-    }, [currentPeriod, isArchiveMode, archiveDate]);
+    }, [currentPeriod, isArchiveMode, archiveDate, radarSource]);
 
     const loadArchiveImage = () => {
         // Mode archive : on ne peut pas animer, on affiche juste le radar direct
@@ -442,35 +465,88 @@ const RadarFrance = () => {
     const fetchTimestamps = async () => {
         setIsLoadingData(true);
         try {
-            // Chargement via RainViewer — API publique, fiable, sans clé
-            const res = await fetch(`https://api.rainviewer.com/public/weather-maps.json`);
-            const data = await res.json();
+            if (radarSource === 'rainviewer') {
+                // Chargement via RainViewer — API publique, fiable, sans clé
+                const res = await fetch(`https://api.rainviewer.com/public/weather-maps.json`);
+                const data = await res.json();
 
-            const frames = data.radar?.past || [];
-            if (frames.length === 0) throw new Error('Aucune frame radar RainViewer disponible');
+                const frames = data.radar?.past || [];
+                if (frames.length === 0) throw new Error('Aucune frame radar RainViewer disponible');
 
-            // Appliquer le filtre de période
-            const count = PERIODS.find(p => p.id === currentPeriod)?.count || 12;
-            const sliced = frames.slice(-count);
+                // Appliquer le filtre de période
+                const count = PERIODS.find(p => p.id === currentPeriod)?.count || 12;
+                const sliced = frames.slice(-count);
 
-            // Construire les timestamps compatibles avec le composant
-            const framesToSet = sliced.map(frame => ({
-                time: frame.time,
-                path: frame.path,
-                host: data.host,
-            }));
+                // Construire les timestamps compatibles avec le composant
+                const framesToSet = sliced.map(frame => ({
+                    time: frame.time,
+                    path: frame.path,
+                    host: data.host,
+                }));
 
-            setTimestamps(framesToSet);
-            setCurrentIndex(framesToSet.length - 1);
+                setTimestamps(framesToSet);
+                setCurrentIndex(framesToSet.length - 1);
 
-            if (framesToSet.length > 0) {
-                setLastRadarUpdate(new Date(framesToSet[framesToSet.length - 1].time * 1000));
+                if (framesToSet.length > 0) {
+                    setLastRadarUpdate(new Date(framesToSet[framesToSet.length - 1].time * 1000));
+                }
+            } else {
+                // meteofrance
+                let manifest;
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const supabaseManifestUrl = supabaseUrl
+                    ? `${supabaseUrl}/storage/v1/object/public/radar-mf/manifest.json?t=${Date.now()}`
+                    : null;
+
+                try {
+                    if (supabaseManifestUrl) {
+                        const res = await fetch(supabaseManifestUrl);
+                        if (res.ok) manifest = await res.json();
+                    }
+                } catch (e) { /* fallback to local */ }
+
+                if (!manifest) {
+                    const response = await fetch(`/radar-mf/manifest.json?t=${Date.now()}`);
+                    manifest = await response.json();
+                }
+
+                if (manifest.frames && manifest.frames.length > 0) {
+                    const baseUrl = manifest.base_url || '/radar-mf/';
+                    const framesToSet = manifest.frames.map(frame => {
+                        const ts = frame.timestamp;
+                        const year = parseInt(ts.substring(0, 4));
+                        const month = parseInt(ts.substring(4, 6)) - 1;
+                        const day = parseInt(ts.substring(6, 8));
+                        const hour = parseInt(ts.substring(8, 10));
+                        const min = parseInt(ts.substring(10, 12));
+                        const sec = parseInt(ts.substring(12, 14));
+                        const date = new Date(Date.UTC(year, month, day, hour, min, sec));
+
+                        return {
+                            time: date.getTime() / 1000,
+                            filename: frame.filename,
+                            imageUrl: `${baseUrl}${frame.filename}`,
+                            leaflet_bounds: manifest.leaflet_bounds,
+                            iso: date.toISOString(),
+                        };
+                    });
+
+                    const count = PERIODS.find(p => p.id === currentPeriod)?.count || 12;
+                    const sliced = framesToSet.slice(-count);
+
+                    setTimestamps(sliced);
+                    setCurrentIndex(sliced.length - 1);
+
+                    if (sliced.length > 0) {
+                        setLastRadarUpdate(new Date(sliced[sliced.length - 1].time * 1000));
+                    }
+                }
             }
 
             setIsLoadingData(false);
             setLoading(false);
         } catch (error) {
-            console.error('Erreur chargement radar RainViewer:', error);
+            console.error('Erreur chargement radar:', error);
             setTimestamps([]);
             setCurrentIndex(0);
             setIsLoadingData(false);
@@ -754,6 +830,13 @@ const RadarFrance = () => {
                                 </select>
                             </div>
                             <div className="setting-item">
+                                <Radio size={14} />
+                                <select value={radarSource} onChange={(e) => setRadarSource(e.target.value)} className="settings-select">
+                                    <option value="rainviewer">Source : RainViewer</option>
+                                    <option value="meteofrance">Source : Météo-France HD</option>
+                                </select>
+                            </div>
+                            <div className="setting-item">
                                 <Layers size={14} />
                                 <select value={mapStyle} onChange={(e) => setMapStyle(e.target.value)} className="settings-select">
                                     {Object.entries(MAP_STYLES).map(([key, s]) => (
@@ -779,6 +862,7 @@ const RadarFrance = () => {
                         lightningStrikes={lightningStrikes}
                         selectedCity={selectedCity}
                         currentZoneId={currentZone}
+                        radarSource={radarSource}
                     />
                 </div>
             </div>

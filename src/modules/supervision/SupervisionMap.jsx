@@ -169,9 +169,14 @@ const SupervisionMap = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(true);
     const [radarScheme, setRadarScheme] = useState(2);
+    const [radarSource, setRadarSource] = useState('rainviewer'); // 'rainviewer' or 'meteofrance'
     const [radarHost, setRadarHost] = useState('https://tilecache.rainviewer.com');
     const [isSmoothed, setIsSmoothed] = useState(true);
     const timerRef = useRef(null);
+
+    useEffect(() => {
+        fetchRadarTimestamps(radarSource);
+    }, [radarSource]);
 
     // --- FOUDRE STATE ---
     const [strikes, setStrikes] = useState([]);
@@ -212,53 +217,77 @@ const SupervisionMap = () => {
         return false;
     };
 
+    const fetchRadarTimestamps = async (source) => {
+        try {
+            if (source === 'rainviewer') {
+                const res = await fetch(`https://api.rainviewer.com/public/weather-maps.json`);
+                const data = await res.json();
+                const frames = data.radar?.past || [];
+                if (frames.length > 0) {
+                    // Conserver les 13 dernières frames (~1h de historique à intervalles de 5 min)
+                    const sliced = frames.slice(-13);
+                    const framesToSet = sliced.map(frame => ({
+                        time: frame.time,
+                        path: frame.path,
+                        host: data.host,
+                    }));
+                    setTimestamps(framesToSet);
+                    setCurrentIndex(framesToSet.length - 1);
+                }
+            } else {
+                // meteofrance
+                let manifest;
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const supabaseManifestUrl = supabaseUrl
+                    ? `${supabaseUrl}/storage/v1/object/public/radar-mf/manifest.json?t=${Date.now()}`
+                    : null;
+
+                try {
+                    if (supabaseManifestUrl) {
+                        const res = await fetch(supabaseManifestUrl);
+                        if (res.ok) manifest = await res.json();
+                    }
+                } catch (e) { /* fallback to local */ }
+
+                if (!manifest) {
+                    const response = await fetch(`/radar-mf/manifest.json?t=${Date.now()}`);
+                    manifest = await response.json();
+                }
+
+                if (manifest.frames && manifest.frames.length > 0) {
+                    const baseUrl = manifest.base_url || '/radar-mf/';
+                    const framesToSet = manifest.frames.map(frame => {
+                        const ts = frame.timestamp;
+                        const year = parseInt(ts.substring(0, 4));
+                        const month = parseInt(ts.substring(4, 6)) - 1;
+                        const day = parseInt(ts.substring(6, 8));
+                        const hour = parseInt(ts.substring(8, 10));
+                        const min = parseInt(ts.substring(10, 12));
+                        const sec = parseInt(ts.substring(12, 14));
+                        const date = new Date(Date.UTC(year, month, day, hour, min, sec));
+
+                        return {
+                            time: date.getTime() / 1000,
+                            filename: frame.filename,
+                            imageUrl: `${baseUrl}${frame.filename}`,
+                            leaflet_bounds: manifest.leaflet_bounds,
+                            iso: date.toISOString(),
+                        };
+                    }).slice(-13);
+
+                    setTimestamps(framesToSet);
+                    setCurrentIndex(framesToSet.length - 1);
+                }
+            }
+        } catch (err) {
+            console.error("Error fetching radar timestamps:", err);
+        }
+    };
+
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Fetch manifest - try Supabase first, then local
-            let manifest;
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseManifestUrl = supabaseUrl
-                ? `${supabaseUrl}/storage/v1/object/public/radar-mf/manifest.json?t=${Date.now()}`
-                : null;
-
-            try {
-                if (supabaseManifestUrl) {
-                    const res = await fetch(supabaseManifestUrl);
-                    if (res.ok) manifest = await res.json();
-                }
-            } catch (e) { /* fallback to local */ }
-
-            if (!manifest) {
-                const response = await fetch(`/radar-mf/manifest.json?t=${Date.now()}`);
-                manifest = await response.json();
-            }
-
-            if (manifest.frames && manifest.frames.length > 0) {
-                const baseUrl = manifest.base_url || '/radar-mf/';
-                const framesToSet = manifest.frames.map(frame => {
-                    const ts = frame.timestamp;
-                    const year = parseInt(ts.substring(0, 4));
-                    const month = parseInt(ts.substring(4, 6)) - 1;
-                    const day = parseInt(ts.substring(6, 8));
-                    const hour = parseInt(ts.substring(8, 10));
-                    const min = parseInt(ts.substring(10, 12));
-                    const sec = parseInt(ts.substring(12, 14));
-                    const date = new Date(Date.UTC(year, month, day, hour, min, sec));
-
-                    return {
-                        time: date.getTime() / 1000,
-                        filename: frame.filename,
-                        imageUrl: `${baseUrl}${frame.filename}`,
-                        leaflet_bounds: manifest.leaflet_bounds,
-                        iso: date.toISOString(),
-                    };
-                }).slice(-13);
-
-                setTimestamps(framesToSet);
-                setCurrentIndex(framesToSet.length - 1);
-            }
-
+            await fetchRadarTimestamps(radarSource);
             fetchStrikes();
 
             const depts = await fetchDepartementsGeoJSON();
@@ -464,6 +493,14 @@ const SupervisionMap = () => {
                     </div>
 
                     <div className="style-selector">
+                        <Radio size={16} className="style-icon" />
+                        <select value={radarSource} onChange={e => setRadarSource(e.target.value)}>
+                            <option value="rainviewer">Radar RainViewer (Mondial)</option>
+                            <option value="meteofrance">Radar Météo-France (HD)</option>
+                        </select>
+                    </div>
+
+                    <div className="style-selector">
                         <Waves size={16} className="style-icon" />
                         <select value={radarScheme} onChange={e => setRadarScheme(parseInt(e.target.value))}>
                             {RADAR_SCHEMES.map(s => (
@@ -622,7 +659,33 @@ const SupervisionMap = () => {
                         <ScaleControl position="bottomleft" imperial={false} />
                         <MousePosition />
 
-                        {layers.radar && timestamps.map((ts, idx) => {
+                        {/* Couche Radar RainViewer */}
+                        {layers.radar && radarSource === 'rainviewer' && timestamps.map((ts, idx) => {
+                            const isCurrent = idx === currentIndex;
+                            const isBuffered = Math.abs(idx - currentIndex) <= 2;
+                            if (!isBuffered) return null;
+                            if (!ts.path) return null;
+
+                            const host = ts.host || radarHost || 'https://tilecache.rainviewer.com';
+                            const url = `${host}${ts.path}/256/{z}/{x}/{y}/${radarScheme}/1_1.png`;
+
+                            return (
+                                <TileLayer
+                                    key={`radar-rv-${ts.time}`}
+                                    url={url}
+                                    opacity={isCurrent ? 0.8 : 0}
+                                    zIndex={isCurrent ? 1000 : 100}
+                                    maxNativeZoom={7}
+                                    maxZoom={20}
+                                    tileSize={256}
+                                    updateWhenZooming={false}
+                                    keepBuffer={4}
+                                />
+                            );
+                        })}
+
+                        {/* Couche Radar Météo-France */}
+                        {layers.radar && radarSource === 'meteofrance' && timestamps.map((ts, idx) => {
                             const isCurrent = idx === currentIndex;
                             const isBuffered = Math.abs(idx - currentIndex) <= 2;
                             if (!isBuffered) return null;
@@ -633,7 +696,7 @@ const SupervisionMap = () => {
 
                             return (
                                 <ImageOverlay
-                                    key={filename}
+                                    key={`radar-mf-${filename}`}
                                     url={ts.imageUrl || `/radar-mf/${filename}`}
                                     bounds={bounds}
                                     className="radar-tile-pro"
@@ -705,7 +768,12 @@ const SupervisionMap = () => {
                         {layers.radar && (
                             <div className="legend-box-glass large">
                                 <label className="legend-header-main">Intensité des Précipitations</label>
-                                <div className="radar-gradient-line-large" />
+                                <div 
+                                    className="radar-gradient-line-large" 
+                                    style={radarSource === 'rainviewer' ? {
+                                        background: `linear-gradient(to right, ${RADAR_SCHEMES.find(s => s.id === radarScheme)?.colors.join(', ') || '#ccc'})`
+                                    } : {}}
+                                />
                                 <div className="legend-range-labels-pro">
                                     <span className="lvl-low">FAIBLE</span>
                                     <span className="lvl-med">MODÉRÉE</span>

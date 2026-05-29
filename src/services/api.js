@@ -16,15 +16,16 @@ export const weatherAPI = {
     getStation6mnHistory: async (stationId, dateObj = null) => {
         if (!supabase) return [];
         try {
+            let start, end;
             let query = supabase
                 .from('observations_6mn')
                 .select('*')
                 .eq('station_id', stationId);
 
             if (dateObj) {
-                const start = new Date(dateObj);
+                start = new Date(dateObj);
                 start.setHours(0, 0, 0, 0);
-                const end = new Date(dateObj);
+                end = new Date(dateObj);
                 end.setHours(23, 59, 59, 999);
 
                 query = query
@@ -34,7 +35,7 @@ export const weatherAPI = {
 
             const { data, error } = await query
                 .order('timestamp', { ascending: false })
-                .limit(400); // Réduit de 1000 à 400 pour éviter les Timeouts Supabase (400 pts = 40h, suffisant pour 24h)
+                .limit(400); // Réduit de 1000 à 400 pour éviter les Timeouts Supabase
             
             if (error) {
                 console.error(`[API] Error fetching history for ${stationId}:`, error);
@@ -44,8 +45,42 @@ export const weatherAPI = {
             let finalData = data || [];
             console.log(`[API] Fetched ${finalData.length} records for ${stationId}`);
 
-            // FALLBACK ARCHIVES (Slices 00-06, 06-12, 12-18, 18-00)
-            if (dateObj && finalData.length === 0) {
+            // FUSION DE LA FIN DE NUIT DU JOUR PRÉCÉDENT (tranche 18-00 de J-1)
+            // Indispensable car l'archive quotidien J-1 a déjà supprimé la fin de nuit locale de la table active
+            if (dateObj) {
+                try {
+                    const prevDate = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+                    const prevY = prevDate.getFullYear();
+                    const prevM = String(prevDate.getMonth() + 1).padStart(2, '0');
+                    const prevD = String(prevDate.getDate()).padStart(2, '0');
+                    
+                    const prevFilePath = `6mn/${prevY}/${prevM}/${prevD}/18-00.json`;
+                    const { data: prevStorageData, error: prevStorageError } = await supabase.storage
+                        .from('observations-archives')
+                        .download(prevFilePath);
+                        
+                    if (!prevStorageError && prevStorageData) {
+                        const text = await prevStorageData.text();
+                        const prevDataParsed = JSON.parse(text);
+                        const prevStationData = prevDataParsed.filter(obs => obs.station_id === stationId);
+                        
+                        // Fusionner en évitant les doublons
+                        const existingTimestamps = new Set(finalData.map(d => d.timestamp));
+                        prevStationData.forEach(obs => {
+                            if (!existingTimestamps.has(obs.timestamp)) {
+                                finalData.push(obs);
+                            }
+                        });
+                        
+                        finalData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    }
+                } catch (err) {
+                    console.warn("[API] Previous day archive fallback failed:", err);
+                }
+            }
+
+            // FALLBACK ARCHIVES COMPLETES (si pas ou peu de données dans la table active, ex: jour passé)
+            if (dateObj && (finalData.length === 0 || finalData.filter(d => new Date(d.timestamp) >= start).length === 0)) {
                 try {
                     const y = dateObj.getFullYear();
                     const m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -69,12 +104,30 @@ export const weatherAPI = {
                     const mergedData = allSlicesData.flat();
 
                     if (mergedData.length > 0) {
-                        finalData = mergedData.filter(obs => obs.station_id === stationId);
+                        const currentDayStationData = mergedData.filter(obs => obs.station_id === stationId);
+                        
+                        const existingTimestamps = new Set(finalData.map(d => d.timestamp));
+                        currentDayStationData.forEach(obs => {
+                            if (!existingTimestamps.has(obs.timestamp)) {
+                                finalData.push(obs);
+                            }
+                        });
+                        
                         finalData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     }
                 } catch (err) {
                     console.warn("[API] Archive fallback failed:", err);
                 }
+            }
+
+            // Filtrage final strict selon la journée civile locale (convertie en UTC pour comparaison)
+            if (dateObj) {
+                const startTime = start.getTime();
+                const endTime = end.getTime();
+                finalData = finalData.filter(obs => {
+                    const t = new Date(obs.timestamp).getTime();
+                    return t >= startTime && t <= endTime;
+                });
             }
 
             return finalData.map(obs => ({

@@ -33,6 +33,7 @@ import MonthlyMapsHub from './modules/maps/MonthlyMapsHub';
 import MeteocielArchives from './modules/rankings/MeteocielArchives';
 import StationArchives from './modules/rankings/StationArchives';
 import HDFRadar from './modules/climatology/HDFRadar';
+import WindyModule from './modules/windy/WindyModule';
 
 import { Menu } from 'lucide-react';
 
@@ -86,6 +87,7 @@ function App() {
           <Route path="/archives-classements" element={<MeteocielArchives />} />
           <Route path="/archives-station" element={<StationArchives />} />
           <Route path="/hdf-radar" element={<HDFRadar />} />
+          <Route path="/windy" element={<WindyModule />} />
 
         </Routes>
 
