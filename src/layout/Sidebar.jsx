@@ -4,7 +4,7 @@ import {
   Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3
 } from 'lucide-react';
 import clsx from 'clsx';
-import { DEPARTMENTS } from '../data/departments.js';
+import { DEPARTMENTS } from '../data/departments';
 import { weatherAPI } from '../services/api';
 import { geoService } from '../services/geoService';
 import './Sidebar.css';
