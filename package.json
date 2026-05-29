@@ -34,7 +34,8 @@
     "react-simple-maps": "^3.0.0",
     "recharts": "^3.6.0",
     "resend": "^6.8.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tweetsodium": "^0.0.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

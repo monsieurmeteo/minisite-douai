@@ -375,23 +375,59 @@ def add_gridlines(ax, zone_key):
 
 
 def add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key):
-    """Bande d'info en bas de carte : modèle, run, échéance, source."""
+    """Bande d'info en bas de carte, plus cartouches pro en haut à gauche et à droite (Meteociel-style)."""
     model  = MODELS[model_key]
     param  = PARAMETERS[param_key]
     run_dt = datetime.strptime(f"{run_date}{run_hour:02d}", '%Y%m%d%H')
     valid_dt = run_dt + timedelta(hours=step)
 
-    info = (
-        f"{model['short']} {model['resolution']} — "
-        f"Run {run_dt.strftime('%d/%m/%Y %Hh')} UTC — "
-        f"Échéance H+{step:03d} ({valid_dt.strftime('%d/%m %Hh')} UTC) — "
-        f"{param['label']} ({param['unit']})"
+    # 1. Cartouche Info en haut à gauche de la carte (Date et échéance)
+    info_text = (
+        f"Modèle : {model['name']} ({model['resolution']})\n"
+        f"Run de départ : {run_dt.strftime('%d/%m/%Y à %Hh')} UTC\n"
+        f"Échéance : +{step}h (validé pour le {valid_dt.strftime('%d/%m/%Y à %Hh')} UTC)"
     )
-    fig.text(0.01, 0.005, info,
-             fontsize=6, color='#333333', va='bottom',
-             path_effects=[pe.withStroke(linewidth=2, foreground='white')])
+    
+    bbox_info = dict(
+        boxstyle="round,pad=0.4",
+        facecolor="white",
+        edgecolor="#334155",
+        alpha=0.92,
+        linewidth=0.8,
+        zorder=10
+    )
+    ax.text(
+        0.015, 0.985, info_text,
+        fontsize=6, color='#1e293b',
+        fontweight='bold',
+        va='top', ha='left',
+        transform=ax.transAxes,
+        bbox=bbox_info,
+        zorder=10
+    )
 
-    # Timestamp de génération
+    # 2. Cartouche Paramètre en haut à droite de la carte
+    param_text = f"{param['label']} ({param['unit']})"
+    
+    bbox_param = dict(
+        boxstyle="round,pad=0.4",
+        facecolor="#1e3a8a",
+        edgecolor="#1e3a8a",
+        alpha=0.95,
+        linewidth=0.8,
+        zorder=10
+    )
+    ax.text(
+        0.985, 0.985, param_text,
+        fontsize=6.5, color='white',
+        fontweight='bold',
+        va='top', ha='right',
+        transform=ax.transAxes,
+        bbox=bbox_param,
+        zorder=10
+    )
+
+    # 3. Bandeau de bas de page (Copyright et signature)
     gen_ts = datetime.now(timezone.utc).strftime('Généré le %d/%m/%Y à %Hh%M UTC')
     fig.text(0.99, 0.005, gen_ts,
              fontsize=5, color='#666666', va='bottom', ha='right',

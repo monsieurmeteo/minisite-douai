@@ -4,6 +4,7 @@ Lance fetch + generation + upload + cleanup pour chaque modèle actif.
 Usage : python run_pipeline.py [ecmwf|icon-eu|all]
 """
 import sys
+import os
 import time
 import logging
 from datetime import datetime, timezone
@@ -34,7 +35,11 @@ def run_ecmwf():
     grib_file, run_date, run_hour = fetch_ecmwf()
     process_ecmwf(grib_file, run_date, run_hour)
     upload_model_run('ecmwf', run_date, run_hour)
-    update_metadata('ecmwf', run_date, run_hour, MODELS['ecmwf']['steps'])
+    
+    if not os.environ.get('SKIP_METADATA'):
+        update_metadata('ecmwf', run_date, run_hour, MODELS['ecmwf']['steps'])
+    else:
+        log.info("SKIP_METADATA est actif : mise à jour de metadata.json ignorée pour ce job")
 
     log.info(f"✅ ECMWF terminé en {(time.time()-t0)/60:.1f} min")
 
@@ -51,7 +56,11 @@ def run_icon():
     run_dir, run_date, run_hour = fetch_icon()
     process_icon(run_dir, run_date, run_hour)
     upload_model_run('icon-eu', run_date, run_hour)
-    update_metadata('icon-eu', run_date, run_hour, MODELS['icon-eu']['steps'])
+    
+    if not os.environ.get('SKIP_METADATA'):
+        update_metadata('icon-eu', run_date, run_hour, MODELS['icon-eu']['steps'])
+    else:
+        log.info("SKIP_METADATA est actif : mise à jour de metadata.json ignorée pour ce job")
 
     log.info(f"OK ICON-EU termine en {(time.time()-t0)/60:.1f} min")
 
@@ -69,9 +78,14 @@ def run_arome():
     nb = process_arome(run_dir, run_date, run_hour)
     log.info(f"AROME : {nb} cartes generees")
     upload_model_run('arome', run_date, run_hour)
-    update_metadata('arome', run_date, run_hour, MODELS['arome']['steps'])
+    
+    if not os.environ.get('SKIP_METADATA'):
+        update_metadata('arome', run_date, run_hour, MODELS['arome']['steps'])
+    else:
+        log.info("SKIP_METADATA est actif : mise à jour de metadata.json ignorée pour ce job")
 
     log.info(f"OK AROME termine en {(time.time()-t0)/60:.1f} min")
+
 
 
 def run_cleanup():

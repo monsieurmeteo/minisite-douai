@@ -60,8 +60,18 @@ def upload_model_run(model, run_date, run_hour):
             if not param_dir.exists():
                 continue
             for png_file in sorted(param_dir.glob('H+*.png')):
-                step   = int(png_file.stem.replace('H+', ''))
+                stem = png_file.stem
+                is_static = stem.endswith('_static')
+                step_str = stem.replace('H+', '').replace('_static', '')
+                try:
+                    step = int(step_str)
+                except ValueError:
+                    continue
+                
                 remote = storage_path(model, zone_key, param_key, run_date, run_hour, step)
+                if is_static:
+                    remote = remote.replace('.png', '_static.png')
+
                 if upload_file(str(png_file), remote):
                     uploaded += 1
                 else:
