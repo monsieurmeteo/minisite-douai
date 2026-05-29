@@ -1,14 +1,17 @@
 """
 Upload les PNG generes vers Supabase Storage via HTTP direct.
 Contourne le bug supabase-py avec les nouvelles cles sb_secret_.
+Upload parallèle avec ThreadPoolExecutor pour éviter les timeouts.
 """
 import os
 import sys
 import json
 import logging
 import requests
+import time
 from pathlib import Path
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import (
     BUCKET_NAME, SUPABASE_URL, SUPABASE_KEY,
@@ -21,6 +24,9 @@ log = logging.getLogger('upload')
 OUTPUT_DIR = Path('data/output')
 
 STORAGE_BASE = f"{SUPABASE_URL}/storage/v1"
+
+# Nombre de threads parallèles pour l'upload (adapté au débit réseau)
+MAX_WORKERS = 8
 
 
 def _headers():
@@ -36,36 +42,37 @@ def upload_file(local_path, remote_path):
     with open(local_path, 'rb') as f:
         data = f.read()
     h = {**_headers(), 'Content-Type': 'image/png', 'x-upsert': 'true'}
-    
-    max_retries = 3
+
+    max_retries = 4
     for attempt in range(1, max_retries + 1):
         try:
             # Essai POST
-            r = requests.post(url, headers=h, data=data, timeout=20)
+            r = requests.post(url, headers=h, data=data, timeout=30)
             if r.status_code in (200, 201):
                 return True
-            
-            # Essai PUT si le POST échoue
-            r2 = requests.put(url, headers=h, data=data, timeout=20)
+
+            # Essai PUT si le POST échoue (fichier existant)
+            r2 = requests.put(url, headers=h, data=data, timeout=30)
             if r2.status_code in (200, 201, 204):
                 return True
-                
-            log.warning(f"Tentative {attempt}/{max_retries} échouée pour {remote_path} (POST: {r.status_code}, PUT: {r2.status_code})")
+
+            log.warning(f"Tentative {attempt}/{max_retries} échouée pour {remote_path} "
+                        f"(POST: {r.status_code}, PUT: {r2.status_code})")
         except requests.RequestException as e:
-            log.warning(f"Tentative {attempt}/{max_retries} échouée pour {remote_path} due à une erreur réseau : {e}")
-            import time
-            time.sleep(1) # Petit délai de courtoisie avant le retry
-            
-    log.error(f"❌ Échec définitif d'upload pour {remote_path} après {max_retries} tentatives")
+            log.warning(f"Tentative {attempt}/{max_retries} réseau pour {remote_path}: {e}")
+
+        # Délai exponentiel avant retry
+        if attempt < max_retries:
+            time.sleep(min(2 ** attempt, 10))
+
+    log.error(f"❌ Échec définitif pour {remote_path} après {max_retries} tentatives")
     return False
 
 
-def upload_model_run(model, run_date, run_hour):
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("SUPABASE_URL / SUPABASE_KEY manquants")
-
-    run_dir  = OUTPUT_DIR / model
-    uploaded = failed = 0
+def _collect_files(model, run_date, run_hour):
+    """Collecte tous les fichiers (local_path, remote_path) à uploader."""
+    run_dir = OUTPUT_DIR / model
+    files = []
 
     for zone_key in ACTIVE_ZONES:
         for param_key in ACTIVE_PARAMETERS:
@@ -80,17 +87,58 @@ def upload_model_run(model, run_date, run_hour):
                     step = int(step_str)
                 except ValueError:
                     continue
-                
+
                 remote = storage_path(model, zone_key, param_key, run_date, run_hour, step)
                 if is_static:
                     remote = remote.replace('.png', '_static.png')
 
-                if upload_file(str(png_file), remote):
-                    uploaded += 1
-                else:
-                    failed += 1
+                files.append((str(png_file), remote))
 
-    log.info(f"Upload {model} {run_date}_{run_hour:02d}h : {uploaded} OK, {failed} erreurs")
+    return files
+
+
+def upload_model_run(model, run_date, run_hour):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL / SUPABASE_KEY manquants")
+
+    files = _collect_files(model, run_date, run_hour)
+    total = len(files)
+
+    if total == 0:
+        log.warning(f"Aucun fichier trouvé pour {model} {run_date}_{run_hour:02d}h")
+        return 0, 0
+
+    log.info(f"Début upload parallèle de {total} fichiers ({MAX_WORKERS} threads)...")
+
+    uploaded = 0
+    failed = 0
+    done = 0
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_remote = {
+            executor.submit(upload_file, lp, rp): rp
+            for lp, rp in files
+        }
+
+        for future in as_completed(future_to_remote):
+            remote = future_to_remote[future]
+            done += 1
+            try:
+                ok = future.result()
+            except Exception as e:
+                log.error(f"Exception pour {remote}: {e}")
+                ok = False
+
+            if ok:
+                uploaded += 1
+            else:
+                failed += 1
+
+            # Log de progression toutes les 100 fichiers
+            if done % 100 == 0 or done == total:
+                log.info(f"  Upload: {done}/{total} ({uploaded} OK, {failed} erreurs)")
+
+    log.info(f"✅ Upload {model} {run_date}_{run_hour:02d}h terminé: {uploaded} OK, {failed} erreurs")
     return uploaded, failed
 
 
@@ -99,7 +147,7 @@ def update_metadata(model, run_date, run_hour, steps_available):
         return
 
     meta_url = f"{STORAGE_BASE}/object/{BUCKET_NAME}/metadata.json"
-    h_get    = _headers()
+    h_get = _headers()
 
     # Charge le metadata existant
     try:
@@ -121,8 +169,8 @@ def update_metadata(model, run_date, run_hour, steps_available):
     }
 
     runs = meta['models'][model]['runs']
-    idx  = next((i for i, r in enumerate(runs)
-                 if r['date'] == run_date and r['hour'] == run_hour), None)
+    idx = next((i for i, r in enumerate(runs)
+                if r['date'] == run_date and r['hour'] == run_hour), None)
     if idx is not None:
         runs[idx] = run_info
     else:
@@ -134,13 +182,21 @@ def update_metadata(model, run_date, run_hour, steps_available):
 
     meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode('utf-8')
     h_put = {**_headers(), 'Content-Type': 'application/json', 'x-upsert': 'true'}
-    try:
-        r = requests.post(meta_url, headers=h_put, data=meta_bytes, timeout=15)
-        if r.status_code not in (200, 201):
-            requests.put(meta_url, headers=h_put, data=meta_bytes, timeout=15)
-        log.info("metadata.json mis a jour")
-    except Exception as e:
-        log.error(f"Impossible de mettre à jour metadata.json : {e}")
+
+    for attempt in range(1, 4):
+        try:
+            r = requests.post(meta_url, headers=h_put, data=meta_bytes, timeout=15)
+            if r.status_code not in (200, 201):
+                r2 = requests.put(meta_url, headers=h_put, data=meta_bytes, timeout=15)
+                if r2.status_code not in (200, 201, 204):
+                    raise ValueError(f"PUT échoué: {r2.status_code}")
+            log.info("✅ metadata.json mis a jour")
+            return
+        except Exception as e:
+            log.warning(f"Tentative {attempt}/3 metadata.json: {e}")
+            time.sleep(2)
+
+    log.error("❌ Impossible de mettre à jour metadata.json")
 
 
 if __name__ == '__main__':
