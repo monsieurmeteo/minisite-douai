@@ -52,10 +52,10 @@ def make_cmap(colors_list):
 CMAPS = {
     # Température : bleu profond → cyan → vert → jaune → orange → rouge foncé
     'temp': make_cmap([
-        '#06004e', '#0000cc', '#0033ff', '#0099ff', '#00ccff',
-        '#00ffee', '#aaffcc', '#55ff55', '#aaff00', '#ffff00',
-        '#ffcc00', '#ff9900', '#ff5500', '#ff0000', '#cc0000',
-        '#880000', '#440000',
+        '#440055', '#660099', '#000088', '#0000cc', '#0033ff', '#0088ff', '#00ccff',
+        '#00ffff', '#88ffff', '#00ff00', '#77ff00', '#bbff00', '#ffff00', '#ffcc00',
+        '#ff9900', '#ff6600', '#ff0000', '#cc0000', '#990000', '#660000', '#440000',
+        '#880088', '#cc00cc', '#ff00ff'
     ]),
     # Vent / Rafales : blanc → vert clair → vert → jaune → orange → rouge → violet
     'wind': make_cmap([
@@ -209,7 +209,7 @@ def add_colorbar(fig, cf, param_key, zone_key):
     cb = plt.colorbar(cf, cax=cbar_ax, orientation='horizontal',
                       extend=param.get('extend', 'both'))
     cb.ax.tick_params(labelsize=7)
-    cb.set_label(f"{param['label']} ({param['unit']})", fontsize=8, labelpad=2)
+    # Le label est géré dans add_run_info pour éviter la superposition
 
 
 # ─── GÉNÉRATION D'UNE CARTE ────────────────────────────────────────────────────
