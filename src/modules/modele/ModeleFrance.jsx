@@ -339,6 +339,23 @@ const ModeleFrance = () => {
                     <button className="sub-nav-shortcut-btn disabled" disabled>📊 Diagramme</button>
                     <button className="sub-nav-shortcut-btn disabled" disabled>📍 Radiosondage</button>
                     <button className="sub-nav-shortcut-btn disabled" disabled>✂️ Coupes</button>
+                    <button 
+                        className="sub-nav-shortcut-btn download-direct-btn" 
+                        onClick={downloadCurrent}
+                        title="Télécharger l'image de la carte actuelle"
+                        style={{
+                            borderColor: '#2563eb',
+                            color: '#2563eb',
+                            background: '#eff6ff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontWeight: '800'
+                        }}
+                    >
+                        <Download size={12} />
+                        Télécharger la carte
+                    </button>
                 </div>
 
                 <div className="sub-nav-right">
@@ -502,7 +519,7 @@ const ModeleFrance = () => {
             {/* ── FOOTER DE BRINDING ── */}
             <div className="modele-footer-pro">
                 <span>Sources : Météo-France • Deutsche Wetterdienst (DWD) • ECMWF OpenData</span>
-                <span>Copyright © meteo-npdc.fr — Tous droits réservés</span>
+                <span>Copyright © Météo Climat Pro — Tous droits réservés</span>
             </div>
 
         </div>

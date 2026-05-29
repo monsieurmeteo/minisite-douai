@@ -406,8 +406,25 @@ def add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key):
         zorder=10
     )
 
-    # 2. Cartouche Paramètre en haut à droite de la carte
+    # 2. Dessiner le logo Météo Climat Pro en haut à droite si présent
+    has_logo = False
+    logo_path = Path('public/logo.jpg')
+    if logo_path.exists():
+        try:
+            from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+            logo_img = plt.imread(str(logo_path))
+            # Zoom pour insérer le logo de manière élégante et compacte (3:1 aspect ratio)
+            imagebox = OffsetImage(logo_img, zoom=0.08)
+            ab = AnnotationBbox(imagebox, (0.985, 0.985), xycoords='axes fraction',
+                                frameon=False, box_alignment=(1.0, 1.0), zorder=11)
+            ax.add_artist(ab)
+            has_logo = True
+        except Exception as e:
+            log.warning(f"Impossible de dessiner le logo : {e}")
+
+    # 3. Cartouche Paramètre en haut à droite (placé sous le logo si existant)
     param_text = f"{param['label']} ({param['unit']})"
+    y_pos = 0.89 if has_logo else 0.985
     
     bbox_param = dict(
         boxstyle="round,pad=0.4",
@@ -418,7 +435,7 @@ def add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key):
         zorder=10
     )
     ax.text(
-        0.985, 0.985, param_text,
+        0.985, y_pos, param_text,
         fontsize=6.5, color='white',
         fontweight='bold',
         va='top', ha='right',
@@ -427,7 +444,7 @@ def add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key):
         zorder=10
     )
 
-    # 3. Bandeau de bas de page (Copyright et signature)
+    # 4. Bandeau de bas de page (Copyright et signature)
     gen_ts = datetime.now(timezone.utc).strftime('Généré le %d/%m/%Y à %Hh%M UTC')
     fig.text(0.99, 0.005, gen_ts,
              fontsize=5, color='#666666', va='bottom', ha='right',
@@ -606,8 +623,8 @@ def generate_map(lats, lons, data, param_key, zone_key, output_path,
         add_colorbar(fig, cf, param_key, zone_key)
         add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key)
 
-        # Ajouter une signature copyright élégante météo-npdc.fr en bas
-        fig.text(0.5, 0.005, 'Météo-France • meteo-npdc.fr',
+        # Ajouter une signature copyright élégante Météo Climat Pro en bas
+        fig.text(0.5, 0.005, 'Météo-France • Météo Climat Pro',
                  fontsize=6, color='#333333', va='bottom', ha='center',
                  path_effects=[pe.withStroke(linewidth=2, foreground='white')])
 

@@ -10,8 +10,17 @@ import logging
 import requests
 import time
 from pathlib import Path
-from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ── Chargement du .env local (credentials Supabase) ───────────────────────────
+_env_file = Path(__file__).parent / '.env'
+if _env_file.exists():
+    for _line in _env_file.read_text(encoding='utf-8').splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _v = _line.split('=', 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+from datetime import datetime, timezone
 
 from config import (
     BUCKET_NAME, SUPABASE_URL, SUPABASE_KEY,
