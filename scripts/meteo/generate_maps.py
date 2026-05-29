@@ -35,6 +35,19 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+try:
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+    from matplotlib.path import Path as MPath
+    from matplotlib.patches import PathPatch
+    HAS_SHAPELY = True
+except ImportError:
+    HAS_SHAPELY = False
+    print("WARNING: shapely or matplotlib path features not available")
+
+import json
+import urllib.request
+
 from config import ZONES, ACTIVE_ZONES, PARAMETERS, ACTIVE_PARAMETERS, MODELS
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [MAPS] %(message)s')
@@ -109,9 +122,162 @@ CMAPS = {
 
 
 # ─── FOND DE CARTE STYLE METEOCIEL ────────────────────────────────────────────
-def add_basemap(ax, zone_key):
-    """Ajoute fond et habillage géographique style météo professionnel."""
+DEPARTMENTS_GEOJSON = None
+
+def load_departments_geojson():
+    global DEPARTMENTS_GEOJSON
+    if DEPARTMENTS_GEOJSON is not None:
+        return DEPARTMENTS_GEOJSON
+    
+    geojson_path = Path('data/departements.geojson')
+    if not geojson_path.exists():
+        geojson_path.parent.mkdir(parents=True, exist_ok=True)
+        url = "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson"
+        try:
+            log.info("Téléchargement du GeoJSON des départements français...")
+            req = urllib.request.Request(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0'}
+            )
+            with urllib.request.urlopen(req, timeout=15) as response:
+                content = response.read()
+            with open(geojson_path, 'wb') as f:
+                f.write(content)
+            log.info("Téléchargement du GeoJSON réussi.")
+        except Exception as e:
+            log.error(f"Impossible de télécharger le GeoJSON : {e}")
+            return None
+            
+    try:
+        with open(geojson_path, 'r', encoding='utf-8') as f:
+            DEPARTMENTS_GEOJSON = json.load(f)
+            return DEPARTMENTS_GEOJSON
+    except Exception as e:
+        log.error(f"Impossible de lire le GeoJSON : {e}")
+        return None
+
+
+ZONE_GEOMETRIES = {}
+
+def get_zone_geometry(zone_key):
+    global ZONE_GEOMETRIES
+    if zone_key in ZONE_GEOMETRIES:
+        return ZONE_GEOMETRIES[zone_key]
+        
+    if not HAS_SHAPELY:
+        return None
+        
+    geojson_data = load_departments_geojson()
+    if not geojson_data:
+        return None
+        
+    try:
+        if zone_key == 'france':
+            geoms = [shape(f['geometry']) for f in geojson_data['features']]
+            ZONE_GEOMETRIES[zone_key] = unary_union(geoms)
+        elif zone_key == 'hauts-de-france':
+            hdf_dept_codes = {'02', '59', '60', '62', '80'}
+            geoms = [
+                shape(f['geometry']) 
+                for f in geojson_data['features'] 
+                if f['properties'].get('code') in hdf_dept_codes
+            ]
+            ZONE_GEOMETRIES[zone_key] = unary_union(geoms)
+        else:
+            ZONE_GEOMETRIES[zone_key] = None
+    except Exception as e:
+        log.error(f"Error computing geometry for zone {zone_key}: {e}")
+        ZONE_GEOMETRIES[zone_key] = None
+        
+    return ZONE_GEOMETRIES[zone_key]
+
+
+def shapely_to_path(geom):
+    """Convertit un Polygon ou MultiPolygon shapely en Path matplotlib."""
+    if not HAS_SHAPELY or geom is None:
+        return None
+    if geom.geom_type == 'Polygon':
+        polys = [geom]
+    elif geom.geom_type == 'MultiPolygon':
+        polys = geom.geoms
+    else:
+        return None
+        
+    codes = []
+    vertices = []
+    
+    for poly in polys:
+        # Contour extérieur
+        exterior = poly.exterior
+        xs, ys = exterior.xy
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            vertices.append((x, y))
+            if i == 0:
+                codes.append(MPath.MOVETO)
+            else:
+                codes.append(MPath.LINETO)
+        codes[-1] = MPath.CLOSEPOLY
+        
+        # Trous
+        for interior in poly.interiors:
+            xs, ys = interior.xy
+            for i, (x, y) in enumerate(zip(xs, ys)):
+                vertices.append((x, y))
+                if i == 0:
+                    codes.append(MPath.MOVETO)
+                else:
+                    codes.append(MPath.LINETO)
+            codes[-1] = MPath.CLOSEPOLY
+            
+    return MPath(vertices, codes)
+
+
+def clip_plot_to_geometry(ax, plot_obj, geom):
+    """Clip a matplotlib plot object (ContourSet, Barbs, etc.) to a shapely geometry."""
+    if not HAS_SHAPELY or geom is None:
+        return
+    path = shapely_to_path(geom)
+    if path is None:
+        return
+    transform = ccrs.PlateCarree() if (HAS_CARTOPY and 'ccrs' in globals()) else ax.transData
+    clip_patch = PathPatch(path, transform=transform, facecolor='none', edgecolor='none')
+    ax.add_patch(clip_patch)
+    
+    if hasattr(plot_obj, 'collections'):
+        for collection in plot_obj.collections:
+            collection.set_clip_path(clip_patch)
+    else:
+        plot_obj.set_clip_path(clip_patch)
+
+
+def draw_shapely_boundary(ax, geom, color='#001122', linewidth=1.2, zorder=6):
+    """Trace les contours extérieurs et intérieurs d'une géométrie shapely (Polygon ou MultiPolygon)."""
+    if not HAS_SHAPELY or geom is None:
+        return
+    if geom.geom_type == 'Polygon':
+        polys = [geom]
+    elif geom.geom_type == 'MultiPolygon':
+        polys = geom.geoms
+    else:
+        return
+        
+    kwargs = {'color': color, 'linewidth': linewidth, 'zorder': zorder}
+    if HAS_CARTOPY:
+        kwargs['transform'] = ccrs.PlateCarree()
+        
+    for poly in polys:
+        xs, ys = poly.exterior.xy
+        ax.plot(xs, ys, **kwargs)
+        for interior in poly.interiors:
+            xs, ys = interior.xy
+            ax.plot(xs, ys, **kwargs)
+
+
+def add_basemap_background(ax, zone_key):
+    """Ajoute le fond géographique (relief, terre, mer, lacs, rivières) sous les données météo."""
     if not HAS_CARTOPY:
+        # Fallback de couleur pour la terre
+        ax.set_facecolor('#e8e0d8')
         return
 
     # Fond océan / terre en couleurs neutres
@@ -138,21 +304,59 @@ def add_basemap(ax, zone_key):
         ax.add_feature(cfeature.RIVERS.with_scale('50m'),
                        edgecolor='#7ab0cc', linewidth=0.3, zorder=1)
 
-    # Côtes
-    scale = '10m' if zone_key == 'hauts-de-france' else '50m'
-    ax.add_feature(cfeature.COASTLINE.with_scale(scale),
-                   linewidth=0.8, edgecolor='#445566', zorder=6)
 
-    # Frontières nationales
-    ax.add_feature(cfeature.BORDERS.with_scale(scale),
-                   linewidth=1.0, edgecolor='#334455', zorder=6)
+def add_basemap_boundaries(ax, zone_key, geojson_data=None):
+    """Ajoute les tracés géographiques (côtes, frontières, départements, régions) par-dessus les données météo."""
+    # Si Cartopy est actif, on ajoute les côtes et les frontières européennes standard en noir
+    if HAS_CARTOPY:
+        scale = '10m' if zone_key == 'hauts-de-france' else '50m'
+        # Côtes (très nettes et sombres, noires)
+        ax.add_feature(cfeature.COASTLINE.with_scale(scale),
+                       linewidth=0.8, edgecolor='#000000', zorder=6)
+        # Frontières nationales (très visibles, noires)
+        ax.add_feature(cfeature.BORDERS.with_scale(scale),
+                       linewidth=1.0, edgecolor='#000000', zorder=6)
 
-    # Frontières régionales / départements
-    if zone_key in ('france', 'hauts-de-france'):
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'cultural', 'admin_1_states_provinces_lines', '10m',
-            facecolor='none', edgecolor='#77889966', linewidth=0.5,
-        ), zorder=6)
+    # Dans tous les cas (Cartopy ou Fallback), si le GeoJSON est disponible, on dessine les départements français
+    if geojson_data and HAS_SHAPELY:
+        from matplotlib.collections import LineCollection
+        segments = []
+        for feature in geojson_data.get('features', []):
+            geom = feature.get('geometry', {})
+            gtype = geom.get('type')
+            coords = geom.get('coordinates', [])
+            if gtype == 'Polygon':
+                for ring in coords:
+                    segments.append(np.array(ring))
+            elif gtype == 'MultiPolygon':
+                for poly in coords:
+                    for ring in poly:
+                        segments.append(np.array(ring))
+        
+        # départements : tracés fins noirs (comme sur la capture d'écran Arpege)
+        transform = ccrs.PlateCarree() if HAS_CARTOPY else ax.transData
+        lc_depts = LineCollection(segments, colors='#000000', linewidths=0.4, alpha=0.6, zorder=6, transform=transform)
+        ax.add_collection(lc_depts)
+        
+        # En mode Fallback (Windows local), on trace au moins la frontière de la zone (contour de France/HDF) en noir
+        if not HAS_CARTOPY:
+            zone_geom = get_zone_geometry(zone_key)
+            if zone_geom:
+                draw_shapely_boundary(ax, zone_geom, color='#000000', linewidth=1.0, zorder=6)
+            
+        # En mode Cartopy, ajouter également les frontières régionales en noir
+        if HAS_CARTOPY:
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'cultural', 'admin_1_states_provinces_lines', '10m',
+                facecolor='none', edgecolor='#000000', linewidth=0.7,
+            ), zorder=6)
+    else:
+        # Fallback basique si pas de GeoJSON
+        if HAS_CARTOPY:
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'cultural', 'admin_1_states_provinces_lines', '10m',
+                facecolor='none', edgecolor='#000000', linewidth=0.7,
+            ), zorder=6)
 
 
 def add_gridlines(ax, zone_key):
@@ -212,13 +416,22 @@ def add_colorbar(fig, cf, param_key, zone_key):
     # Le label est géré dans add_run_info pour éviter la superposition
 
 
+def to_mercator_lat(lat_deg):
+    """
+    Projette des latitudes en degrés dans le système Spherical Mercator (Web Mercator / EPSG:3857).
+    """
+    lat_rad = np.radians(lat_deg)
+    return np.degrees(np.log(np.tan(np.pi / 4.0 + lat_rad / 2.0)))
+
+
 # ─── GÉNÉRATION D'UNE CARTE ────────────────────────────────────────────────────
 def generate_map(lats, lons, data, param_key, zone_key, output_path,
                  model_key='icon-eu', run_date='20260101', run_hour=0, step=0,
-                 u_wind=None, v_wind=None):
+                 u_wind=None, v_wind=None, is_static=False):
     """
-    Génère une carte PNG complète style Meteociel avec fond de carte,
-    données météo, isohypses si nécessaire, légende et info du run.
+    Génère une carte PNG :
+    - Si is_static est False : carte transparente, cadrée au pixel près pour Leaflet (Web Mercator).
+    - Si is_static est True : carte complète avec relief, frontières, légende et infos de run (Meteociel-style).
     """
     param = PARAMETERS[param_key]
     zone  = ZONES[zone_key]
@@ -235,84 +448,146 @@ def generate_map(lats, lons, data, param_key, zone_key, output_path,
     else:
         data_smooth = data
 
+    # Récupérer la géométrie de la zone pour clip (contours de France ou HDF)
+    zone_geom = get_zone_geometry(zone_key)
+    geojson_data = load_departments_geojson()
+
+    # Création de la figure
     fig = plt.figure(figsize=zone['figsize'], dpi=zone['dpi'])
 
-    if HAS_CARTOPY:
-        ax = fig.add_axes([0.0, 0.08, 1.0, 0.90], projection=ccrs.Mercator())
-        ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    if not is_static:
+        # ───────── CALQUE DE DONNÉES PURE POUR LEAFLET (MERCATOR NON-LINÉAIRE) ─────────
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_axis_off()
+        fig.patch.set_alpha(0.0)
+        ax.patch.set_visible(False)
 
-        # 1. Fond de carte
-        add_basemap(ax, zone_key)
+        # Projection des coordonnées de latitude de degrés en coordonnées Web Mercator
+        lats_proj = to_mercator_lat(lats)
+        lat_min_proj = to_mercator_lat(lat_min)
+        lat_max_proj = to_mercator_lat(lat_max)
 
-        # 2. Données météo colorées
-        cf = ax.contourf(
-            lons, lats, data_smooth,
-            levels=levels, cmap=cmap, norm=norm,
-            extend=param.get('extend', 'both'),
-            transform=ccrs.PlateCarree(),
-            alpha=0.82,
-            zorder=2,
-        )
-
-        # 3. Isohypses / isobares
+        # Données colorées
+        cf = ax.contourf(lons, lats_proj, data_smooth, levels=levels, cmap=cmap, norm=norm,
+                         extend=param.get('extend', 'both'), alpha=0.60)
+        
+        # Isobares si demandé (ex: pression)
         if param.get('isobars', False):
             isobar_step = param.get('isobar_step', 5)
             iso_levels  = [l for l in levels if l % isobar_step == 0]
-            cs = ax.contour(
-                lons, lats, data_smooth,
-                levels=iso_levels,
-                colors='#222222',
-                linewidths=0.7,
-                transform=ccrs.PlateCarree(),
-                zorder=3,
-            )
-            if param.get('isobar_label', False) or param_key in ('pressure', 'geopotential'):
-                try:
-                    ax.clabel(cs, fmt='%d', fontsize=6.5, colors='#111111',
-                              inline=True, inline_spacing=3)
-                except Exception:
-                    pass
+            cs = ax.contour(lons, lats_proj, data_smooth, levels=iso_levels, colors='#222222', linewidths=0.6)
 
-        # 4. Flèches de vent (si disponibles et zone petite)
-        if u_wind is not None and v_wind is not None and zone_key in ('france', 'hauts-de-france'):
+        # Flèches de vent (si disponibles)
+        if u_wind is not None and v_wind is not None:
             step_arrow = max(1, lons.shape[1] // 18)
-            ax.barbs(
+            barbs = ax.barbs(
                 lons[::step_arrow, ::step_arrow],
-                lats[::step_arrow, ::step_arrow],
+                lats_proj[::step_arrow, ::step_arrow],
                 u_wind[::step_arrow, ::step_arrow],
                 v_wind[::step_arrow, ::step_arrow],
-                length=5, linewidth=0.7, color='#222222',
-                transform=ccrs.PlateCarree(), zorder=4,
+                length=4.5, linewidth=0.6, color='#222222',
             )
 
-        # 5. Habillage géographique par-dessus les données
-        add_basemap(ax, zone_key)   # rappel pour les traits par-dessus les données
-
-        # 6. Graticule
-        add_gridlines(ax, zone_key)
+        # Cadrage strict et absolu sur la Bounding Box géographique projetée
+        ax.set_xlim(lon_min, lon_max)
+        ax.set_ylim(lat_min_proj, lat_max_proj)
 
     else:
-        # Fallback sans cartopy
-        ax = fig.add_axes([0.0, 0.10, 1.0, 0.88])
-        cf = ax.contourf(lons, lats, data_smooth,
-                         levels=levels, cmap=cmap, norm=norm,
-                         extend=param.get('extend', 'both'), alpha=0.85)
+        # ───────── CARTE STATIQUE HABILLÉE (STYLE METEOCIEL PRO) ─────────
+        if HAS_CARTOPY:
+            # Use Mercator projection centered on the zone to avoid geographic squishing
+            proj = ccrs.Mercator(central_longitude=(lon_min + lon_max) / 2.0)
+            ax = fig.add_axes([0.05, 0.08, 0.90, 0.88], projection=proj)
+            ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+            
+            # 1. Dessiner le fond géographique (relief, terre, mer, lacs, rivières) sous la météo
+            add_basemap_background(ax, zone_key)
+            
+            # 2. Dessiner les données météo par-dessus le fond
+            cf = ax.contourf(lons, lats, data_smooth, levels=levels, cmap=cmap, norm=norm,
+                             extend=param.get('extend', 'both'), alpha=0.60, transform=ccrs.PlateCarree())
+            
+            # Isobares
+            if param.get('isobars', False):
+                isobar_step = param.get('isobar_step', 5)
+                iso_levels  = [l for l in levels if l % isobar_step == 0]
+                cs = ax.contour(lons, lats, data_smooth, levels=iso_levels, colors='#222222', linewidths=0.6,
+                           transform=ccrs.PlateCarree())
 
-    # 7. Barre de couleur + info du run
-    add_colorbar(fig, cf, param_key, zone_key)
-    add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key)
+            # Flèches de vent
+            if u_wind is not None and v_wind is not None:
+                step_arrow = max(1, lons.shape[1] // 18)
+                barbs = ax.barbs(
+                    lons[::step_arrow, ::step_arrow],
+                    lats[::step_arrow, ::step_arrow],
+                    u_wind[::step_arrow, ::step_arrow],
+                    v_wind[::step_arrow, ::step_arrow],
+                    length=4.5, linewidth=0.6, color='#222222',
+                    transform=ccrs.PlateCarree(),
+                )
+                
+            # 3. Dessiner les frontières et les graticules par-dessus la météo (haute visibilité)
+            add_basemap_boundaries(ax, zone_key, geojson_data=geojson_data)
+            add_gridlines(ax, zone_key)
+        else:
+            # Fallback matplotlib pur
+            ax = fig.add_axes([0.05, 0.08, 0.90, 0.88])
+            center_lat = (lat_min + lat_max) / 2.0
+            ax.set_aspect(1.0 / np.cos(np.radians(center_lat)))
+            
+            # 1. Dessiner le fond géographique (relief, terre, mer, lacs, rivières) sous la météo
+            add_basemap_background(ax, zone_key)
+            
+            # 2. Dessiner les données météo par-dessus le fond
+            cf = ax.contourf(lons, lats, data_smooth, levels=levels, cmap=cmap, norm=norm,
+                             extend=param.get('extend', 'both'), alpha=0.60)
+            
+            # Isobares
+            if param.get('isobars', False):
+                isobar_step = param.get('isobar_step', 5)
+                iso_levels  = [l for l in levels if l % isobar_step == 0]
+                cs = ax.contour(lons, lats, data_smooth, levels=iso_levels, colors='#222222', linewidths=0.6)
+            
+            # Flèches de vent
+            if u_wind is not None and v_wind is not None:
+                step_arrow = max(1, lons.shape[1] // 18)
+                barbs = ax.barbs(
+                    lons[::step_arrow, ::step_arrow],
+                    lats[::step_arrow, ::step_arrow],
+                    u_wind[::step_arrow, ::step_arrow],
+                    v_wind[::step_arrow, ::step_arrow],
+                    length=4.5, linewidth=0.6, color='#222222',
+                )
+            
+            # 3. Dessiner les frontières et départements par-dessus la météo
+            add_basemap_boundaries(ax, zone_key, geojson_data=geojson_data)
+            
+            ax.set_xlim(lon_min, lon_max)
+            ax.set_ylim(lat_min, lat_max)
+            ax.set_axis_off()
+
+        # Ajout des infos de run, de la colorbar et du copyright
+        add_colorbar(fig, cf, param_key, zone_key)
+        add_run_info(fig, ax, model_key, run_date, run_hour, step, param_key)
+
+        # Ajouter une signature copyright élégante météo-npdc.fr en bas
+        fig.text(0.5, 0.005, 'Météo-France • meteo-npdc.fr',
+                 fontsize=6, color='#333333', va='bottom', ha='center',
+                 path_effects=[pe.withStroke(linewidth=2, foreground='white')])
 
     # Sauvegarde
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(
         str(output_path),
         dpi=zone['dpi'],
-        bbox_inches='tight',
-        pad_inches=0.02,
-        facecolor='#f5f5f5',  # fond gris très clair (pas transparent — self-contained)
+        bbox_inches=None if not is_static else 'tight',
+        pad_inches=0 if not is_static else 0.1,
+        transparent=not is_static,
         format='png',
+        facecolor='none' if not is_static else 'white',
     )
     plt.close(fig)
+
 
 
 # ─── LECTURE GRIB ECMWF ───────────────────────────────────────────────────────
@@ -357,194 +632,269 @@ def read_grib_ecmwf(grib_file, param_key, step):
         return None, None, None, None, None
 
 
-# ─── TRAITEMENT COMPLET ECMWF ─────────────────────────────────────────────────
-def process_ecmwf(grib_file, run_date, run_hour):
-    from config import MODELS
-    steps = MODELS['ecmwf']['steps']
-    total = 0
+# ─── LOGIQUE DE TRAITEMENT PAR PAS DE TEMPS (POUR PARALLÉLISATION) ─────────────
 
-    for step in steps:
-        log.info(f"  ECMWF H+{step:03d} ({len(ACTIVE_PARAMETERS)} params × {len(ACTIVE_ZONES)} zones)")
-        for param_key in ACTIVE_PARAMETERS:
-            lats, lons, data, u, v = read_grib_ecmwf(grib_file, param_key, step)
-            if data is None:
-                continue
+def process_ecmwf_step(step, grib_file, run_date, run_hour):
+    """Génère les cartes ECMWF pour un pas de temps donné."""
+    import xarray as xr
+    import numpy as np
+    
+    total = 0
+    # On itère sur les paramètres actifs
+    for param_key in ACTIVE_PARAMETERS:
+        lats, lons, data, u, v = read_grib_ecmwf(grib_file, param_key, step)
+        if data is None:
+            continue
+        for zone_key in ACTIVE_ZONES:
+            zone = ZONES[zone_key]
+            lon_min, lon_max, lat_min, lat_max = zone['bounds']
+            lon_m = (lons >= lon_min) & (lons <= lon_max)
+            lat_m = (lats >= lat_min) & (lats <= lat_max)
+            lats_c   = lats[lat_m]
+            lons_c   = lons[lon_m]
+            data_c   = data[np.ix_(lat_m, lon_m)]
+            lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
+            u_c = u[np.ix_(lat_m, lon_m)] if u is not None else None
+            v_c = v[np.ix_(lat_m, lon_m)] if v is not None else None
+
+            out = (OUTPUT_DIR / 'ecmwf' / zone_key / param_key /
+                   f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
+            generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
+                         'ecmwf', run_date, run_hour, step, u_c, v_c, is_static=False)
+            
+            out_static = (OUTPUT_DIR / 'ecmwf' / zone_key / param_key /
+                          f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}_static.png')
+            generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out_static,
+                         'ecmwf', run_date, run_hour, step, u_c, v_c, is_static=True)
+            total += 2
+    return total
+
+
+def process_icon_step(step, run_dir, run_date, run_hour):
+    """Génère les cartes ICON-EU pour un pas de temps donné."""
+    import xarray as xr
+    import numpy as np
+    run_dir = Path(run_dir)
+    total = 0
+    
+    for param_key in ACTIVE_PARAMETERS:
+        ip   = PARAMETERS[param_key].get('icon_param')
+        conv = PARAMETERS[param_key]['convert_icon']
+        if not ip:
+            continue
+        try:
+            u_data = v_data = None
+            if isinstance(ip, list):
+                f_u = run_dir / f'{ip[0]}_{step:03d}.grib2'
+                f_v = run_dir / f'{ip[1]}_{step:03d}.grib2'
+                if not f_u.exists() or not f_v.exists():
+                    continue
+                ds_u = xr.open_dataset(str(f_u), engine='cfgrib')
+                ds_v = xr.open_dataset(str(f_v), engine='cfgrib')
+                u_raw  = ds_u[list(ds_u.data_vars)[0]].values
+                v_raw  = ds_v[list(ds_v.data_vars)[0]].values
+                lats   = ds_u.latitude.values
+                lons   = ds_u.longitude.values
+                data   = conv(u_raw, v_raw)
+                u_data = u_raw
+                v_data = v_raw
+            else:
+                f = run_dir / f'{ip}_{step:03d}.grib2'
+                if not f.exists():
+                    continue
+                ds   = xr.open_dataset(str(f), engine='cfgrib')
+                var  = list(ds.data_vars)[0]
+                lats = ds.latitude.values
+                lons = ds.longitude.values
+                data = conv(ds[var].values)
+
+            data = np.where(np.isfinite(data), data, np.nan)
+
             for zone_key in ACTIVE_ZONES:
                 zone = ZONES[zone_key]
                 lon_min, lon_max, lat_min, lat_max = zone['bounds']
                 lon_m = (lons >= lon_min) & (lons <= lon_max)
                 lat_m = (lats >= lat_min) & (lats <= lat_max)
+                if not lon_m.any() or not lat_m.any():
+                    continue
                 lats_c   = lats[lat_m]
                 lons_c   = lons[lon_m]
                 data_c   = data[np.ix_(lat_m, lon_m)]
                 lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
-                u_c = u[np.ix_(lat_m, lon_m)] if u is not None else None
-                v_c = v[np.ix_(lat_m, lon_m)] if v is not None else None
+                u_c = u_data[np.ix_(lat_m, lon_m)] if u_data is not None else None
+                v_c = v_data[np.ix_(lat_m, lon_m)] if v_data is not None else None
 
-                out = (OUTPUT_DIR / 'ecmwf' / zone_key / param_key /
+                out = (OUTPUT_DIR / 'icon-eu' / zone_key / param_key /
                        f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
                 generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
-                             'ecmwf', run_date, run_hour, step, u_c, v_c)
-                total += 1
-
-    log.info(f"✅ ECMWF : {total} cartes générées")
+                             'icon-eu', run_date, run_hour, step, u_c, v_c, is_static=False)
+                
+                out_static = (OUTPUT_DIR / 'icon-eu' / zone_key / param_key /
+                              f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}_static.png')
+                generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out_static,
+                             'icon-eu', run_date, run_hour, step, u_c, v_c, is_static=True)
+                total += 2
+        except Exception as e:
+            log.warning(f"  {param_key} H+{step:03d} : {e}")
+            continue
     return total
 
 
-# ─── TRAITEMENT COMPLET ICON-EU ───────────────────────────────────────────────
-def process_icon(run_dir, run_date, run_hour):
+def process_arome_step(step, run_dir, run_date, run_hour):
+    """Génère les cartes AROME pour un pas de temps donné."""
     import xarray as xr
+    import numpy as np
     run_dir = Path(run_dir)
-    steps   = MODELS['icon-eu']['steps']
-    total   = 0
+    total = 0
 
-    for step in steps:
-        log.info(f"  ICON-EU H+{step:03d}")
-        for param_key in ACTIVE_PARAMETERS:
-            ip   = PARAMETERS[param_key].get('icon_param')
-            conv = PARAMETERS[param_key]['convert_icon']
-            if not ip:
-                continue
-            try:
-                u_data = v_data = None
-                if isinstance(ip, list):
-                    f_u = run_dir / f'{ip[0]}_{step:03d}.grib2'
-                    f_v = run_dir / f'{ip[1]}_{step:03d}.grib2'
-                    if not f_u.exists() or not f_v.exists():
-                        continue
-                    ds_u = xr.open_dataset(str(f_u), engine='cfgrib')
-                    ds_v = xr.open_dataset(str(f_v), engine='cfgrib')
-                    u_raw  = ds_u[list(ds_u.data_vars)[0]].values
-                    v_raw  = ds_v[list(ds_v.data_vars)[0]].values
-                    lats   = ds_u.latitude.values
-                    lons   = ds_u.longitude.values
-                    data   = conv(u_raw, v_raw)
-                    u_data = u_raw
-                    v_data = v_raw
-                else:
-                    f = run_dir / f'{ip}_{step:03d}.grib2'
-                    if not f.exists():
-                        continue
-                    ds   = xr.open_dataset(str(f), engine='cfgrib')
-                    var  = list(ds.data_vars)[0]
-                    lats = ds.latitude.values
-                    lons = ds.longitude.values
-                    data = conv(ds[var].values)
-
-                data = np.where(np.isfinite(data), data, np.nan)
-
-                for zone_key in ACTIVE_ZONES:
-                    zone = ZONES[zone_key]
-                    lon_min, lon_max, lat_min, lat_max = zone['bounds']
-                    lon_m = (lons >= lon_min) & (lons <= lon_max)
-                    lat_m = (lats >= lat_min) & (lats <= lat_max)
-                    if not lon_m.any() or not lat_m.any():
-                        continue
-                    lats_c   = lats[lat_m]
-                    lons_c   = lons[lon_m]
-                    data_c   = data[np.ix_(lat_m, lon_m)]
-                    lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
-                    u_c = u_data[np.ix_(lat_m, lon_m)] if u_data is not None else None
-                    v_c = v_data[np.ix_(lat_m, lon_m)] if v_data is not None else None
-
-                    out = (OUTPUT_DIR / 'icon-eu' / zone_key / param_key /
-                           f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
-                    generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
-                                 'icon-eu', run_date, run_hour, step, u_c, v_c)
-                    total += 1
-            except Exception as e:
-                log.warning(f"  {param_key} H+{step:03d} : {e}")
-                continue
-
-    log.info(f"✅ ICON-EU : {total} cartes générées")
-    return total
-
-
-
-# ─── TRAITEMENT COMPLET AROME ─────────────────────────────────────────────────
-def process_arome(run_dir, run_date, run_hour):
-    import xarray as xr
-    run_dir = Path(run_dir)
-    steps   = MODELS['arome']['steps']
-    total   = 0
-
-    # Mapping param_key → nom de fichier AROME (voir fetch_arome.py)
     AROME_FILE = {
-        'temperature': ('{pk}_{step:03d}.grib2', None),
-        'wind_speed':  ('{pk}_U_{step:03d}.grib2', '{pk}_V_{step:03d}.grib2'),
-        'wind_gusts':  ('{pk}_{step:03d}.grib2', None),
-        'precipitation': ('{pk}_{step:03d}.grib2', None),
-        'pressure':    ('{pk}_{step:03d}.grib2', None),
-        'clouds':      ('{pk}_{step:03d}.grib2', None),
-        'humidity':    ('{pk}_{step:03d}.grib2', None),
-        'cape':        ('{pk}_{step:03d}.grib2', None),
-        'snow':        ('{pk}_{step:03d}.grib2', None),
+        'temperature': ('{param_key}_{step:03d}.grib2', None),
+        'wind_speed':  ('{param_key}_U_{step:03d}.grib2', '{param_key}_V_{step:03d}.grib2'),
+        'wind_gusts':  ('{param_key}_{step:03d}.grib2', None),
+        'precipitation': ('{param_key}_{step:03d}.grib2', None),
+        'pressure':    ('{param_key}_{step:03d}.grib2', None),
+        'clouds':      ('{param_key}_{step:03d}.grib2', None),
+        'humidity':    ('{param_key}_{step:03d}.grib2', None),
+        'cape':        ('{param_key}_{step:03d}.grib2', None),
+        'snow':        ('{param_key}_{step:03d}.grib2', None),
     }
 
-    for step in steps:
-        log.info(f"  AROME H+{step:03d}")
-        for param_key in ACTIVE_PARAMETERS:
-            conv = PARAMETERS[param_key].get('convert_icon', lambda x: x)
-            file_tpl = AROME_FILE.get(param_key)
-            if not file_tpl:
-                continue
+    for param_key in ACTIVE_PARAMETERS:
+        conv = PARAMETERS[param_key].get('convert_icon', lambda x: x)
+        file_tpl = AROME_FILE.get(param_key)
+        if not file_tpl:
+            continue
+        try:
+            u_data = v_data = None
+            fname_u, fname_v = file_tpl
+            fname_u = fname_u.format(param_key=param_key, step=step)
+
+            if fname_v:
+                fname_v = fname_v.format(param_key=param_key, step=step)
+                f_u = run_dir / fname_u
+                f_v = run_dir / fname_v
+                if not f_u.exists() or not f_v.exists():
+                    continue
+                ds_u = xr.open_dataset(str(f_u), engine='cfgrib')
+                ds_v = xr.open_dataset(str(f_v), engine='cfgrib')
+                u_raw = ds_u[list(ds_u.data_vars)[0]].values
+                v_raw = ds_v[list(ds_v.data_vars)[0]].values
+                lats  = ds_u.latitude.values
+                lons  = ds_u.longitude.values
+                data  = conv(u_raw, v_raw)
+                u_data = u_raw
+                v_data = v_raw
+            else:
+                f = run_dir / fname_u
+                if not f.exists():
+                    continue
+                ds   = xr.open_dataset(str(f), engine='cfgrib')
+                var  = list(ds.data_vars)[0]
+                lats = ds.latitude.values
+                lons = ds.longitude.values
+                data = conv(ds[var].values)
+
+            data = np.where(np.isfinite(data), data, np.nan)
+
+            for zone_key in ACTIVE_ZONES:
+                zone = ZONES[zone_key]
+                lon_min, lon_max, lat_min, lat_max = zone['bounds']
+                lon_m = (lons >= lon_min) & (lons <= lon_max)
+                lat_m = (lats >= lat_min) & (lats <= lat_max)
+                if not lon_m.any() or not lat_m.any():
+                    continue
+                lats_c = lats[lat_m]
+                lons_c = lons[lon_m]
+                data_c = data[np.ix_(lat_m, lon_m)]
+                lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
+                u_c = u_data[np.ix_(lat_m, lon_m)] if u_data is not None else None
+                v_c = v_data[np.ix_(lat_m, lon_m)] if v_data is not None else None
+
+                out = (OUTPUT_DIR / 'arome' / zone_key / param_key /
+                       f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
+                generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
+                             'arome', run_date, run_hour, step, u_c, v_c, is_static=False)
+                
+                out_static = (OUTPUT_DIR / 'arome' / zone_key / param_key /
+                              f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}_static.png')
+                generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out_static,
+                             'arome', run_date, run_hour, step, u_c, v_c, is_static=True)
+                total += 2
+
+        except Exception as e:
+            log.warning(f"  {param_key} H+{step:03d} : {e}")
+            continue
+    return total
+
+
+# ─── ORCHESTRATION DU TRAITEMENT DES MODÈLES ────────────────────────────────────
+
+def process_ecmwf(grib_file, run_date, run_hour):
+    from concurrent.futures import ProcessPoolExecutor
+    import os
+    steps = MODELS['ecmwf']['steps']
+    total = 0
+    max_workers = os.cpu_count() or 2
+    log.info(f"Début traitement parallèle ECMWF sur {max_workers} cœurs ({len(steps)} pas)")
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_ecmwf_step, step, grib_file, run_date, run_hour)
+            for step in steps
+        ]
+        for fut in futures:
             try:
-                u_data = v_data = None
-                fname_u, fname_v = file_tpl
-                fname_u = fname_u.format(pk=param_key, step=step)
-
-                if fname_v:
-                    fname_v = fname_v.format(pk=param_key, step=step)
-                    f_u = run_dir / fname_u
-                    f_v = run_dir / fname_v
-                    if not f_u.exists() or not f_v.exists():
-                        continue
-                    ds_u = xr.open_dataset(str(f_u), engine='cfgrib')
-                    ds_v = xr.open_dataset(str(f_v), engine='cfgrib')
-                    u_raw = ds_u[list(ds_u.data_vars)[0]].values
-                    v_raw = ds_v[list(ds_v.data_vars)[0]].values
-                    lats  = ds_u.latitude.values
-                    lons  = ds_u.longitude.values
-                    data  = conv(u_raw, v_raw)
-                    u_data = u_raw
-                    v_data = v_raw
-                else:
-                    f = run_dir / fname_u
-                    if not f.exists():
-                        continue
-                    ds   = xr.open_dataset(str(f), engine='cfgrib')
-                    var  = list(ds.data_vars)[0]
-                    lats = ds.latitude.values
-                    lons = ds.longitude.values
-                    data = conv(ds[var].values)
-
-                data = np.where(np.isfinite(data), data, np.nan)
-
-                for zone_key in ACTIVE_ZONES:
-                    zone = ZONES[zone_key]
-                    lon_min, lon_max, lat_min, lat_max = zone['bounds']
-                    lon_m = (lons >= lon_min) & (lons <= lon_max)
-                    lat_m = (lats >= lat_min) & (lats <= lat_max)
-                    if not lon_m.any() or not lat_m.any():
-                        continue
-                    lats_c = lats[lat_m]
-                    lons_c = lons[lon_m]
-                    data_c = data[np.ix_(lat_m, lon_m)]
-                    lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
-                    u_c = u_data[np.ix_(lat_m, lon_m)] if u_data is not None else None
-                    v_c = v_data[np.ix_(lat_m, lon_m)] if v_data is not None else None
-
-                    out = (OUTPUT_DIR / 'arome' / zone_key / param_key /
-                           f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
-                    generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
-                                 'arome', run_date, run_hour, step, u_c, v_c)
-                    total += 1
-
+                total += fut.result()
             except Exception as e:
-                log.warning(f"  {param_key} H+{step:03d} : {e}")
-                continue
+                log.error(f"Erreur pas de temps ECMWF : {e}")
 
-    log.info(f"AROME : {total} cartes generees")
+    log.info(f"✅ ECMWF : {total} cartes générées en parallèle")
+    return total
+
+
+def process_icon(run_dir, run_date, run_hour):
+    from concurrent.futures import ProcessPoolExecutor
+    import os
+    steps = MODELS['icon-eu']['steps']
+    total = 0
+    max_workers = os.cpu_count() or 2
+    log.info(f"Début traitement parallèle ICON-EU sur {max_workers} cœurs ({len(steps)} pas)")
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_icon_step, step, run_dir, run_date, run_hour)
+            for step in steps
+        ]
+        for fut in futures:
+            try:
+                total += fut.result()
+            except Exception as e:
+                log.error(f"Erreur pas de temps ICON-EU : {e}")
+
+    log.info(f"✅ ICON-EU : {total} cartes générées en parallèle")
+    return total
+
+
+def process_arome(run_dir, run_date, run_hour):
+    from concurrent.futures import ProcessPoolExecutor
+    import os
+    steps = MODELS['arome']['steps']
+    total = 0
+    max_workers = os.cpu_count() or 2
+    log.info(f"Début traitement parallèle AROME sur {max_workers} cœurs ({len(steps)} pas)")
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_arome_step, step, run_dir, run_date, run_hour)
+            for step in steps
+        ]
+        for fut in futures:
+            try:
+                total += fut.result()
+            except Exception as e:
+                log.error(f"Erreur pas de temps AROME : {e}")
+
+    log.info(f"✅ AROME : {total} cartes générées en parallèle")
     return total
 
 
@@ -559,4 +909,5 @@ if __name__ == '__main__':
         process_arome(grib_arg, run_date, run_hour)
     else:
         process_icon(grib_arg, run_date, run_hour)
+
 
