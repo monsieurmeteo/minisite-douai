@@ -7,12 +7,6 @@ import os
 # ─── ZONES GÉOGRAPHIQUES ───────────────────────────────────────────────────────
 # bounds = [lon_min, lon_max, lat_min, lat_max]
 ZONES = {
-    'europe': {
-        'name': 'Europe',
-        'bounds': [-25, 45, 34, 72],
-        'figsize': (16, 10),
-        'dpi': 100,
-    },
     'france': {
         'name': 'France',
         'bounds': [-6, 11, 41, 52.5],
@@ -21,13 +15,13 @@ ZONES = {
     },
     'hauts-de-france': {
         'name': 'Hauts-de-France',
-        'bounds': [1.0, 4.5, 49.2, 51.5],
+        'bounds': [0.0, 5.2, 48.2, 51.5],
         'figsize': (10, 7),
         'dpi': 150,
     },
 }
 
-ACTIVE_ZONES = ['france', 'hauts-de-france', 'europe']
+ACTIVE_ZONES = ['france', 'hauts-de-france']
 
 # ─── PARAMÈTRES MÉTÉO ──────────────────────────────────────────────────────────
 PARAMETERS = {
@@ -186,7 +180,7 @@ MODELS = {
         # Limité à 0 pour test 3h (ECMWF n'a que des pas de 6h)
         'steps': [0],
         'runs': [0, 12],
-        'enabled': True,
+        'enabled': False,
         'delay_h': 7,   # disponible ~7h après le run
     },
     'icon-eu': {
@@ -194,8 +188,8 @@ MODELS = {
         'short': 'ICON-EU',
         'resolution': '6.5 km',
         'color': '#16a34a',
-        # Limité à 3h pour test
-        'steps': [0, 1, 2, 3],
+        # Toutes les heures H+000→H+120, puis pas de 3h H+123→H+180
+        'steps': list(range(0, 121, 1)) + list(range(123, 181, 3)),
         'runs': [0, 3, 6, 9, 12, 15, 18, 21],
         'enabled': True,
         'delay_h': 3,
@@ -221,6 +215,23 @@ MODELS = {
         'delay_h': 4,
     },
 }
+
+# ─── FILTRAGE DES PAS DE TEMPS (POUR MATRIX WORKFLOWS) ─────────────────────────
+import os
+env_steps = os.environ.get('METEO_STEPS')
+if env_steps:
+    try:
+        if '-' in env_steps:
+            start, end = map(int, env_steps.split('-'))
+            for m_key in MODELS:
+                MODELS[m_key]['steps'] = [s for s in MODELS[m_key]['steps'] if start <= s <= end]
+        else:
+            allowed = set(map(int, env_steps.split(',')))
+            for m_key in MODELS:
+                MODELS[m_key]['steps'] = [s for s in MODELS[m_key]['steps'] if s in allowed]
+    except Exception as e:
+        print(f"WARNING: failed to parse METEO_STEPS env variable '{env_steps}': {e}")
+
 
 # ─── CHEMINS SUPABASE STORAGE ──────────────────────────────────────────────────
 BUCKET_NAME = 'meteo-models'
