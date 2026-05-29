@@ -97,17 +97,18 @@ const SatelliteFrance = () => {
                 setProgress(Math.round((loadedCount / list.length) * 100));
                 if (loadedCount === list.length) {
                     setLoading(false);
+                    setIsPlaying(true);
                 }
             }).catch(() => {
                 loadedCount++;
                 if (loadedCount === list.length) {
                     setLoading(false);
+                    setIsPlaying(true);
                 }
             });
         });
 
         setCurrentIndex(list.length - 1);
-        setIsPlaying(true);
     }, [layerKey]);
 
     useEffect(() => { loadFrames(); }, [loadFrames]);
@@ -255,8 +256,6 @@ const SatelliteFrance = () => {
                         {/* Images satellites WMS superposées (transition d'opacités à 60 FPS sans clignotement) */}
                         {urls.map((url, idx) => {
                             const isCurrent = idx === currentIndex;
-                            const isBuffered = Math.abs(idx - currentIndex) <= 4 || idx === 0 || idx === urls.length - 1;
-                            if (!isBuffered) return null;
 
                             return (
                                 <ImageOverlay
