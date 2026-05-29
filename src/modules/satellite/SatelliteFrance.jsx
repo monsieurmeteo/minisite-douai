@@ -17,14 +17,19 @@ const IMG_H     = 700;
 const BOUNDS    = [[36, -16], [57, 20]];
 
 const LAYERS = {
-    infrared: { wms: 'msg_fes:ir108',                    label: 'Infrarouge',  step: 15, count: 20, color: '#6366f1', opacity: 0.9 },
-    visible:  { wms: 'msg_fes:vis06',                    label: 'Visible',     step: 15, count: 16, color: '#f59e0b', opacity: 0.9 },
-    natural:  { wms: 'mumi:wideareacoverage_rgb_natural', label: 'Couleurs',    step: 60, count:  10, color: '#10b981', opacity: 0.88 },
+    geocolor_hd: { wms: 'mtg_fd:rgb_geocolour',          label: 'Géo-Couleur HD (MTG)', step: 10, count: 12, color: '#0ea5e9', opacity: 0.9 },
+    truecolor_hd:{ wms: 'mtg_fd:rgb_truecolour',         label: 'Couleur HD (MTG)',  step: 10, count: 12, color: '#10b981', opacity: 0.9 },
+    infrared_hd: { wms: 'mtg_fd:ir105_hrfi',             label: 'IR HD (MTG)',       step: 10, count: 15, color: '#6366f1', opacity: 0.9 },
+    visible_hd:  { wms: 'mtg_fd:vis06_hrfi',             label: 'Visible HD (MTG)',  step: 10, count: 15, color: '#f59e0b', opacity: 0.9 },
+    foudre_li:   { wms: 'mtg_fd:li_afa',                 label: 'Foudre LI (MTG)',   step: 10, count: 15, color: '#ef4444', opacity: 0.8 },
+    infrared:    { wms: 'msg_fes:ir108',                 label: 'IR Standard (MSG)', step: 15, count: 20, color: '#4f46e5', opacity: 0.9 },
+    visible:     { wms: 'msg_fes:vis006',                label: 'Visible Standard',  step: 15, count: 16, color: '#d97706', opacity: 0.9 },
+    natural:     { wms: 'mumi:wideareacoverage_rgb_natural', label: 'Couleur Standard', step: 60, count: 10, color: '#059669', opacity: 0.88 },
 };
 
-// Génère N timestamps ISO en remontant depuis maintenant
+// Génère N timestamps ISO en remontant depuis maintenant (avec décalage de 20 minutes pour garantir la disponibilité)
 const genTimestamps = (stepMin, count) => {
-    const now = new Date();
+    const now = new Date(Date.now() - 20 * 60 * 1000);
     now.setSeconds(0, 0);
     now.setMinutes(Math.floor(now.getMinutes() / stepMin) * stepMin);
     return Array.from({ length: count }, (_, i) => {
@@ -61,7 +66,7 @@ const SatelliteFrance = () => {
     const center = [46.5, 2.5];
     const zoom   = 5;
 
-    const [layerKey,      setLayerKey]      = useState('infrared');
+    const [layerKey,      setLayerKey]      = useState('geocolor_hd');
     const [urls,          setUrls]          = useState([]);
     const [timestamps,    setTimestamps]    = useState([]);
     const [currentIndex,  setCurrentIndex]  = useState(0);
