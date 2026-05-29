@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3, CloudLightning
+  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3
 } from 'lucide-react';
 import clsx from 'clsx';
-import { DEPARTMENTS } from '../data/departments';
+import { DEPARTMENTS } from '../data/departments.js';
 import { weatherAPI } from '../services/api';
 import { geoService } from '../services/geoService';
 import './Sidebar.css';
@@ -127,11 +127,7 @@ export default function Sidebar({ isOpen, onClose }) {
           <span>Ma Ville</span>
         </NavLink>
 
-        <div className="nav-divider-label">MODÈLE MÉTÉO</div>
-        <NavLink to="/modele" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
-          <CloudLightning size={18} style={{ color: '#16a34a' }} />
-          <span>Modèle Météo</span>
-        </NavLink>
+
 
         <div className="nav-divider-label">CARTES</div>
         <NavLink to="/supervision" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
