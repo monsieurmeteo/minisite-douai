@@ -1,19 +1,14 @@
 """
-Upload les PNG generes vers Supabase Storage.
-Met a jour metadata.json avec la liste des runs disponibles.
+Upload les PNG generes vers Supabase Storage via HTTP direct.
+Contourne le bug supabase-py avec les nouvelles cles sb_secret_.
 """
 import os
 import sys
 import json
 import logging
+import requests
 from pathlib import Path
 from datetime import datetime, timezone
-
-try:
-    from supabase import create_client
-except ImportError:
-    print("ERROR: pip install supabase")
-    sys.exit(1)
 
 from config import (
     BUCKET_NAME, SUPABASE_URL, SUPABASE_KEY,
@@ -25,35 +20,38 @@ log = logging.getLogger('upload')
 
 OUTPUT_DIR = Path('data/output')
 
-
-def get_client():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("Variables SUPABASE_URL et SUPABASE_KEY manquantes")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+STORAGE_BASE = f"{SUPABASE_URL}/storage/v1"
 
 
-def upload_file(client, local_path, remote_path):
+def _headers():
+    return {
+        'apikey': SUPABASE_KEY,
+        'Authorization': f'Bearer {SUPABASE_KEY}',
+    }
+
+
+def upload_file(local_path, remote_path):
+    """Upload un fichier PNG via requete HTTP directe."""
+    url = f"{STORAGE_BASE}/object/{BUCKET_NAME}/{remote_path}"
     with open(local_path, 'rb') as f:
         data = f.read()
-    opts = {'content-type': 'image/png', 'cache-control': '3600', 'upsert': 'true'}
-    try:
-        client.storage.from_(BUCKET_NAME).upload(path=remote_path, file=data, file_options=opts)
+    h = {**_headers(), 'Content-Type': 'image/png', 'x-upsert': 'true'}
+    r = requests.post(url, headers=h, data=data, timeout=30)
+    if r.status_code in (200, 201):
         return True
-    except Exception:
-        try:
-            client.storage.from_(BUCKET_NAME).update(
-                path=remote_path, file=data,
-                file_options={'content-type': 'image/png', 'upsert': 'true'}
-            )
-            return True
-        except Exception as e:
-            log.error(f"Erreur upload {remote_path}: {e}")
-            return False
+    # Essai PUT si POST echoue
+    r2 = requests.put(url, headers=h, data=data, timeout=30)
+    if r2.status_code in (200, 201, 204):
+        return True
+    log.debug(f"Upload echoue {remote_path}: {r.status_code} {r.text[:80]}")
+    return False
 
 
 def upload_model_run(model, run_date, run_hour):
-    client = get_client()
-    run_dir = OUTPUT_DIR / model
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL / SUPABASE_KEY manquants")
+
+    run_dir  = OUTPUT_DIR / model
     uploaded = failed = 0
 
     for zone_key in ACTIVE_ZONES:
@@ -62,9 +60,9 @@ def upload_model_run(model, run_date, run_hour):
             if not param_dir.exists():
                 continue
             for png_file in sorted(param_dir.glob('H+*.png')):
-                step = int(png_file.stem.replace('H+', ''))
+                step   = int(png_file.stem.replace('H+', ''))
                 remote = storage_path(model, zone_key, param_key, run_date, run_hour, step)
-                if upload_file(client, str(png_file), remote):
+                if upload_file(str(png_file), remote):
                     uploaded += 1
                 else:
                     failed += 1
@@ -74,10 +72,16 @@ def upload_model_run(model, run_date, run_hour):
 
 
 def update_metadata(model, run_date, run_hour, steps_available):
-    client = get_client()
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
+
+    meta_url = f"{STORAGE_BASE}/object/{BUCKET_NAME}/metadata.json"
+    h_get    = _headers()
+
+    # Charge le metadata existant
     try:
-        raw  = client.storage.from_(BUCKET_NAME).download('metadata.json')
-        meta = json.loads(raw.decode('utf-8'))
+        r = requests.get(meta_url, headers=h_get, timeout=15)
+        meta = json.loads(r.content) if r.status_code == 200 else {'models': {}, 'last_updated': ''}
     except Exception:
         meta = {'models': {}, 'last_updated': ''}
 
@@ -106,16 +110,10 @@ def update_metadata(model, run_date, run_hour, steps_available):
     meta['last_updated'] = datetime.now(timezone.utc).isoformat()
 
     meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode('utf-8')
-    try:
-        client.storage.from_(BUCKET_NAME).update(
-            path='metadata.json', file=meta_bytes,
-            file_options={'content-type': 'application/json', 'upsert': 'true'}
-        )
-    except Exception:
-        client.storage.from_(BUCKET_NAME).upload(
-            path='metadata.json', file=meta_bytes,
-            file_options={'content-type': 'application/json', 'upsert': 'true'}
-        )
+    h_put = {**_headers(), 'Content-Type': 'application/json', 'x-upsert': 'true'}
+    r = requests.post(meta_url, headers=h_put, data=meta_bytes, timeout=15)
+    if r.status_code not in (200, 201):
+        requests.put(meta_url, headers=h_put, data=meta_bytes, timeout=15)
     log.info("metadata.json mis a jour")
 
 
