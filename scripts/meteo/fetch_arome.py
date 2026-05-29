@@ -2,14 +2,15 @@
 Telecharge les donnees AROME depuis l'API Meteo-France (WCS).
 Resolution : 1.3 km sur la France. Runs toutes les 3h.
 Necessite : MF_API_TOKEN (portail-api.meteofrance.fr)
+Rate limit : 50 req/min → on limite a 40/min (1.5s entre requetes)
 """
 import os
 import sys
+import time
 import logging
 import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import MODELS, PARAMETERS, ACTIVE_PARAMETERS
 
@@ -22,7 +23,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MF_TOKEN = os.environ.get('MF_API_TOKEN', '')
 WCS_BASE = 'https://public-api.meteofrance.fr/public/arome/1.0/wcs/MF-NWP-HIGHRES-AROME-001-FRANCE-WCS'
 
+# Delai entre requetes pour respecter le quota 50/min
+REQUEST_DELAY = 1.6  # secondes → ~37 req/min, sous la limite de 50
+
 # Mapping parametres → WCS coverage ID + height
+# IDs verifies sur le portail MF (GetCapabilities)
 AROME_COVERAGE = {
     'temperature': {
         'coverage': 'TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND',
@@ -48,10 +53,8 @@ AROME_COVERAGE = {
         'coverage': 'TOTAL_CLOUD_COVER__GROUND_OR_WATER_SURFACE',
         'height': None,
     },
-    'humidity': {
-        'coverage': 'RELATIVE_HUMIDITY__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND',
-        'height': 2,
-    },
+    # Humidite : pas disponible directement en WCS AROME → skip
+    # 'humidity': non disponible via GetCoverage standard
     'cape': {
         'coverage': 'CONVECTIVE_AVAILABLE_POTENTIAL_ENERGY__GROUND_OR_WATER_SURFACE',
         'height': None,
@@ -127,7 +130,7 @@ def download_coverage(coverage_id, step, run_dt, height, output_path):
 
 
 def fetch_arome(run_hour=None):
-    """Telecharge toutes les donnees AROME pour un run."""
+    """Telecharge toutes les donnees AROME pour un run (sequentiel, rate-limited)."""
     if not MF_TOKEN:
         raise ValueError("MF_API_TOKEN manquant")
 
@@ -151,7 +154,6 @@ def fetch_arome(run_hour=None):
         cov = AROME_COVERAGE.get(param_key)
         if not cov:
             continue
-
         if isinstance(cov, list):
             for sub in cov:
                 for step in steps:
@@ -164,15 +166,66 @@ def fetch_arome(run_hour=None):
                 tasks.append((cov['coverage'], step, run_dt,
                                cov.get('height'), run_dir / fname))
 
-    log.info(f"Fichiers a telecharger : {len(tasks)}")
-    ok = 0
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = {ex.submit(download_coverage, *t): t for t in tasks}
-        for fut in as_completed(futures):
-            if fut.result():
-                ok += 1
+    total = len(tasks)
+    log.info(f"Fichiers a telecharger : {total} (sequentiel, {REQUEST_DELAY}s entre chaque)")
+    ok = skipped = errors = 0
 
-    log.info(f"AROME telechargement : {ok}/{len(tasks)} OK dans {run_dir}")
+    for i, (coverage_id, step, rdt, height, out_path) in enumerate(tasks):
+        # Skip si deja present
+        if out_path.exists():
+            skipped += 1
+            continue
+
+        # Construire et envoyer la requete
+        params = {
+            'SERVICE': 'WCS', 'VERSION': '2.0.1', 'REQUEST': 'GetCoverage',
+            'format': 'application/wmo-grib2',
+            'coverageId': f'{coverage_id}___{run_iso(rdt)}',
+            'SUBSET': [
+                f'time({valid_time_iso(rdt, step)})',
+                'lat(41.0,52.5)', 'long(-6.0,11.0)',
+            ],
+        }
+        if height is not None:
+            params['SUBSET'].append(f'height({height})')
+
+        headers = {'apikey': MF_TOKEN}
+
+        # Retry sur 429
+        for attempt in range(3):
+            try:
+                r = requests.get(f'{WCS_BASE}/GetCoverage', params=params,
+                                 headers=headers, timeout=90, stream=True)
+                if r.status_code == 200:
+                    with out_path.open('wb') as f:
+                        for chunk in r.iter_content(chunk_size=65536):
+                            f.write(chunk)
+                    ok += 1
+                    break
+                elif r.status_code == 429:
+                    wait = 60 + attempt * 30
+                    log.warning(f"429 quota depasse - attente {wait}s...")
+                    time.sleep(wait)
+                elif r.status_code == 404:
+                    log.debug(f"Non dispo H+{step:03d} {coverage_id[:40]}")
+                    break
+                else:
+                    log.warning(f"HTTP {r.status_code} H+{step:03d}: {r.text[:80]}")
+                    errors += 1
+                    break
+            except Exception as e:
+                log.warning(f"Erreur H+{step:03d}: {e}")
+                errors += 1
+                break
+
+        # Log progres tous les 50 fichiers
+        if (i + 1) % 50 == 0:
+            log.info(f"  Progres: {i+1}/{total} | OK={ok} Sautes={skipped} Erreurs={errors}")
+
+        # Rate limiting : pause entre chaque requete
+        time.sleep(REQUEST_DELAY)
+
+    log.info(f"AROME OK: {ok}/{total-skipped} telecharges ({skipped} deja presents, {errors} erreurs)")
     return str(run_dir), run_date, run_hour
 
 
@@ -180,3 +233,4 @@ if __name__ == '__main__':
     run_hour = int(sys.argv[1]) if len(sys.argv) > 1 else None
     run_dir, run_date, run_hour = fetch_arome(run_hour)
     print(f"OUTPUT:{run_dir}:{run_date}:{run_hour}")
+
