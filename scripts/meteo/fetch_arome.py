@@ -21,13 +21,19 @@ OUTPUT_DIR = Path('data/arome')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 MF_TOKEN = os.environ.get('MF_API_TOKEN', '')
-WCS_BASE = 'https://public-api.meteofrance.fr/public/arome/1.0/wcs/MF-NWP-HIGHRES-AROME-001-FRANCE-WCS'
+# URL correcte : sans "1.0/" (confirme par GetCapabilities reel)
+WCS_BASE = 'https://public-api.meteofrance.fr/public/arome/wcs/MF-NWP-HIGHRES-AROME-001-FRANCE-WCS'
 
 # Delai entre requetes pour respecter le quota 50/min
 REQUEST_DELAY = 1.6  # secondes → ~37 req/min, sous la limite de 50
 
+
+def _headers():
+    """Headers d'authentification MF API (apikey = methode valide, 200 OK confirme)."""
+    return {'apikey': MF_TOKEN}
+
 # Mapping parametres → WCS coverage ID + height
-# IDs verifies sur le portail MF (GetCapabilities)
+# IDs verifies depuis GetCapabilities reel (6600 coverages disponibles)
 AROME_COVERAGE = {
     'temperature': {
         'coverage': 'TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND',
@@ -53,8 +59,10 @@ AROME_COVERAGE = {
         'coverage': 'TOTAL_CLOUD_COVER__GROUND_OR_WATER_SURFACE',
         'height': None,
     },
-    # Humidite : pas disponible directement en WCS AROME → skip
-    # 'humidity': non disponible via GetCoverage standard
+    'humidity': {
+        'coverage': 'RELATIVE_HUMIDITY__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND',
+        'height': 2,
+    },
     'cape': {
         'coverage': 'CONVECTIVE_AVAILABLE_POTENTIAL_ENERGY__GROUND_OR_WATER_SURFACE',
         'height': None,
@@ -189,7 +197,7 @@ def fetch_arome(run_hour=None):
         if height is not None:
             params['SUBSET'].append(f'height({height})')
 
-        headers = {'apikey': MF_TOKEN}
+        headers = _headers()
 
         # Retry sur 429
         for attempt in range(3):
