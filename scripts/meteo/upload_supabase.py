@@ -31,19 +31,32 @@ def _headers():
 
 
 def upload_file(local_path, remote_path):
-    """Upload un fichier PNG via requete HTTP directe."""
+    """Upload un fichier PNG via requete HTTP directe avec retries et timeout géré."""
     url = f"{STORAGE_BASE}/object/{BUCKET_NAME}/{remote_path}"
     with open(local_path, 'rb') as f:
         data = f.read()
     h = {**_headers(), 'Content-Type': 'image/png', 'x-upsert': 'true'}
-    r = requests.post(url, headers=h, data=data, timeout=30)
-    if r.status_code in (200, 201):
-        return True
-    # Essai PUT si POST echoue
-    r2 = requests.put(url, headers=h, data=data, timeout=30)
-    if r2.status_code in (200, 201, 204):
-        return True
-    log.debug(f"Upload echoue {remote_path}: {r.status_code} {r.text[:80]}")
+    
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Essai POST
+            r = requests.post(url, headers=h, data=data, timeout=20)
+            if r.status_code in (200, 201):
+                return True
+            
+            # Essai PUT si le POST échoue
+            r2 = requests.put(url, headers=h, data=data, timeout=20)
+            if r2.status_code in (200, 201, 204):
+                return True
+                
+            log.warning(f"Tentative {attempt}/{max_retries} échouée pour {remote_path} (POST: {r.status_code}, PUT: {r2.status_code})")
+        except requests.RequestException as e:
+            log.warning(f"Tentative {attempt}/{max_retries} échouée pour {remote_path} due à une erreur réseau : {e}")
+            import time
+            time.sleep(1) # Petit délai de courtoisie avant le retry
+            
+    log.error(f"❌ Échec définitif d'upload pour {remote_path} après {max_retries} tentatives")
     return False
 
 
@@ -121,10 +134,13 @@ def update_metadata(model, run_date, run_hour, steps_available):
 
     meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode('utf-8')
     h_put = {**_headers(), 'Content-Type': 'application/json', 'x-upsert': 'true'}
-    r = requests.post(meta_url, headers=h_put, data=meta_bytes, timeout=15)
-    if r.status_code not in (200, 201):
-        requests.put(meta_url, headers=h_put, data=meta_bytes, timeout=15)
-    log.info("metadata.json mis a jour")
+    try:
+        r = requests.post(meta_url, headers=h_put, data=meta_bytes, timeout=15)
+        if r.status_code not in (200, 201):
+            requests.put(meta_url, headers=h_put, data=meta_bytes, timeout=15)
+        log.info("metadata.json mis a jour")
+    except Exception as e:
+        log.error(f"Impossible de mettre à jour metadata.json : {e}")
 
 
 if __name__ == '__main__':
