@@ -90,30 +90,29 @@ const SatelliteFrance = () => {
         const ts   = genTimestamps(layer.step, layer.count);
         const list = ts.map(t => buildUrl(layer.wms, t));
 
-        setTimestamps(ts);
-        setUrls(list);
-        urlsRef.current = list;
-
         // Préchargement asynchrone non bloquant pour le cache
         let loadedCount = 0;
+        const checkComplete = () => {
+            if (loadedCount === list.length) {
+                setTimestamps(ts);
+                setUrls(list);
+                urlsRef.current = list;
+                setCurrentIndex(list.length - 1);
+                setLoading(false);
+                setIsPlaying(true);
+            }
+        };
+
         list.forEach(url => {
             preload(url).then(() => {
                 loadedCount++;
                 setProgress(Math.round((loadedCount / list.length) * 100));
-                if (loadedCount === list.length) {
-                    setLoading(false);
-                    setIsPlaying(true);
-                }
+                checkComplete();
             }).catch(() => {
                 loadedCount++;
-                if (loadedCount === list.length) {
-                    setLoading(false);
-                    setIsPlaying(true);
-                }
+                checkComplete();
             });
         });
-
-        setCurrentIndex(list.length - 1);
     }, [layerKey]);
 
     useEffect(() => { loadFrames(); }, [loadFrames]);
