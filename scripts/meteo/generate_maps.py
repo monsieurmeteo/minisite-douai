@@ -238,7 +238,7 @@ def generate_map(lats, lons, data, param_key, zone_key, output_path,
     fig = plt.figure(figsize=zone['figsize'], dpi=zone['dpi'])
 
     if HAS_CARTOPY:
-        ax = fig.add_axes([0.0, 0.08, 1.0, 0.90], projection=ccrs.PlateCarree())
+        ax = fig.add_axes([0.0, 0.08, 1.0, 0.90], projection=ccrs.Mercator())
         ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
 
         # 1. Fond de carte
