@@ -53,7 +53,25 @@ def run_icon():
     upload_model_run('icon-eu', run_date, run_hour)
     update_metadata('icon-eu', run_date, run_hour, MODELS['icon-eu']['steps'])
 
-    log.info(f"✅ ICON-EU terminé en {(time.time()-t0)/60:.1f} min")
+    log.info(f"OK ICON-EU termine en {(time.time()-t0)/60:.1f} min")
+
+
+def run_arome():
+    from fetch_arome    import fetch_arome
+    from generate_maps import process_arome
+    from upload_supabase import upload_model_run, update_metadata
+
+    log.info("=" * 60)
+    log.info("DEMARRAGE AROME")
+    t0 = time.time()
+
+    run_dir, run_date, run_hour = fetch_arome()
+    nb = process_arome(run_dir, run_date, run_hour)
+    log.info(f"AROME : {nb} cartes generees")
+    upload_model_run('arome', run_date, run_hour)
+    update_metadata('arome', run_date, run_hour, MODELS['arome']['steps'])
+
+    log.info(f"OK AROME termine en {(time.time()-t0)/60:.1f} min")
 
 
 def run_cleanup():
@@ -79,11 +97,18 @@ def main():
             log.error(f"❌ ECMWF échoué : {e}")
             errors.append(f"ecmwf: {e}")
 
+    if target in ('arome', 'all') and MODELS['arome']['enabled']:
+        try:
+            run_arome()
+        except Exception as e:
+            log.error(f"AROME echoue : {e}")
+            errors.append(f"arome: {e}")
+
     if target in ('icon-eu', 'icon', 'all') and MODELS['icon-eu']['enabled']:
         try:
             run_icon()
         except Exception as e:
-            log.error(f"❌ ICON-EU échoué : {e}")
+            log.error(f"ICON-EU echoue : {e}")
             errors.append(f"icon-eu: {e}")
 
     # Nettoyage systématique après chaque run

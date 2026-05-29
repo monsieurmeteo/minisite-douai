@@ -186,7 +186,7 @@ MODELS = {
         # Open Data : pas de 6h (limite API gratuite)
         'steps': list(range(0, 121, 6)) + list(range(126, 241, 6)),
         'runs': [0, 12],
-        'enabled': True,
+        'enabled': False,  # desactive pour test AROME
         'delay_h': 7,   # disponible ~7h après le run
     },
     'icon-eu': {
@@ -197,7 +197,7 @@ MODELS = {
         # Toutes les heures H+000→H+120, puis pas 3h H+123→H+180
         'steps': list(range(0, 121, 1)) + list(range(123, 181, 3)),
         'runs': [0, 3, 6, 9, 12, 15, 18, 21],
-        'enabled': True,
+        'enabled': False,  # desactive pour test AROME
         'delay_h': 3,
     },
     'arome': {
@@ -207,7 +207,7 @@ MODELS = {
         'color': '#dc2626',
         'steps': list(range(0, 52, 1)),
         'runs': [0, 3, 6, 9, 12, 15, 18, 21],
-        'enabled': False,   # activer après clé API MF
+        'enabled': True,   # ACTIF - cle API MF configuree
         'delay_h': 2,
     },
     'arpege': {

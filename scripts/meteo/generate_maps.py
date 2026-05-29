@@ -460,6 +460,94 @@ def process_icon(run_dir, run_date, run_hour):
     return total
 
 
+
+# ─── TRAITEMENT COMPLET AROME ─────────────────────────────────────────────────
+def process_arome(run_dir, run_date, run_hour):
+    import xarray as xr
+    run_dir = Path(run_dir)
+    steps   = MODELS['arome']['steps']
+    total   = 0
+
+    # Mapping param_key → nom de fichier AROME (voir fetch_arome.py)
+    AROME_FILE = {
+        'temperature': ('{pk}_{step:03d}.grib2', None),
+        'wind_speed':  ('{pk}_U_{step:03d}.grib2', '{pk}_V_{step:03d}.grib2'),
+        'wind_gusts':  ('{pk}_{step:03d}.grib2', None),
+        'precipitation': ('{pk}_{step:03d}.grib2', None),
+        'pressure':    ('{pk}_{step:03d}.grib2', None),
+        'clouds':      ('{pk}_{step:03d}.grib2', None),
+        'humidity':    ('{pk}_{step:03d}.grib2', None),
+        'cape':        ('{pk}_{step:03d}.grib2', None),
+        'snow':        ('{pk}_{step:03d}.grib2', None),
+    }
+
+    for step in steps:
+        log.info(f"  AROME H+{step:03d}")
+        for param_key in ACTIVE_PARAMETERS:
+            conv = PARAMETERS[param_key].get('convert_icon', lambda x: x)
+            file_tpl = AROME_FILE.get(param_key)
+            if not file_tpl:
+                continue
+            try:
+                u_data = v_data = None
+                fname_u, fname_v = file_tpl
+                fname_u = fname_u.format(pk=param_key, step=step)
+
+                if fname_v:
+                    fname_v = fname_v.format(pk=param_key, step=step)
+                    f_u = run_dir / fname_u
+                    f_v = run_dir / fname_v
+                    if not f_u.exists() or not f_v.exists():
+                        continue
+                    ds_u = xr.open_dataset(str(f_u), engine='cfgrib')
+                    ds_v = xr.open_dataset(str(f_v), engine='cfgrib')
+                    u_raw = ds_u[list(ds_u.data_vars)[0]].values
+                    v_raw = ds_v[list(ds_v.data_vars)[0]].values
+                    lats  = ds_u.latitude.values
+                    lons  = ds_u.longitude.values
+                    data  = conv(u_raw, v_raw)
+                    u_data = u_raw
+                    v_data = v_raw
+                else:
+                    f = run_dir / fname_u
+                    if not f.exists():
+                        continue
+                    ds   = xr.open_dataset(str(f), engine='cfgrib')
+                    var  = list(ds.data_vars)[0]
+                    lats = ds.latitude.values
+                    lons = ds.longitude.values
+                    data = conv(ds[var].values)
+
+                data = np.where(np.isfinite(data), data, np.nan)
+
+                for zone_key in ACTIVE_ZONES:
+                    zone = ZONES[zone_key]
+                    lon_min, lon_max, lat_min, lat_max = zone['bounds']
+                    lon_m = (lons >= lon_min) & (lons <= lon_max)
+                    lat_m = (lats >= lat_min) & (lats <= lat_max)
+                    if not lon_m.any() or not lat_m.any():
+                        continue
+                    lats_c = lats[lat_m]
+                    lons_c = lons[lon_m]
+                    data_c = data[np.ix_(lat_m, lon_m)]
+                    lons_2d, lats_2d = np.meshgrid(lons_c, lats_c)
+                    u_c = u_data[np.ix_(lat_m, lon_m)] if u_data is not None else None
+                    v_c = v_data[np.ix_(lat_m, lon_m)] if v_data is not None else None
+
+                    out = (OUTPUT_DIR / 'arome' / zone_key / param_key /
+                           f'{run_date}_{run_hour:02d}h' / f'H+{step:03d}.png')
+                    generate_map(lats_2d, lons_2d, data_c, param_key, zone_key, out,
+                                 'arome', run_date, run_hour, step, u_c, v_c)
+                    total += 1
+
+            except Exception as e:
+                log.warning(f"  {param_key} H+{step:03d} : {e}")
+                continue
+
+    log.info(f"AROME : {total} cartes generees")
+    return total
+
+
 if __name__ == '__main__':
     mode     = sys.argv[1] if len(sys.argv) > 1 else 'icon'
     grib_arg = sys.argv[2] if len(sys.argv) > 2 else ''
@@ -467,5 +555,8 @@ if __name__ == '__main__':
     run_hour = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     if mode == 'ecmwf':
         process_ecmwf(grib_arg, run_date, run_hour)
+    elif mode == 'arome':
+        process_arome(grib_arg, run_date, run_hour)
     else:
         process_icon(grib_arg, run_date, run_hour)
+
