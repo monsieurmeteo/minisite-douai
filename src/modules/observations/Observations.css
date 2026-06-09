@@ -572,3 +572,54 @@ input:checked+.slider:before {
     font-size: 0.7rem;
     font-style: italic;
 }
+
+/* RESPONSIVE MOBILE DETAILS DE STATION (< 768px) */
+@media (max-width: 768px) {
+    .detail-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+
+    .detail-header .btn-outline {
+        width: 100% !important;
+        margin-left: 0 !important;
+        margin-top: 8px !important;
+        justify-content: center !important;
+        display: flex !important;
+    }
+
+    .detail-tabs {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+
+    .detail-tabs .tab-btn {
+        flex: 1 1 auto !important;
+        text-align: center !important;
+        padding: 8px 12px !important;
+        font-size: 0.85rem !important;
+    }
+
+    .normals-summary-grid,
+    .records-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+
+    .main-obs-layout {
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+    }
+
+    .picker-controls {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+
+    .date-display-wrapper {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+}

@@ -384,6 +384,21 @@
 
     .refresh-btn {
         grid-column: span 1;
+        width: 100% !important;
+        justify-content: center !important;
+    }
+
+    .filter-group,
+    .altitude-filters {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+
+    .filter-group select,
+    .alt-input {
+        width: 100% !important;
     }
 
     .table-wrapper {

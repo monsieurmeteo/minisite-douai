@@ -95,6 +95,23 @@
   }
 }
 
+/* RESPONSIVE RESETS ET OVERRIDES MAJEURS (< 768px) */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  .table-wrapper,
+  .table-container,
+  .scrollable-table-wrapper,
+  .monthly-table-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
 /* =========================================
    PRINT STYLES
    ========================================= */

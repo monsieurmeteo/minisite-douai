@@ -72,25 +72,59 @@ Deno.serve(async (req) => {
             console.warn(`⚠️ Erreur non-bloquante lors du fetch des textes: ${textRes.status}`);
         }
 
+        // 4. Fetch Météo des forêts
+        let foretData: any[] = [];
+        try {
+            console.log("🌲 Récupération de la Météo des forêts...");
+            const foretRes = await fetch("https://public-api.meteofrance.fr/public/DPMeteoForets/v1/carte/departement/encours?format=json", {
+                headers: fetchHeaders
+            });
+            if (foretRes.ok) {
+                foretData = await foretRes.json();
+                console.log(`✅ Météo des forêts récupérée : ${foretData.length} départements.`);
+            } else {
+                console.warn(`⚠️ Erreur non-bloquante lors du fetch Météo des forêts: ${foretRes.status}`);
+            }
+        } catch (err) {
+            console.warn(`⚠️ Erreur non-bloquante lors de la récupération Météo des forêts:`, err.message);
+        }
+
         // --- Process Maps ---
         let allUpsertData = [];
         if (mapData && mapData.product && mapData.product.periods) {
             mapData.product.periods.forEach((period: any, periodIdx: number) => {
                 if (!period.timelaps || !period.timelaps.domain_ids) return;
                 const domains = period.timelaps.domain_ids;
-                const upsertData = domains.map((domain: any) => ({
-                    dep_code: domain.domain_id,
-                    period: periodIdx,
-                    level: domain.max_color_id,
-                    start_time: period.begin_validity_time,
-                    end_time: period.end_validity_time,
-                    risks: domain.phenomenon_items?.map((p: any) => ({
+                const upsertData = domains.map((domain: any) => {
+                    const depCode = domain.domain_id;
+                    const risks = domain.phenomenon_items?.map((p: any) => ({
                         id: p.phenomenon_id,
                         level: p.phenomenon_max_color_id,
                         timelines: p.timelaps_items
-                    })) || [],
-                    last_update: new Date().toISOString()
-                }));
+                    })) || [];
+
+                    // Intégration du danger feux de forêt (identifiant "100")
+                    const depForet = foretData.find((f: any) => f.dep_code === depCode);
+                    if (depForet) {
+                        const levelVal = periodIdx === 0 ? parseInt(depForet.niveau_j1) : parseInt(depForet.niveau_j2);
+                        if (!isNaN(levelVal)) {
+                            risks.push({
+                                id: "100", // Météo des forêts
+                                level: levelVal
+                            });
+                        }
+                    }
+
+                    return {
+                        dep_code: depCode,
+                        period: periodIdx,
+                        level: domain.max_color_id,
+                        start_time: period.begin_validity_time,
+                        end_time: period.end_validity_time,
+                        risks: risks,
+                        last_update: new Date().toISOString()
+                    };
+                });
                 allUpsertData.push(...upsertData);
             });
         }

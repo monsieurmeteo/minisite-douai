@@ -422,3 +422,68 @@
 .mouse-coords-overlay-radar .coord-val {
     font-weight: 500;
 }
+
+/* RESPONSIVE MOBILE RADAR & SATELLITE (< 768px) */
+@media (max-width: 768px) {
+    .radar-container {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: auto !important;
+        padding: 8px !important;
+        gap: 10px !important;
+    }
+
+    .radar-controls-compact {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+        padding: 12px !important;
+        height: auto !important;
+    }
+
+    .radar-controls-compact .control-section {
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+
+    .control-divider {
+        display: none !important;
+    }
+
+    .radar-main-content {
+        flex-direction: column !important;
+        height: auto !important;
+        flex: none !important;
+    }
+
+    .radar-map-wrapper {
+        height: 55vh !important;
+        min-height: 380px !important;
+        width: 100% !important;
+    }
+
+    .compact-range {
+        width: 100% !important;
+        margin: 6px 0 !important;
+    }
+
+    .mouse-coords-overlay-radar {
+        display: none !important;
+    }
+
+    .map-settings-panel {
+        top: 8px !important;
+        right: 8px !important;
+        width: 150px !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .map-legend-compact {
+        bottom: 8px !important;
+        left: 8px !important;
+        width: 120px !important;
+        padding: 4px 8px !important;
+    }
+}

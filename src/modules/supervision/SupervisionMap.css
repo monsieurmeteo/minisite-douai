@@ -774,3 +774,98 @@
     font-size: 0.75rem !important;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
 }
+
+/* RESPONSIVE MOBILE SUPERVISION LIVE (< 768px) */
+@media (max-width: 768px) {
+    .super-app {
+        height: auto !important;
+        overflow-y: auto !important;
+    }
+
+    .super-nav {
+        height: auto !important;
+        flex-wrap: wrap !important;
+        padding: 10px !important;
+        gap: 8px !important;
+    }
+
+    .super-nav .nav-group {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .super-nav .nav-divider {
+        display: none !important;
+    }
+
+    .layer-selector-compact {
+        flex-wrap: wrap !important;
+        width: 100% !important;
+        gap: 8px !important;
+        margin-top: 4px;
+    }
+
+    .style-selector {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .super-layout {
+        flex-direction: column !important;
+        height: auto !important;
+    }
+
+    .map-view-wrapper {
+        position: relative !important;
+        height: 50vh !important;
+        min-height: 350px !important;
+        width: 100% !important;
+        inset: auto !important;
+    }
+
+    .super-overlay-panel {
+        position: relative !important;
+        top: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+        right: auto !important;
+        width: 100% !important;
+        padding: 12px !important;
+        pointer-events: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .super-overlay-panel.left,
+    .super-overlay-panel.right {
+        width: 100% !important;
+    }
+
+    .panel-box {
+        width: 100% !important;
+        background: #0f172a !important; /* Force solide pour une lisibilité maximale en empilement */
+    }
+
+    .stats-panel {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    .legend-group-container {
+        width: 100% !important;
+        margin-top: 10px !important;
+    }
+
+    .mouse-coords-overlay {
+        display: none !important;
+    }
+
+    .floating-suggestions {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        z-index: 10000 !important;
+    }
+}

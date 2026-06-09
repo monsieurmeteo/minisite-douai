@@ -430,16 +430,83 @@
 
 @media (max-width: 768px) {
     .foudre-container {
-        padding: 0.75rem;
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: auto !important;
+        padding: 8px !important;
+        gap: 8px !important;
+    }
+
+    .foudre-header-npdc {
+        padding: 10px !important;
+        gap: 8px !important;
     }
 
     .status-bar {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 10px !important;
     }
 
     .last-refresh {
-        align-self: flex-end;
+        align-self: center !important;
+    }
+
+    .foudre-modes {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 10px !important;
+    }
+
+    .search-foudre-wrapper {
+        width: 100% !important;
+    }
+
+    .radius-select-wrapper {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .zone-select-npdc {
+        width: 100% !important;
+        text-align: center !important;
+    }
+
+    .utility-buttons {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .util-btn {
+        flex: 1 !important;
+        height: 38px !important;
+    }
+
+    .impact-counter-main {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 8px !important;
+    }
+
+    .foudre-map-wrapper {
+        height: 50vh !important;
+        min-height: 350px !important;
+        flex: none !important;
+        width: 100% !important;
+    }
+
+    .foudre-stats-panel {
+        width: 100% !important;
+        border-right: none !important;
+        border-top: 1px solid #e2e8f0 !important;
+        padding: 12px !important;
+    }
+
+    .lightning-legend-box {
+        margin: 8px !important;
+        padding: 8px !important;
+        width: 110px !important;
     }
 }

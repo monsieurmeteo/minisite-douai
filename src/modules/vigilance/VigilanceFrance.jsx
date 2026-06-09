@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { geoConicConformal, geoPath } from "d3-geo";
 import {
-    Droplets, Waves, Wind, Zap, Snowflake, Info, Thermometer,
+    Droplets, Waves, Wind, Zap, Snowflake, Info, Thermometer, Flame,
     ChevronDown, Activity, Loader, ShieldAlert, FileText, X,
     Image as ImageIcon, Link as LinkIcon, Eye
 } from 'lucide-react';
@@ -32,6 +32,7 @@ const PHENOMENONS = [
     { id: "6", name: "Canicule", icon: Thermometer },
     { id: "7", name: "Grand Froid", icon: Thermometer },
     { id: "8", name: "Avalanches", icon: Info },
+    { id: "100", name: "Météo des forêts", icon: Flame },
 ];
 
 const REGIONS = [
@@ -541,6 +542,21 @@ const VigilanceFrance = () => {
                                     );
                                 })}
                             </div>
+                            {selectedPhenom === "100" && (
+                                <div className="phenom-info-note animate-in" style={{ 
+                                    marginTop: '15px', 
+                                    padding: '12px', 
+                                    background: '#fff7ed', 
+                                    borderRadius: '8px', 
+                                    borderLeft: '4px solid #ea580c', 
+                                    fontSize: '13px', 
+                                    color: '#7c2d12',
+                                    lineHeight: '1.4'
+                                }}>
+                                    <Flame size={16} style={{ color: '#ea580c', display: 'inline', marginRight: '6px', marginBottom: '-3px' }} />
+                                    La <strong>Météo des forêts</strong> estime le danger d'incendie de forêt et de végétation à l'échelle départementale. Elle est émise quotidiennement par Météo-France de juin à septembre.
+                                </div>
+                            )}
                         </div>
 
                         <div className="sidebar-card share-card no-capture">

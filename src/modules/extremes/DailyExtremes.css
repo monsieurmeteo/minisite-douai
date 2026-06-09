@@ -650,3 +650,68 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* RESPONSIVE MOBILE EXTREMES QUOTIDIENS (< 768px) */
+@media (max-width: 768px) {
+    .extremes-header {
+        position: relative !important;
+        top: 0 !important;
+        padding: 16px !important;
+        margin-bottom: 16px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+
+    .header-title {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .header-title h1 {
+        font-size: 1.4rem !important;
+    }
+
+    .header-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        gap: 12px !important;
+    }
+
+    .tabs-container {
+        flex-wrap: wrap !important;
+        background: #f1f5f9;
+        padding: 4px;
+        border-radius: 10px;
+        width: 100% !important;
+    }
+
+    .tab-btn {
+        flex: 1 1 auto !important;
+        text-align: center !important;
+        padding: 8px 12px !important;
+        font-size: 0.85rem !important;
+    }
+
+    .alt-filter {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .date-nav-group-pro {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .date-display-box {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+
+    .search-input {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+}
