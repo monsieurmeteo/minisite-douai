@@ -1,5 +1,5 @@
 # Ignore local weather data and scripts in Vercel deployments
-data/
+/data/
 scripts/meteo/
 scratch/
 node_modules/
