@@ -165,12 +165,30 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                         </svg>
 
                         <div className="fb-legend-minimal">
-                            {[1, 2, 3, 4].map(lvl => (
-                                <div key={lvl} className="legend-item">
-                                    <span className="dot" style={{ backgroundColor: OFFICIAL_COLORS[lvl] }}></span>
-                                    <span>{lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge'}</span>
+                            {activePhenomsList[0]?.id?.toString() === "100" && (
+                                <div className="legend-title" style={{ 
+                                    fontWeight: 'bold', 
+                                    marginBottom: '8px', 
+                                    fontSize: '18px', 
+                                    color: '#334155',
+                                    width: '100%',
+                                    textAlign: 'center'
+                                }}>
+                                    Danger Feux
                                 </div>
-                            ))}
+                            )}
+                            {[1, 2, 3, 4].map(lvl => {
+                                let label = lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge';
+                                if (activePhenomsList[0]?.id?.toString() === "100") {
+                                    label = lvl === 1 ? 'Faible' : lvl === 2 ? 'Modéré' : lvl === 3 ? 'Elevé' : 'Très élevé';
+                                }
+                                return (
+                                    <div key={lvl} className="legend-item">
+                                        <span className="dot" style={{ backgroundColor: OFFICIAL_COLORS[lvl] }}></span>
+                                        <span>{label}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
