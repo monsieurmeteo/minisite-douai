@@ -16,16 +16,17 @@ export const weatherAPI = {
     getStation6mnHistory: async (stationId, dateObj = null) => {
         if (!supabase) return [];
         try {
+            const targetDate = dateObj ? new Date(dateObj) : null;
             let start, end;
             let query = supabase
                 .from('observations_6mn')
                 .select('*')
                 .eq('station_id', stationId);
 
-            if (dateObj) {
-                start = new Date(dateObj);
+            if (targetDate) {
+                start = new Date(targetDate);
                 start.setHours(0, 0, 0, 0);
-                end = new Date(dateObj);
+                end = new Date(targetDate);
                 end.setHours(23, 59, 59, 999);
 
                 query = query
@@ -47,23 +48,44 @@ export const weatherAPI = {
 
             // FUSION DE LA FIN DE NUIT DU JOUR PRÉCÉDENT (tranche 18-00 de J-1)
             // Indispensable car l'archive quotidien J-1 a déjà supprimé la fin de nuit locale de la table active
-            if (dateObj) {
+            if (targetDate) {
                 try {
                     const prevDate = new Date(start.getTime() - 24 * 60 * 60 * 1000);
                     const prevY = prevDate.getFullYear();
                     const prevM = String(prevDate.getMonth() + 1).padStart(2, '0');
                     const prevD = String(prevDate.getDate()).padStart(2, '0');
                     
-                    const prevFilePath = `6mn/${prevY}/${prevM}/${prevD}/18-00.json`;
+                    let prevStationData = [];
+                    
+                    // On tente d'abord de charger le fichier journalier unifié
+                    const prevFilePathSingle = `6mn/${prevY}/${prevM}/${prevD}.json`;
                     const { data: prevStorageData, error: prevStorageError } = await supabase.storage
                         .from('observations-archives')
-                        .download(prevFilePath);
+                        .download(prevFilePathSingle);
                         
                     if (!prevStorageError && prevStorageData) {
                         const text = await prevStorageData.text();
                         const prevDataParsed = JSON.parse(text);
-                        const prevStationData = prevDataParsed.filter(obs => obs.station_id === stationId);
-                        
+                        // Conserver uniquement la station ciblée et les heures UTC >= 18h
+                        prevStationData = prevDataParsed.filter(obs => 
+                            obs.station_id === stationId && 
+                            new Date(obs.timestamp).getUTCHours() >= 18
+                        );
+                    } else {
+                        // Fallback : chargement de la tranche slice historique
+                        const prevFilePathSlice = `6mn/${prevY}/${prevM}/${prevD}/18-00.json`;
+                        const { data: prevSliceData, error: prevSliceError } = await supabase.storage
+                            .from('observations-archives')
+                            .download(prevFilePathSlice);
+                            
+                        if (!prevSliceError && prevSliceData) {
+                            const text = await prevSliceData.text();
+                            const prevDataParsed = JSON.parse(text);
+                            prevStationData = prevDataParsed.filter(obs => obs.station_id === stationId);
+                        }
+                    }
+                    
+                    if (prevStationData.length > 0) {
                         // Fusionner en évitant les doublons
                         const existingTimestamps = new Set(finalData.map(d => d.timestamp));
                         prevStationData.forEach(obs => {
@@ -80,34 +102,49 @@ export const weatherAPI = {
             }
 
             // FALLBACK ARCHIVES COMPLETES (si pas ou peu de données dans la table active, ex: jour passé)
-            if (dateObj && (finalData.length === 0 || finalData.filter(d => new Date(d.timestamp) >= start).length === 0)) {
+            if (targetDate && (finalData.length === 0 || finalData.filter(d => new Date(d.timestamp) >= start).length === 0)) {
                 try {
-                    const y = dateObj.getFullYear();
-                    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-                    const d = String(dateObj.getDate()).padStart(2, '0');
-                    const slices = ['00-06', '06-12', '12-18', '18-00'];
+                    const y = targetDate.getFullYear();
+                    const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+                    const d = String(targetDate.getDate()).padStart(2, '0');
                     
-                    const slicePromises = slices.map(async (sliceId) => {
-                        const filePath = `6mn/${y}/${m}/${d}/${sliceId}.json`;
-                        const { data: storageData, error: storageError } = await supabase.storage
-                            .from('observations-archives')
-                            .download(filePath);
+                    let targetDayStationData = [];
+                    
+                    // On tente d'abord de charger le fichier journalier unifié
+                    const filePathSingle = `6mn/${y}/${m}/${d}.json`;
+                    const { data: storageData, error: storageError } = await supabase.storage
+                        .from('observations-archives')
+                        .download(filePathSingle);
                         
-                        if (!storageError && storageData) {
-                            const text = await storageData.text();
-                            return JSON.parse(text);
-                        }
-                        return [];
-                    });
-
-                    const allSlicesData = await Promise.all(slicePromises);
-                    const mergedData = allSlicesData.flat();
-
-                    if (mergedData.length > 0) {
-                        const currentDayStationData = mergedData.filter(obs => obs.station_id === stationId);
+                    if (!storageError && storageData) {
+                        const text = await storageData.text();
+                        const dataParsed = JSON.parse(text);
+                        targetDayStationData = dataParsed.filter(obs => obs.station_id === stationId);
+                    } else {
+                        // Fallback : chargement des 4 slices historiques
+                        const slices = ['00-06', '06-12', '12-18', '18-00'];
                         
+                        const slicePromises = slices.map(async (sliceId) => {
+                            const filePath = `6mn/${y}/${m}/${d}/${sliceId}.json`;
+                            const { data: sliceData, error: sliceError } = await supabase.storage
+                                .from('observations-archives')
+                                .download(filePath);
+                            
+                            if (!sliceError && sliceData) {
+                                const text = await sliceData.text();
+                                return JSON.parse(text);
+                            }
+                            return [];
+                        });
+
+                        const allSlicesData = await Promise.all(slicePromises);
+                        const mergedData = allSlicesData.flat();
+                        targetDayStationData = mergedData.filter(obs => obs.station_id === stationId);
+                    }
+
+                    if (targetDayStationData.length > 0) {
                         const existingTimestamps = new Set(finalData.map(d => d.timestamp));
-                        currentDayStationData.forEach(obs => {
+                        targetDayStationData.forEach(obs => {
                             if (!existingTimestamps.has(obs.timestamp)) {
                                 finalData.push(obs);
                             }
@@ -121,7 +158,7 @@ export const weatherAPI = {
             }
 
             // Filtrage final strict selon la journée civile locale (convertie en UTC pour comparaison)
-            if (dateObj) {
+            if (targetDate) {
                 const startTime = start.getTime();
                 const endTime = end.getTime();
                 finalData = finalData.filter(obs => {
