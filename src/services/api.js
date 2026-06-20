@@ -43,7 +43,7 @@ export const weatherAPI = {
                 throw error;
             }
 
-            let finalData = data || [];
+            let finalData = data ? [...data] : [];
             console.log(`[API] Fetched ${finalData.length} records for ${stationId}`);
 
             // FUSION DE LA FIN DE NUIT DU JOUR PRÉCÉDENT (tranche 18-00 de J-1)
@@ -102,7 +102,7 @@ export const weatherAPI = {
             }
 
             // FALLBACK ARCHIVES COMPLETES (si pas ou peu de données dans la table active, ex: jour passé)
-            if (targetDate && (finalData.length === 0 || finalData.filter(d => new Date(d.timestamp) >= start).length === 0)) {
+            if (targetDate && ((!data || data.length === 0) || data.filter(d => new Date(d.timestamp) >= start).length === 0)) {
                 try {
                     const y = targetDate.getFullYear();
                     const m = String(targetDate.getMonth() + 1).padStart(2, '0');
