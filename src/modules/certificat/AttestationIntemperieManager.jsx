@@ -56,6 +56,7 @@ const AttestationIntemperieManager = () => {
     const [excludeWeekends, setExcludeWeekends] = useState(false);
     const [expertConclusion, setExpertConclusion] = useState('');
     const [isConclusionManual, setIsConclusionManual] = useState(false);
+    const [customClassification, setCustomClassification] = useState('');
     const [archives, setArchives] = useState([]);
     const [showArchivesModal, setShowArchivesModal] = useState(false);
     const [loadingArchives, setLoadingArchives] = useState(false);
@@ -63,7 +64,8 @@ const AttestationIntemperieManager = () => {
         client: true,
         period: true,
         thresholds: false,
-        conclusion: false
+        conclusion: false,
+        classification: false
     });
 
     const chartRefs = useRef({});
@@ -123,10 +125,9 @@ const AttestationIntemperieManager = () => {
         getStations();
     }, [selectedDept]);
 
-    // --- Mise à jour du rapport ---
     useEffect(() => {
         generateReport();
-    }, [globalData, docType, projectName, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion, stationMeteo]);
+    }, [globalData, docType, projectName, clientName, clientAddress, clientCity, clientZip, limitRain, limitTemp, limitWind, limitTempMax, refDossier, nearbyStations, showCharts, showPersonalization, isPeriod, startDate, endDate, expertConclusion, stationMeteo, customClassification]);
 
     // --- Monitoring Changes for Conclusion ---
     useEffect(() => {
@@ -514,111 +515,6 @@ const AttestationIntemperieManager = () => {
         `;
     };
 
-    const getExtremesClassificationTableHtml = () => {
-        if (!globalData) return '';
-        const days = Object.entries(globalData).map(([date, data]) => ({
-            date,
-            stats: data.stats
-        }));
-        if (days.length === 0) return '';
-
-        // Wind Max
-        let maxGustDay = days[0];
-        days.forEach(d => {
-            if ((d.stats.gustMax || 0) > (maxGustDay.stats.gustMax || 0)) {
-                maxGustDay = d;
-            }
-        });
-        const maxGustVal = Math.round(maxGustDay.stats.gustMax || 0);
-        const maxGustDateStr = new Date(maxGustDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const maxGustTimeStr = maxGustDay.stats.gustTime && maxGustDay.stats.gustTime !== 'N/A' ? ` à ${maxGustDay.stats.gustTime}` : '';
-        const maxGustLabel = maxGustVal >= 100 ? "TEMPÊTE" :
-                             maxGustVal >= 70 ? "VENTS TRÈS FORTS" :
-                             maxGustVal >= 40 ? "VENTS FORTS" :
-                             maxGustVal >= 20 ? "VENTS MODÉRÉS" : "Vents Faibles";
-
-        // Rain Max
-        let maxRainDay = days[0];
-        days.forEach(d => {
-            if ((d.stats.rainTotal || 0) > (maxRainDay.stats.rainTotal || 0)) {
-                maxRainDay = d;
-            }
-        });
-        const maxRainVal = maxRainDay.stats.rainTotal || 0;
-        const maxRainDateStr = new Date(maxRainDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const maxRainLabel = maxRainVal >= 40 ? "PLUIES EXCEPTIONNELLES" :
-                             maxRainVal >= 30 ? "PLUIES ABONDANTES" :
-                             maxRainVal >= 20 ? "PLUIES TRÈS FORTES" :
-                             maxRainVal >= 10 ? "PLUIES FORTES" :
-                             maxRainVal >= 5 ? "Pluies Modérées" : "Pluies Faibles";
-
-        // Temp Min
-        let minTempDay = days[0];
-        days.forEach(d => {
-            if (d.stats.tmin < minTempDay.stats.tmin) {
-                minTempDay = d;
-            }
-        });
-        const minTempVal = minTempDay.stats.tmin;
-        const minTempDateStr = new Date(minTempDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const minTempLabel = minTempVal <= -10 ? "GRAND FROID" :
-                             minTempVal <= -5 ? "FROID INTENSE" :
-                             minTempVal <= 0 ? "GEL" : "Températures Normales";
-
-        // Temp Max
-        let maxTempDay = days[0];
-        days.forEach(d => {
-            if (d.stats.tmax > maxTempDay.stats.tmax) {
-                maxTempDay = d;
-            }
-        });
-        const maxTempVal = maxTempDay.stats.tmax;
-        const maxTempDateStr = new Date(maxTempDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const maxTempLabel = maxTempVal >= 35 ? "CANICULE" :
-                             maxTempVal >= 30 ? "TRÈS CHAUD" :
-                             maxTempVal >= 25 ? "CHALEUR" : "Températures Normales";
-
-        return `
-            <div class="cert-section-header" style="margin-top: 15px;">VALEURS EXTRÊMES ET CLASSIFICATION</div>
-            <table class="cert-table" style="margin-top: 5px;">
-                <thead>
-                    <tr style="background:#f1f5f9;">
-                        <th style="text-align:left; border: 1px solid #000; padding: 4px;">PHÉNOMÈNE</th>
-                        <th style="border: 1px solid #000; padding: 4px;">VALEUR ENREGISTRÉE</th>
-                        <th style="border: 1px solid #000; padding: 4px;">DATE D'OBSERVATION</th>
-                        <th style="border: 1px solid #000; padding: 4px;">CLASSIFICATION D'INTENSITÉ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Rafale de vent maximale</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxGustVal} km/h</td>
-                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxGustDateStr}${maxGustTimeStr}</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxGustLabel}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Précipitations max en 24h</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxRainVal.toFixed(1).replace('.', ',')} mm</td>
-                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxRainDateStr}</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxRainLabel}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Température minimale</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${minTempVal.toFixed(1).replace('.', ',')} °C</td>
-                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${minTempDateStr}</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${minTempLabel}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Température maximale</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxTempVal.toFixed(1).replace('.', ',')} °C</td>
-                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxTempDateStr}</td>
-                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxTempLabel}</td>
-                    </tr>
-                </tbody>
-            </table>
-        `;
-    };
-
     const getSynthesisHtml = () => {
         if (!globalData) return '';
         const startD = new Date(startDate);
@@ -649,7 +545,10 @@ const AttestationIntemperieManager = () => {
                     </tbody>
                 </table>
 
-                ${getExtremesClassificationTableHtml()}
+                ${customClassification ? `
+                <div class="cert-section-header" style="margin-top: 15px;">CLASSEMENT</div>
+                <div class="cert-text-block" style="margin-top:10px; padding:12px 16px; border:2px solid #003366; background:#f8fafc; text-align:left; border-radius: 8px; font-size:10.5pt; white-space: pre-wrap;">${customClassification}</div>
+                ` : ''}
 
                 <div class="cert-section-header" style="margin-top: 15px;">CONCLUSION DE L'EXPERT</div>
                 <div class="cert-text-block" style="margin-top:10px; line-height:1.6; font-size:10.5pt; white-space: pre-wrap; text-align: justify;">${expertConclusion || generateAutoConclusion()}</div>
@@ -1449,6 +1348,25 @@ const AttestationIntemperieManager = () => {
                             >
                                 <Eraser size={12} /> Réinitialiser (Auto-générer)
                             </button>
+                        </div>
+                    )}
+
+                    <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, classification: !prev.classification }))}>
+                        <div className="flex items-center">
+                            <div className="btp-step-num">5</div>
+                            <div className="btp-panel-title">Classement</div>
+                        </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.classification ? '▼' : '►'}</span>
+                    </div>
+                    {panelOpen.classification && (
+                        <div className="p-15 bg-white border rounded">
+                            <textarea
+                                className="w-full text-sm p-10 border rounded font-sans leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+                                style={{ minHeight: '100px', width: '100%', resize: 'vertical' }}
+                                value={customClassification}
+                                onChange={e => setCustomClassification(e.target.value)}
+                                placeholder="Saisissez ici le classement manuel..."
+                            />
                         </div>
                     )}
 

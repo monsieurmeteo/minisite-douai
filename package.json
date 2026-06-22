@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "prod": "npx vercel build --prod && npx vercel deploy --prebuilt --prod",
+    "prod": "npx vercel build --prod && node scratch/clean_vercel_output.js && npx vercel deploy --prebuilt --prod",
     "lint": "eslint .",
     "preview": "vite preview"
   },

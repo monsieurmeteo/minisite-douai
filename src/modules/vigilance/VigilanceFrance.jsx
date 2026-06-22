@@ -22,6 +22,25 @@ const OFFICIAL_COLORS = {
     4: '#cc0000', // Rouge
 };
 
+const FOREST_FIRE_DESCRIPTIONS = {
+    1: {
+        title: "Danger faible (vert)",
+        text: "Les conditions météorologiques prévues et les dernières précipitations atténuent le risque de départ et de propagation de feux de forêt et de végétation."
+    },
+    2: {
+        title: "Danger modéré (jaune)",
+        text: "Les conditions météorologiques n'aggravent pas significativement le risque de départ et de propagation de feux de forêt et de végétation comparativement aux normales estivales. Le risque de feux peut être localement élevé."
+    },
+    3: {
+        title: "Danger élevé (orange)",
+        text: "Les conditions météorologiques aggravent significativement le risque de départ et de propagation de feux de forêt et de végétation comparativement aux normales estivales. Le risque de feux peut être localement très élevé."
+    },
+    4: {
+        title: "Danger très élevé (rouge)",
+        text: "Les conditions météorologiques rendent le risque de départ et de propagation de feux de forêt et de végétation très élevé comparativement aux normales estivales."
+    }
+};
+
 const PHENOMENONS = [
     { id: "2", name: "Pluie-inondation", icon: Droplets },
     { id: "9", name: "Vagues-submersion", icon: Waves },
@@ -447,31 +466,50 @@ const VigilanceFrance = () => {
                                 )}
                             </div>
                             <div className="map-legend-official">
-                                {selectedPhenom === "100" && (
-                                    <div className="legend-title" style={{ 
-                                        fontWeight: 'bold', 
-                                        marginBottom: '8px', 
-                                        fontSize: '13px', 
-                                        color: '#334155',
-                                        width: '100%',
-                                        textAlign: 'center'
-                                    }}>
-                                        Danger Feux
-                                    </div>
-                                )}
-                                {[1, 2, 3, 4].map(lvl => {
-                                    let label = lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge';
-                                    if (selectedPhenom === "100") {
-                                        label = lvl === 1 ? 'Faible' : lvl === 2 ? 'Modéré' : lvl === 3 ? 'Elevé' : 'Très élevé';
-                                    }
-                                    return (
-                                        <div key={lvl} className="legend-item">
-                                            <span className="dot" style={{ background: OFFICIAL_COLORS[lvl] }}></span>
-                                            <span>{label}</span>
-                                        </div>
-                                    );
-                                })}
+                                <span className="legend-prefix">
+                                    {selectedPhenom === "100" ? "Danger Feux :" : "Vigilance :"}
+                                </span>
+                                <div className="legend-items-list">
+                                    {[1, 2, 3, 4].map(lvl => {
+                                        let label = lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge';
+                                        if (selectedPhenom === "100") {
+                                            label = lvl === 1 ? 'Faible' : lvl === 2 ? 'Modéré' : lvl === 3 ? 'Elevé' : 'Très élevé';
+                                        }
+                                        return (
+                                            <div key={lvl} className="legend-item">
+                                                <span className="dot" style={{ background: OFFICIAL_COLORS[lvl] }}></span>
+                                                <span className="label-text">{label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
+
+                            {selectedPhenom === "100" && (
+                                <div className="forest-fire-explanation-panel no-capture animate-in">
+                                    <h4 className="explanation-title">Les 4 niveaux de représentation du danger de feux</h4>
+                                    <div className="forest-fire-levels-grid-mini">
+                                        {[4, 3, 2, 1].map(lvl => {
+                                            const desc = FOREST_FIRE_DESCRIPTIONS[lvl];
+                                            const color = OFFICIAL_COLORS[lvl];
+                                            return (
+                                                <div key={lvl} className="forest-fire-level-card-mini">
+                                                    <div className="level-card-header-mini">
+                                                        <div className="level-circle-icon-mini" style={{ backgroundColor: color, color: lvl === 2 ? '#334155' : '#ffffff' }}>
+                                                            <svg viewBox="0 0 24 24" fill="currentColor" className="tree-svg">
+                                                                <rect x="11.2" y="14" width="1.6" height="7" rx="0.4" />
+                                                                <path d="M12 2.5a5.5 5.5 0 0 0-4.5 8.64A3.5 3.5 0 0 0 9 17.5h6a3.5 3.5 0 0 0 1.5-6.36A5.5 5.5 0 0 0 12 2.5z" />
+                                                            </svg>
+                                                        </div>
+                                                        <h5>{desc.title}</h5>
+                                                    </div>
+                                                    <p>{desc.text}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {selectedDep && (
@@ -485,31 +523,101 @@ const VigilanceFrance = () => {
                                     <div className="f-level-tags">
                                         <div className="tag-group">
                                             <span className="tag-label">Aujourd'hui</span>
-                                            <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level || 1] }}>
-                                                {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.level === 1 ? "Vert" : "Vigilance"}
-                                            </div>
+                                            {(() => {
+                                                const dToday = vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0);
+                                                let lvlToday = dToday?.level || 1;
+                                                let textToday = lvlToday === 1 ? "Vert" : "Vigilance";
+                                                if (selectedPhenom) {
+                                                    const risk = dToday?.risks?.find(r => r.id === selectedPhenom);
+                                                    lvlToday = risk ? risk.level : 1;
+                                                    if (selectedPhenom === "100") {
+                                                        const labels = { 1: "Faible", 2: "Modéré", 3: "Elevé", 4: "Très élevé" };
+                                                        textToday = labels[lvlToday] || "Faible";
+                                                    }
+                                                }
+                                                return (
+                                                    <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[lvlToday] }}>
+                                                        {textToday}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="tag-group">
                                             <span className="tag-label">Demain</span>
-                                            <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level || 1] }}>
-                                                {vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.level === 1 ? "Vert" : "Vigilance"}
-                                            </div>
+                                            {(() => {
+                                                const dTomorrow = vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1);
+                                                let lvlTomorrow = dTomorrow?.level || 1;
+                                                let textTomorrow = lvlTomorrow === 1 ? "Vert" : "Vigilance";
+                                                if (selectedPhenom) {
+                                                    const risk = dTomorrow?.risks?.find(r => r.id === selectedPhenom);
+                                                    lvlTomorrow = risk ? risk.level : 1;
+                                                    if (selectedPhenom === "100") {
+                                                        const labels = { 1: "Faible", 2: "Modéré", 3: "Elevé", 4: "Très élevé" };
+                                                        textTomorrow = labels[lvlTomorrow] || "Faible";
+                                                    }
+                                                }
+                                                return (
+                                                    <div className="f-level-tag" style={{ backgroundColor: OFFICIAL_COLORS[lvlTomorrow] }}>
+                                                        {textTomorrow}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="footer-chronology-grid">
-                                    {renderHourlyTimeline(
-                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.risks,
-                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.start_time,
-                                        "Chronologie Aujourd'hui"
-                                    )}
-                                    {renderHourlyTimeline(
-                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.risks,
-                                        vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.start_time || new Date(new Date().getTime() + 86400000).toISOString(),
-                                        "Chronologie Demain"
-                                    )}
-                                </div>
+                                {selectedPhenom === "100" ? (
+                                    <div className="forest-fire-detail-block" style={{ 
+                                        marginTop: '20px', 
+                                        background: '#f8fafc', 
+                                        padding: '15px', 
+                                        borderRadius: '8px', 
+                                        border: '1px solid #e2e8f0' 
+                                    }}>
+                                        <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', fontWeight: '600' }}>Niveaux de danger feux détaillés</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
+                                            {(() => {
+                                                const lvlToday = vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.risks?.find(r => r.id === "100")?.level || 1;
+                                                const lvlTomorrow = vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.risks?.find(r => r.id === "100")?.level || 1;
+                                                
+                                                const descToday = FOREST_FIRE_DESCRIPTIONS[lvlToday];
+                                                const descTomorrow = FOREST_FIRE_DESCRIPTIONS[lvlTomorrow];
+
+                                                return (
+                                                    <>
+                                                        <div className="day-desc" style={{ padding: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
+                                                                <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: OFFICIAL_COLORS[lvlToday], marginRight: '8px' }}></span>
+                                                                <strong style={{ fontSize: '13px', color: '#1e293b' }}>Aujourd'hui : {descToday.title}</strong>
+                                                            </div>
+                                                            <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: '1.4' }}>{descToday.text}</p>
+                                                        </div>
+                                                        <div className="day-desc" style={{ padding: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
+                                                                <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: OFFICIAL_COLORS[lvlTomorrow], marginRight: '8px' }}></span>
+                                                                <strong style={{ fontSize: '13px', color: '#1e293b' }}>Demain : {descTomorrow.title}</strong>
+                                                            </div>
+                                                            <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: '1.4' }}>{descTomorrow.text}</p>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="footer-chronology-grid">
+                                        {renderHourlyTimeline(
+                                            vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.risks,
+                                            vigilanceData.find(d => d.dep_code === selectedDep && d.period === 0)?.start_time,
+                                            "Chronologie Aujourd'hui"
+                                        )}
+                                        {renderHourlyTimeline(
+                                            vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.risks,
+                                            vigilanceData.find(d => d.dep_code === selectedDep && d.period === 1)?.start_time || new Date(new Date().getTime() + 86400000).toISOString(),
+                                            "Chronologie Demain"
+                                        )}
+                                    </div>
+                                )}
 
                                 <section className="detail-section" style={{ marginTop: '30px' }}>
                                     <h3 className="section-label">Relevés Stations ({selectedDep})</h3>
@@ -722,8 +830,9 @@ const VigilanceFrance = () => {
                     phenoms={PHENOMENONS}
                     regionId={selectedRegion}
                 />
-
             </div>
+
+
 
             <div className="vigilance-text-list-section">
                 {generatedBulletin && (

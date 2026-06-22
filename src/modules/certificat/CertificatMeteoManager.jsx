@@ -37,6 +37,11 @@ const CertificatMeteoManager = () => {
     const [selectedDept, setSelectedDept] = useState('');
     const [selectedStationId, setSelectedStationId] = useState('');
     const [stationMeteo, setStationMeteo] = useState('');
+    const [stationMeteoTemp, setStationMeteoTemp] = useState('');
+    const [stationMeteoRain, setStationMeteoRain] = useState('');
+    const [stationMeteoWind, setStationMeteoWind] = useState('');
+    const [showDetailedStations, setShowDetailedStations] = useState(false);
+    const [csvStationName, setCsvStationName] = useState('');
     const [loadingStations, setLoadingStations] = useState(false);
     const [stationNames, setStationNames] = useState({});
 
@@ -66,12 +71,37 @@ const CertificatMeteoManager = () => {
     const [showDetailedHumi, setShowDetailedHumi] = useState(false);
     const [showDetailedPres, setShowDetailedPres] = useState(false);
     const [showDetailedVis, setShowDetailedVis] = useState(false);
+    const [showDetailedRecords, setShowDetailedRecords] = useState(true);
+    const [annexCols, setAnnexCols] = useState({
+        temp: true,
+        rain: true,
+        windA: true,
+        windG: true,
+        humi: false,
+        pres: false,
+        vis: false
+    });
+
+    // --- États d'import/fusion de fichiers CSV ---
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [csvRowsParsed, setCsvRowsParsed] = useState([]);
+    const [csvStationId, setCsvStationId] = useState('');
+    const [csvDates, setCsvDates] = useState({ firstDate: null, lastDate: null });
+    const [mergeOptionTemp, setMergeOptionTemp] = useState(true);
+    const [mergeOptionRain, setMergeOptionRain] = useState(true);
+    const [mergeOptionWind, setMergeOptionWind] = useState(true);
+    const [mergeMode, setMergeMode] = useState('merge'); // 'merge' or 'overwrite'
 
     const [archives, setArchives] = useState([]);
     const [showArchivesModal, setShowArchivesModal] = useState(false);
     const [loadingArchives, setLoadingArchives] = useState(false);
+    const [panelOpen, setPanelOpen] = useState({
+        config: true,
+        custom: false
+    });
 
     const chartRefs = useRef({});
+    const fileInputRef = useRef(null);
 
     // --- Constantes ---
     const CERT_TYPES = [
@@ -86,6 +116,16 @@ const CertificatMeteoManager = () => {
         "Neige",
         "Autre phénomène"
     ];
+
+    // Synchro de stationMeteo (compatibilité DB/Archives)
+    useEffect(() => {
+        if (stationMeteoTemp === stationMeteoRain && stationMeteoRain === stationMeteoWind) {
+            setStationMeteo(stationMeteoTemp);
+        } else {
+            setStationMeteo(`Temp: ${stationMeteoTemp || '?'}, Pluie: ${stationMeteoRain || '?'}, Vent: ${stationMeteoWind || '?'}`);
+            setShowDetailedStations(true);
+        }
+    }, [stationMeteoTemp, stationMeteoRain, stationMeteoWind]);
 
     // Synchro dates
     useEffect(() => {
@@ -168,7 +208,7 @@ const CertificatMeteoManager = () => {
     // Mise à jour du rapport quand les données changent
     useEffect(() => {
         generateReport();
-    }, [globalData, clientName, clientAddress, clientCity, clientZip, startDate, endDate, isPeriod, certType, showCharts, multiChartMode, chartDesign, showWindAvg, nearbyStations, selectedStationDist, showValuesUnderTitle, showWindParams, showRainParams, showTempParams]);
+    }, [globalData, clientName, clientAddress, clientCity, clientZip, startDate, endDate, isPeriod, certType, showCharts, multiChartMode, chartDesign, showWindAvg, nearbyStations, selectedStationDist, showValuesUnderTitle, showWindParams, showRainParams, showTempParams, stationMeteo, showDetailedRecords, stationMeteoTemp, stationMeteoRain, stationMeteoWind, annexCols]);
 
     // --- Calcul "Live" des stations proches si la ville change ---
     useEffect(() => {
@@ -412,7 +452,12 @@ const CertificatMeteoManager = () => {
                     stats: globalData.stats,
                     rows: globalData.rows,
                     summary: customSynthesis,
-                    conclusion: customConclusion
+                    conclusion: customConclusion,
+                    stationMeteoTemp,
+                    stationMeteoRain,
+                    stationMeteoWind,
+                    showDetailedStations,
+                    annexCols
                 },
                 date_generation: new Date()
             };
@@ -475,9 +520,299 @@ const CertificatMeteoManager = () => {
             });
             setCustomSynthesis(a.donnees_brutes_json.summary || '');
             setCustomConclusion(a.donnees_brutes_json.conclusion || '');
+            
+            const dbTemp = a.donnees_brutes_json.stationMeteoTemp || a.station_reference || '';
+            const dbRain = a.donnees_brutes_json.stationMeteoRain || a.station_reference || '';
+            const dbWind = a.donnees_brutes_json.stationMeteoWind || a.station_reference || '';
+            setStationMeteoTemp(dbTemp);
+            setStationMeteoRain(dbRain);
+            setStationMeteoWind(dbWind);
+            setShowDetailedStations(a.donnees_brutes_json.showDetailedStations || false);
+
+            if (a.donnees_brutes_json.annexCols) {
+                setAnnexCols(a.donnees_brutes_json.annexCols);
+            }
         }
         setShowArchivesModal(false);
         setStatus(`📂 Certificat chargé : ${a.nom_client} (${a.date_sinistre})`);
+    };
+
+    // --- Récupération des données depuis un fichier CSV ---
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setStatus('⏳ Lecture du fichier CSV...');
+        const reader = new FileReader();
+
+        reader.onload = async (event) => {
+            try {
+                const content = event.target.result;
+                const lines = content.split('\n');
+                if (lines.length < 2) throw new Error("Fichier vide ou mal formaté");
+
+                // Headers: POSTE;DATE;RR;TN;TX;FXI
+                const dataLines = lines.slice(1).filter(l => l.trim().length > 0);
+
+                const rows = [];
+                let firstDate = null;
+                let lastDate = null;
+                let stationId = '';
+
+                // On vérifie si les unités de vent sont en m/s ou km/h
+                // Si une valeur FXI > 40, on suppose que c'est du km/h
+                let maxFxiSeen = 0;
+                dataLines.forEach(line => {
+                    const cols = line.trim().split(';');
+                    if (cols.length >= 6) {
+                        const fxi = parseFloat(cols[5]?.replace(',', '.')) || 0;
+                        if (fxi > maxFxiSeen) maxFxiSeen = fxi;
+                    }
+                });
+                const windMultiplier = maxFxiSeen > 40 ? 1 : 3.6;
+                console.log(`[Certificat CSV] Max FXI seen: ${maxFxiSeen}. Using multiplier: ${windMultiplier}`);
+
+                dataLines.forEach(line => {
+                    const cols = line.trim().split(';');
+                    if (cols.length < 5) return;
+
+                    const rawDate = cols[1]; // YYYYMMDD or YYYYMMDDHH
+                    if (!rawDate || (rawDate.length !== 8 && rawDate.length !== 10)) return;
+
+                    const year = parseInt(rawDate.substring(0, 4));
+                    const month = parseInt(rawDate.substring(4, 6));
+                    const day = parseInt(rawDate.substring(6, 8));
+                    const hour = rawDate.length === 10 ? parseInt(rawDate.substring(8, 10)) : 12;
+
+                    const dateObj = new Date(year, month - 1, day, hour, 0, 0);
+                    const datePure = new Date(year, month - 1, day);
+
+                    if (!firstDate || datePure < firstDate) firstDate = datePure;
+                    if (!lastDate || datePure > lastDate) lastDate = datePure;
+
+                    stationId = cols[0];
+
+                    const rr = parseFloat(cols[2]?.replace(',', '.')) || 0;
+                    const tn = parseFloat(cols[3]?.replace(',', '.')) || 99;
+                    const tx = parseFloat(cols[4]?.replace(',', '.')) || -99;
+                    const fxi = parseFloat(cols[5]?.replace(',', '.')) || 0;
+
+                    let tempVal = (tn !== 99 && tx !== -99) ? (tn + tx) / 2 : (tn !== 99 ? tn : tx);
+                    if (tempVal === 99 || tempVal === -99) tempVal = 0;
+
+                    rows.push({
+                        time: dateObj,
+                        h: hour,
+                        temp: tempVal,
+                        tmin: tn !== 99 ? tn : null,
+                        tmax: tx !== -99 ? tx : null,
+                        rain: rr,
+                        w_avg: fxi * windMultiplier,
+                        w_gst: fxi * windMultiplier,
+                        humi: 0,
+                        pres: 1013,
+                        vv: 10
+                    });
+                });
+
+                if (rows.length === 0) throw new Error("Aucune donnée valide trouvée dans le fichier.");
+
+                rows.sort((a, b) => a.time - b.time);
+
+                // Calculer les stats globales pour le certificat
+                const windMaxRow = rows.reduce((prev, curr) => (Number(prev.w_gst) >= Number(curr.w_gst) ? prev : curr), rows[0]);
+                const rainMaxRow = rows.reduce((prev, curr) => (Number(prev.rain) >= Number(curr.rain) ? prev : curr), rows[0]);
+                const tempMaxRow = rows.reduce((prev, curr) => (Number(prev.tmax !== null ? prev.tmax : prev.temp) >= Number(curr.tmax !== null ? curr.tmax : curr.temp) ? prev : curr), rows[0]);
+                const tempMinRow = rows.reduce((prev, curr) => (Number(prev.tmin !== null ? prev.tmin : prev.temp) <= Number(curr.tmin !== null ? curr.tmin : curr.temp) ? prev : curr), rows[0]);
+
+                const stats = {
+                    tempMax: tempMaxRow.tmax !== null ? tempMaxRow.tmax : tempMaxRow.temp,
+                    tempMaxTime: tempMaxRow.time,
+                    tempMin: tempMinRow.tmin !== null ? tempMinRow.tmin : tempMinRow.temp,
+                    tempMinTime: tempMinRow.time,
+                    rainTotal: rows.reduce((acc, r) => acc + (Number(r.rain) || 0), 0),
+                    snowTotal: rows.reduce((acc, r) => acc + (Number(r.temp) <= 0 ? (Number(r.rain) || 0) : 0), 0),
+                    windGustMax: windMaxRow.w_gst,
+                    windGustMaxTime: windMaxRow.time,
+                    windAvgMax: Math.max(...rows.map(r => Number(r.w_avg) || 0)),
+                    rainMaxH: rainMaxRow.rain,
+                    rainMaxTime: rainMaxRow.time,
+                    humMax: 0
+                };
+
+                const isPeriodVal = firstDate.getTime() !== lastDate.getTime();
+
+                setCsvRowsParsed(rows);
+                setCsvStationId(stationId);
+                setCsvStationName(stationId);
+                setCsvDates({ firstDate, lastDate });
+
+                if (globalData.rows && globalData.rows.length > 0) {
+                    setMergeMode('merge');
+                } else {
+                    setMergeMode('overwrite');
+                }
+
+                setShowMergeModal(true);
+                setStatus('⏳ Fichier CSV analysé. Veuillez configurer les options de fusion dans la fenêtre.');
+            } catch (err) {
+                console.error(err);
+                setStatus('❌ Erreur Import : ' + err.message);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
+    // --- Validation et fusion des données CSV ---
+    const handleConfirmMerge = () => {
+        try {
+            if (csvRowsParsed.length === 0) return;
+
+            let finalRows = [];
+            let firstDate = csvDates.firstDate;
+            let lastDate = csvDates.lastDate;
+
+            if (mergeMode === 'overwrite' || !globalData.rows || globalData.rows.length === 0) {
+                // Filtrer par paramètres sélectionnés
+                finalRows = csvRowsParsed.map(row => ({
+                    time: row.time,
+                    h: row.h,
+                    temp: mergeOptionTemp ? row.temp : 0,
+                    tmin: mergeOptionTemp ? row.tmin : null,
+                    tmax: mergeOptionTemp ? row.tmax : null,
+                    rain: mergeOptionRain ? row.rain : 0,
+                    w_avg: mergeOptionWind ? row.w_avg : 0,
+                    w_gst: mergeOptionWind ? row.w_gst : 0,
+                    humi: 0,
+                    pres: 1013,
+                    vv: 10
+                }));
+            } else {
+                // Fusionner les données actuelles avec les données du CSV
+                const existingRows = globalData.rows.map(r => ({ ...r }));
+
+                const getRowKey = (row) => {
+                    const d = new Date(row.time);
+                    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}_H${row.h}`;
+                };
+
+                const existingMap = {};
+                existingRows.forEach((r, idx) => {
+                    existingMap[getRowKey(r)] = idx;
+                });
+
+                csvRowsParsed.forEach(csvRow => {
+                    const key = getRowKey(csvRow);
+                    if (existingMap[key] !== undefined) {
+                        const matchIdx = existingMap[key];
+                        // Mettre à jour seulement les paramètres sélectionnés
+                        if (mergeOptionTemp) {
+                            existingRows[matchIdx].temp = csvRow.temp;
+                            existingRows[matchIdx].tmin = csvRow.tmin;
+                            existingRows[matchIdx].tmax = csvRow.tmax;
+                        }
+                        if (mergeOptionRain) {
+                            existingRows[matchIdx].rain = csvRow.rain;
+                        }
+                        if (mergeOptionWind) {
+                            existingRows[matchIdx].w_avg = csvRow.w_avg;
+                            existingRows[matchIdx].w_gst = csvRow.w_gst;
+                        }
+                    } else {
+                        // Si pas de correspondance, on ajoute une nouvelle ligne
+                        const newRow = {
+                            time: csvRow.time,
+                            h: csvRow.h,
+                            temp: mergeOptionTemp ? csvRow.temp : 0,
+                            tmin: mergeOptionTemp ? csvRow.tmin : null,
+                            tmax: mergeOptionTemp ? csvRow.tmax : null,
+                            rain: mergeOptionRain ? csvRow.rain : 0,
+                            w_avg: mergeOptionWind ? csvRow.w_avg : 0,
+                            w_gst: mergeOptionWind ? csvRow.w_gst : 0,
+                            humi: 0,
+                            pres: 1013,
+                            vv: 10
+                        };
+                        existingRows.push(newRow);
+                    }
+                });
+
+                finalRows = existingRows;
+
+                // Mettre à jour les dates limites globales
+                const datesOnly = finalRows.map(r => new Date(r.time.getFullYear(), r.time.getMonth(), r.time.getDate()));
+                firstDate = new Date(Math.min(...datesOnly.map(d => d.getTime())));
+                lastDate = new Date(Math.max(...datesOnly.map(d => d.getTime())));
+            }
+
+            finalRows.sort((a, b) => a.time - b.time);
+
+            // Recalculer les statistiques sur les lignes finales
+            const windMaxRow = finalRows.reduce((prev, curr) => (Number(prev.w_gst) >= Number(curr.w_gst) ? prev : curr), finalRows[0]);
+            const rainMaxRow = finalRows.reduce((prev, curr) => (Number(prev.rain) >= Number(curr.rain) ? prev : curr), finalRows[0]);
+            const tempMaxRow = finalRows.reduce((prev, curr) => (Number(prev.tmax !== null ? prev.tmax : prev.temp) >= Number(curr.tmax !== null ? curr.tmax : curr.temp) ? prev : curr), finalRows[0]);
+            const tempMinRow = finalRows.reduce((prev, curr) => (Number(prev.tmin !== null ? prev.tmin : prev.temp) <= Number(curr.tmin !== null ? curr.tmin : curr.temp) ? prev : curr), finalRows[0]);
+
+            const stats = {
+                tempMax: tempMaxRow.tmax !== null ? tempMaxRow.tmax : tempMaxRow.temp,
+                tempMaxTime: tempMaxRow.time,
+                tempMin: tempMinRow.tmin !== null ? tempMinRow.tmin : tempMinRow.temp,
+                tempMinTime: tempMinRow.time,
+                rainTotal: finalRows.reduce((acc, r) => acc + (Number(r.rain) || 0), 0),
+                snowTotal: finalRows.reduce((acc, r) => acc + (Number(r.temp) <= 0 ? (Number(r.rain) || 0) : 0), 0),
+                windGustMax: windMaxRow.w_gst,
+                windGustMaxTime: windMaxRow.time,
+                windAvgMax: Math.max(...finalRows.map(r => Number(r.w_avg) || 0)),
+                rainMaxH: rainMaxRow.rain,
+                rainMaxTime: rainMaxRow.time,
+                humMax: 0
+            };
+
+            const isPeriodVal = firstDate.getTime() !== lastDate.getTime();
+
+            setGlobalData({
+                date: firstDate.toISOString().split('T')[0],
+                endDate: isPeriodVal ? lastDate.toISOString().split('T')[0] : null,
+                isPeriod: isPeriodVal,
+                rows: finalRows,
+                stats
+            });
+
+            const finalStationName = csvStationName.trim() || csvStationId;
+            if (mergeOptionTemp) setStationMeteoTemp(finalStationName);
+            if (mergeOptionRain) setStationMeteoRain(finalStationName);
+            if (mergeOptionWind) setStationMeteoWind(finalStationName);
+
+            setSelectedStationId(csvStationId);
+            setStationMeteo(prev => {
+                if (mergeMode === 'overwrite' || !prev) {
+                    return `Import CSV (${csvStationId})`;
+                }
+                return `${prev} + CSV (${csvStationId})`;
+            });
+
+            // Sync dates UI
+            setStartDate(firstDate.toISOString().split('T')[0]);
+            if (isPeriodVal) {
+                setIsPeriod(true);
+                setEndDate(lastDate.toISOString().split('T')[0]);
+            } else {
+                setIsPeriod(false);
+            }
+
+            const autoConclusion = generateConclusion(stats, certType);
+            setCustomConclusion(autoConclusion);
+
+            const autoSynthesis = generateSynthesisText(stats, finalRows);
+            setCustomSynthesis(autoSynthesis);
+
+            setStatus(`✅ Données CSV fusionnées avec succès (${finalRows.length} lignes).`);
+            setShowMergeModal(false);
+        } catch (err) {
+            console.error(err);
+            setStatus('❌ Erreur Fusion : ' + err.message);
+        }
     };
 
     // --- Logique de récupération des données (Similaire BTP mais simplifiée) ---
@@ -643,7 +978,11 @@ const CertificatMeteoManager = () => {
             const autoSynthesis = generateSynthesisText(stats, rows);
             setCustomSynthesis(autoSynthesis);
 
-            setStationMeteo(stationNames[selectedStationId] || selectedStationId);
+            const sName = stationNames[selectedStationId] || selectedStationId;
+            setStationMeteo(sName);
+            setStationMeteoTemp(sName);
+            setStationMeteoRain(sName);
+            setStationMeteoWind(sName);
             setStatus('✅ Données récupérées avec succès (Station principale).');
 
             // On lance le calcul des stations proches (async)
@@ -804,10 +1143,10 @@ const CertificatMeteoManager = () => {
 
         const addRow = (param, val, time, classification) => {
             htmlRows += `<tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 3px 8px;">${param}</td>
-                <td style="padding: 3px 8px;"><span class="cert-value-essential">${val}</span></td>
-                <td style="padding: 3px 8px; color:#475569;">${time}</td>
-                <td style="padding: 3px 8px; color:#003366; font-size:8.5pt; font-weight:bold;">${classification}</td>
+                <td style="padding: 8px 12px; font-size: 10pt;">${param}</td>
+                <td style="padding: 8px 12px; font-size: 10pt;"><span class="cert-value-essential">${val}</span></td>
+                <td style="padding: 8px 12px; font-size: 9.5pt; color:#475569;">${time}</td>
+                <td style="padding: 8px 12px; color:#003366; font-size: 9.5pt; font-weight:bold;">${classification}</td>
             </tr>`;
         };
 
@@ -921,29 +1260,26 @@ const CertificatMeteoManager = () => {
             <div style="font-size: 8pt; color: #475569; margin-bottom: 4px; font-style:italic;">
                 Relevés des 4 stations officielles les plus proches.
             </div>
-            <table class="cert-table" style="margin-top: 0; font-size: 8pt;">
+            <table class="cert-table" style="margin-top: 0; font-size: 9.5pt;">
                 <thead>
                     <tr>
-                        <th style="padding: 3px 5px; text-align:left;">STATION</th>
-                        <th style="padding: 3px 5px;">DIST.</th>
-                        <th style="padding: 3px 5px;">${valueLabel}</th>
+                        <th style="padding: 8px 12px; text-align:left;">STATION</th>
+                        <th style="padding: 8px 12px;">DIST.</th>
+                        <th style="padding: 8px 12px;">${valueLabel}</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${nearbyStations.slice(0, 4).map(s => `
                         <tr>
-                            <td style="padding: 2px 5px; text-align:left; font-weight:bold; color:#0f172a;">${s.name}</td>
-                            <td style="padding: 2px 5px; font-size:7.5pt; color:#64748b;">${s.dist ? Math.round(s.dist) + ' km' : '-'}</td>
-                            <td style="padding: 2px 5px; font-weight:900; color:#334155;">${getValue(s)}</td>
+                            <td style="padding: 8px 12px; text-align:left; font-weight:bold; color:#0f172a;">${s.name}</td>
+                            <td style="padding: 8px 12px; font-size: 9pt; color:#64748b;">${s.dist ? Math.round(s.dist) + ' km' : '-'}</td>
+                            <td style="padding: 8px 12px; font-weight:900; color:#334155;">${getValue(s)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         `;
     };
-
-
-
 
     const getDetailedRecordsHtml = (rows) => {
         if (!rows || rows.length === 0) return '';
@@ -974,25 +1310,37 @@ const CertificatMeteoManager = () => {
 
             return `
             <div class="cert-page" style="page-break-before: always; border-top: 1px dashed #cbd5e1; display: flex; flex-direction: column;">
-                <div style="border: 2px solid #000; padding: 10px 5px; text-align: center; margin-top: 20px; margin-bottom: 20px;">
+                <div style="border: 2px solid #000; padding: 10px 15px; text-align: left; margin-top: 20px; margin-bottom: 20px;">
                     <h2 style="color: #003366; font-size: 13pt; margin: 0; font-weight: 900; text-transform: uppercase;">ANNEXE : DONNÉES HORAIRES DÉTAILLÉES</h2>
                     <div style="font-size: 10pt; font-weight: 700; color: #000; margin-top: 5px; text-transform: capitalize;">
-                        ${dateFull} - Station : ${stationMeteo}
+                        ${dateFull} - Station : ${(() => {
+                            if (stationMeteoTemp === stationMeteoRain && stationMeteoRain === stationMeteoWind) {
+                                return stationMeteoTemp;
+                            }
+                            const parts = [];
+                            if (annexCols.temp && stationMeteoTemp) parts.push(`Temp: ${stationMeteoTemp}`);
+                            if (annexCols.rain && stationMeteoRain) parts.push(`Pluie: ${stationMeteoRain}`);
+                            if ((annexCols.windA || annexCols.windG) && stationMeteoWind) parts.push(`Vent: ${stationMeteoWind}`);
+                            return parts.join(' | ') || 'Multi-stations';
+                        })()}
                     </div>
                     <div style="font-size: 9pt; color: #64748b; margin-top: 5px;">
                         Page ${pageNum} / ${totalPages}
                     </div>
                 </div>
 
-                <table class="cert-table" style="font-size: 8pt; margin-top: 0;">
+                <table class="cert-table" style="font-size: 9.5pt; margin-top: 0;">
                     <thead>
                         <tr style="background:#1e293b; color: white;">
                             <th style="width: 60px;">DATE</th>
                             <th>HEURE</th>
-                            <th>TEMP. (°C)</th>
-                            <th>PLUIE (MM)</th>
-                            <th>VENT (KM/H)</th>
-                            <th>RAFALES</th>
+                            ${annexCols.temp ? '<th>TEMP. (°C)</th>' : ''}
+                            ${annexCols.rain ? '<th>PLUIE (MM)</th>' : ''}
+                            ${annexCols.windA ? '<th>VENT (KM/H)</th>' : ''}
+                            ${annexCols.windG ? '<th>RAFALES (KM/H)</th>' : ''}
+                            ${annexCols.humi ? '<th>HUMIDITÉ (%)</th>' : ''}
+                            ${annexCols.pres ? '<th>PRESSION (HPA)</th>' : ''}
+                            ${annexCols.vis ? '<th>VISIBILITÉ (KM)</th>' : ''}
                         </tr>
                     </thead>
                     <tbody>
@@ -1000,10 +1348,13 @@ const CertificatMeteoManager = () => {
                             <tr>
                                 <td style="color:#475569;">${dateShort}</td>
                                 <td style="font-weight:bold; color:#003366;">${r.h}h</td>
-                                <td style="font-weight:600;">${r.temp !== null ? r.temp.toFixed(1) : '-'}</td>
-                                <td ${r.rain > 0 ? 'style="color:#2563eb; font-weight:bold;"' : ''}>${r.rain > 0 ? r.rain.toFixed(1).replace('.', ',') : '0,0'}</td>
-                                <td>${Math.round(r.w_avg || 0)}</td>
-                                <td ${r.w_gst > 60 ? 'style="color:#dc2626; font-weight:bold;"' : ''}>${Math.round(r.w_gst || 0)}</td>
+                                ${annexCols.temp ? `<td style="font-weight:600;">${r.temp !== null ? r.temp.toFixed(1) : '-'}</td>` : ''}
+                                ${annexCols.rain ? `<td ${r.rain > 0 ? 'style="color:#2563eb; font-weight:bold;"' : ''}>${r.rain > 0 ? r.rain.toFixed(1).replace('.', ',') : '0,0'}</td>` : ''}
+                                ${annexCols.windA ? `<td>${r.w_avg !== null && r.w_avg !== undefined ? Math.round(r.w_avg) : '-'}</td>` : ''}
+                                ${annexCols.windG ? `<td ${r.w_gst > 60 ? 'style="color:#dc2626; font-weight:bold;"' : ''}>${r.w_gst !== null && r.w_gst !== undefined ? Math.round(r.w_gst) : '-'}</td>` : ''}
+                                ${annexCols.humi ? `<td>${r.humi !== undefined && r.humi !== null ? Math.round(r.humi) : '-'}%</td>` : ''}
+                                ${annexCols.pres ? `<td>${r.pres !== undefined && r.pres !== null ? Math.round(r.pres) : '-'}</td>` : ''}
+                                ${annexCols.vis ? `<td>${r.vv !== undefined && r.vv !== null ? Math.round(r.vv) : '-'}</td>` : ''}
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1016,9 +1367,15 @@ const CertificatMeteoManager = () => {
         }).join('');
     };
 
-    const renderCertChart = (data) => {
+    const renderCertChart = (data, attempt = 1) => {
         const canvas = document.getElementById('cert-chart-preview');
-        if (!canvas || !window.Chart) return;
+        if (!canvas) {
+            if (attempt < 15) {
+                setTimeout(() => renderCertChart(data, attempt + 1), 50);
+            }
+            return;
+        }
+        if (!window.Chart) return;
 
         const ctx = canvas.getContext('2d');
         if (chartRefs.current['preview']) chartRefs.current['preview'].destroy();
@@ -1071,6 +1428,76 @@ const CertificatMeteoManager = () => {
         });
     };
 
+
+    const formatCustomText = (text) => {
+        if (!text) return '';
+        
+        const protectedItems = [];
+        let tempText = text;
+        
+        // Protect dates, times, phone numbers, and standalone 4-digit years from number highlighting
+        const protectRegexes = [
+            /(?:\+33\s*[1-9](?:[\s.-]?\d{2}){4})|(?:\b0[1-9](?:[\s.-]?\d{2}){4}\b)/gi,
+            /\b\d{1,2}\s+(?:janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+\d{4}\b/gi,
+            /\b\d{1,2}\s+(?:janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\b/gi,
+            /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g,
+            /\b\d{1,2}h\d{2}\b/gi,
+            /\b\d{1,2}:\d{2}\b/g,
+            /\b\d{1,2}\s*h\b/gi,
+            /\b\d{4}\b/g
+        ];
+        
+        protectRegexes.forEach((regex) => {
+            tempText = tempText.replace(regex, (match) => {
+                const placeholder = `||PROT_HL_${protectedItems.length}||`;
+                protectedItems.push({ placeholder, value: match });
+                return placeholder;
+            });
+        });
+        
+        // Match numbers, decimals, negatives, and weather units
+        const numRegex = /(?:-?\d+(?:[\.,]\d+)?\s*(?:mm|°C|°|hPa|km\/h|%|cm|m\/s|km)\b)|(?:-?\b\d+[\.,]\d+\b)|(?:\b-?\d{1,3}\b)|(?:\b-?\d{5,}\b)/gi;
+        const highlightItems = [];
+        
+        tempText = tempText.replace(numRegex, (match) => {
+            const placeholder = `||NUM_HL_${highlightItems.length}||`;
+            highlightItems.push({ placeholder, value: match });
+            return placeholder;
+        });
+        
+        // Escape HTML
+        let escaped = tempText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+            
+        // Restore highlighted items with CSS styled span
+        highlightItems.forEach(({ placeholder, value }) => {
+            const escapedValue = value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+            escaped = escaped.replace(placeholder, `<span class="cert-value-essential" style="font-weight: 800; color: #003366;">${escapedValue}</span>`);
+        });
+        
+        // Restore protected items unchanged
+        protectedItems.forEach(({ placeholder, value }) => {
+            const escapedValue = value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+            escaped = escaped.replace(placeholder, escapedValue);
+        });
+        
+        return escaped;
+    };
+
     const generateReport = () => {
         if (!globalData.rows) return;
         const { stats, rows } = globalData;
@@ -1078,90 +1505,58 @@ const CertificatMeteoManager = () => {
 
         let html = `
             <div class="cert-page">
-                <style>
-                    .cert-page { font-family: Arial, sans-serif; color: #334155; }
-                    /* PREMIUM DARK BLUE THEME (Match Attestation) */
-                    .cert-section-header { 
-                        background: #f1f5f9 !important; 
-                        color: #000 !important; 
-                        padding: 5px 8px; 
-                        font-weight: 900; 
-                        font-size: 10pt;
-                        text-transform: uppercase; 
-                        margin-top: 15px; 
-                        margin-bottom: 5px; 
-                        border-left: 6px solid #003366; 
-                        -webkit-print-color-adjust: exact;
-                    }
-                    .cert-main-title-box { 
-                        border: 2px solid #000; 
-                        padding: 5px; 
-                        text-align: center; 
-                        margin-top: 10px; 
-                        margin-bottom: 10px; 
-                        background: #fff; 
-                    }
-                    .cert-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 9pt; }
-                    .cert-table th { 
-                        background: #1e293b !important; 
-                        color: white !important; 
-                        padding: 8px; 
-                        border: 1px solid #000; 
-                        text-transform: uppercase; 
-                        font-size: 8.5pt; 
-                    }
-                    .cert-table td { 
-                        padding: 6px; 
-                        border: 1px solid #64748b; 
-                        font-size: 9pt; 
-                        text-align: center; 
-                    }
-                    .cert-table tr:nth-child(even) { background-color: #f8fafc; }
-                    
-                    .highlight-card { flex: 1; padding: 10px; border: 1px solid #000; border-radius: 4px; background: #fff; text-align: center; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
-                    .hc-title { font-size: 7.5pt; color: #64748b; text-transform: uppercase; margin-bottom: 2px; font-weight: bold; }
-                    .hc-val { font-size: 14pt; font-weight: 900; color: #003366; }
-                    .hc-unit { font-size: 9pt; color: #64748b; margin-left: 2px; }
-                    
-                    .cert-value-essential { font-weight: bold; color: #003366; }
-                </style>
+                ${getCommonStyles(false)}
                 
-                <div class="cert-header-combined" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">
+                <div class="cert-header-combined">
                     <div class="header-left">
-                        <div class="cert-logo"><img src="${companyLogo || '/logo_mcp.png'}" alt="MÉTÉO CLIMAT PRO" style="max-height: 50px;" /></div>
-                        <div class="cert-emitter-info" style="margin-top: 5px; font-size: 8pt; color: #475569;">
-                            ${emitterAddress || '---'}<br/>${emitterZip || '---'} ${emitterCity || '---'}<br/>
-                            Tel : <span style="font-weight: 600; color: #0f172a;">${emitterPhone || '---'}</span>
-                            <div style="font-weight: 700; color: #003366; text-transform: uppercase; margin-top: 2px;">Expertise Météo-Climatologique</div>
+                        <div class="cert-logo"><img src="${companyLogo || '/logo_mcp.png'}" alt="MÉTÉO CLIMAT PRO" /></div>
+                        <div class="cert-emitter-info">
+                            <div>${emitterAddress || '---'}</div>
+                            <div>${emitterZip || '---'} ${emitterCity || '---'}</div>
+                            <div>Tel : <span>${emitterPhone || '---'}</span></div>
+                            <div class="signature-title">Expertise Météo-Climatologique</div>
                         </div>
                     </div>
-                    <div class="header-right" style="margin-top: 10px;">
-                        <div class="cert-client-box" style="border-left: 3px solid #003366; padding-left: 10px;">
+                    <div class="header-right">
+                        <div class="cert-client-box">
                             <div class="cert-client-info">
-                                <div class="cert-main-title" style="font-size: 11pt; font-weight: 900; color: #0f172a; text-transform: uppercase;">${clientName || '---'}</div>
-                                <div style="font-size: 9pt; color: #334155;">${clientAddress || '---'}</div>
-                                <div style="font-size: 9pt; color: #334155;">${clientZip || ''} ${clientCity || ''}</div>
-                                <div class="ref-box" style="margin-top: 5px; background: #003366; color: white; padding: 2px 8px; border-radius: 4px; display: inline-block; font-weight: bold; font-size: 7.5pt;">Réf. ${certRef || '---'}</div>
+                                <div class="cert-main-title">${clientName || '---'}</div>
+                                <div>${clientAddress || '---'}</div>
+                                <div>${clientZip || ''} ${clientCity || ''}</div>
+                                <div class="ref-box">Réf. ${certRef || '---'}</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="cert-main-title-box">
-                    <h1 style="margin: 0; font-size: 16pt; letter-spacing: 1px; color: #003366; text-transform: uppercase;">CERTIFICAT D'INTEMPÉRIE</h1>
-                    <div style="font-weight: 800; color: #000; margin-top: 2px; font-size: 10pt; text-transform: uppercase;">${certType}</div>
+                    <h1>CERTIFICAT D'INTEMPÉRIE</h1>
+                    <div>${certType}</div>
                 </div>
 
-                <div style="margin-top: 10px;">
+                <div style="margin-top: 5px;">
                      ${getPhenomenonClassification(certType, stats)}
                 </div>
 
                 <div class="cert-section-header">DESCRIPTION DE LA SITUATION MÉTÉOROLOGIQUE</div>
-                <div class="cert-text-block" style="line-height: 1.4; text-align: justify; font-size: 9.5pt;">${customSynthesis || generateSynthesisText(stats, rows)}</div>
+                <div class="cert-text-block">${formatCustomText(customSynthesis || generateSynthesisText(stats, rows))}</div>
 
                 <div class="cert-section-header">MESURES OBSERVÉES - STATION DE RÉFÉRENCE</div>
-                <div style="font-size: 8.5pt; margin-top: 2px; color: #475569; font-style: italic;">Station officielle : <strong>${stationMeteo} (${selectedStationId})</strong>.</div>
-                <table class="cert-table" style="margin-top: 5px;">
+                ${stationMeteoTemp === stationMeteoRain && stationMeteoRain === stationMeteoWind ? `
+                    <div style="font-size: 8.5pt; margin-top: 2px; color: #475569; font-style: italic; margin-bottom: 6px;">
+                        Station officielle : <strong>${stationMeteoTemp} (${selectedStationId || 'ID inconnu'})</strong>
+                    </div>
+                ` : `
+                    <div style="font-size: 8.5pt; margin-top: 2px; color: #475569; font-style: italic; margin-bottom: 8px;">
+                        <strong style="color: #003366;">Postes de référence :</strong>
+                        <span style="margin-left: 8px; display: inline-block;">Température : <strong>${stationMeteoTemp || 'Non précisé'}</strong></span>
+                        <span style="margin-left: 8px; margin-right: 8px; color: #cbd5e1;">|</span>
+                        <span style="display: inline-block;">Précipitations : <strong>${stationMeteoRain || 'Non précisé'}</strong></span>
+                        <span style="margin-left: 8px; margin-right: 8px; color: #cbd5e1;">|</span>
+                        <span style="display: inline-block;">Vent & Rafales : <strong>${stationMeteoWind || 'Non précisé'}</strong></span>
+                    </div>
+                `}
+                <table class="cert-table">
                     <thead><tr><th>PARAMÈTRE</th><th>VALEUR RELEVÉE</th><th>HEURE / PÉRIODE</th><th>CLASSEMENT</th></tr></thead>
                     <tbody>${getMeasureRows(stats, rows, certType)}</tbody>
                 </table>
@@ -1169,26 +1564,25 @@ const CertificatMeteoManager = () => {
                 ${getNearbyStationsTable()}
 
                 <div class="cert-section-header">CONCLUSION DE L'ANALYSE</div>
-                <div class="cert-text-block" style="line-height: 1.4; font-weight: 500; font-size: 10pt; border: 1px solid #e2e8f0; padding: 8px; background: #f8fafc; border-left: 4px solid #003366;">${customConclusion || generateConclusion(stats, certType)}</div>
+                <div class="cert-conclusion-box">${formatCustomText(customConclusion || generateConclusion(stats, certType))}</div>
 
-                <div class="cert-signature-block" style="margin-top: 20px; text-align: right; padding-right: 20px;">
-                    <div class="signature-date" style="font-style: italic; color: #64748b; font-size: 8.5pt;">Fait à Raimbeaucourt, le ${todayFr}</div>
-                    <div style="margin-top: 10px;">
-                        <div class="signature-title" style="font-weight: bold; text-decoration: underline; font-size: 9pt;">Signature de l'expert</div>
-                        <div class="signature-name" style="font-size: 11pt; font-weight: 900; color: #003366; margin-top: 5px;">Patrick Marlière</div>
-                    </div>
+                <div class="cert-signature-block">
+                    <div class="signature-date">Fait à Raimbeaucourt, le ${todayFr}</div>
+                    <div class="signature-title">Signature de l'expert</div>
+                    <div class="signature-name">Patrick Marlière</div>
                 </div>
             </div>
             
-            ${getDetailedRecordsHtml(rows)}
+            ${showDetailedRecords ? getDetailedRecordsHtml(rows) : ''}
         `;
 
         if (showCharts) {
-            const chartPageNum = 1 + Object.keys(rows.reduce((acc, r) => {
+            const dayCount = showDetailedRecords ? Object.keys(rows.reduce((acc, r) => {
                 const d = r.time.toLocaleDateString('fr-FR');
                 if (!acc[d]) acc[d] = 1;
                 return acc;
-            }, {})).length + 1;
+            }, {})).length : 0;
+            const chartPageNum = 1 + dayCount + 1;
 
             const totalPages = chartPageNum; // Last page
 
@@ -1198,7 +1592,7 @@ const CertificatMeteoManager = () => {
 
             html += `
                 <div class="cert-page" style="page-break-before: always; display: flex; flex-direction: column;">
-                     <div style="border: 2px solid #000; padding: 10px 5px; text-align: center; margin-top: 20px; margin-bottom: 20px;">
+                     <div style="border: 2px solid #000; padding: 10px 15px; text-align: left; margin-top: 20px; margin-bottom: 20px;">
                         <h2 style="color: #003366; font-size: 13pt; margin: 0; font-weight: 900; text-transform: uppercase;">ANNEXE : REPRÉSENTATION GRAPHIQUE</h2>
                         <div style="font-size: 10pt; font-weight: 700; color: #000; margin-top: 5px; text-transform: capitalize;">
                             ${dateRangeLabel} - Station : ${stationMeteo}
@@ -1212,7 +1606,7 @@ const CertificatMeteoManager = () => {
                         <canvas id="cert-chart-preview"></canvas>
                     </div>
 
-                    <div style="margin-top: auto; font-size: 9pt; color: #64748b; font-style: italic; text-align: center; padding-bottom: 20px;">
+                    <div style="margin-top: auto; font-size: 9pt; color: #64748b; font-style: italic; text-align: left; padding-bottom: 20px;">
                         Visualisation chronologique des principaux paramètres météorologiques de la période.
                     </div>
                 </div>
@@ -1228,145 +1622,127 @@ const CertificatMeteoManager = () => {
 
     useEffect(() => {
         if (globalData.rows) generateReport();
-    }, [globalData, customSynthesis, customConclusion, showCharts, showWindAvg, showValuesUnderTitle, showWindParams, showRainParams, showTempParams, showDetailedHumi, showDetailedPres, showDetailedVis]);
+    }, [globalData, customSynthesis, customConclusion, showCharts, showWindAvg, showValuesUnderTitle, showWindParams, showRainParams, showTempParams, showDetailedHumi, showDetailedPres, showDetailedVis, stationMeteo, showDetailedRecords, stationMeteoTemp, stationMeteoRain, stationMeteoWind, annexCols]);
 
-    const getCommonStyles = () => `
+    const getCommonStyles = (isPrint = false) => `
         <style>
-            @page { size: A4; margin: 0; }
-            body { margin: 0; font-family: 'Arial', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            ${isPrint ? `
+                @page { size: A4; margin: 0; }
+                body { margin: 0; font-family: 'Arial', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #ffffff; }
+                .no-print { display: none!important; }
+            ` : ''}
+            
             .cert-page {
+                font-family: 'Arial', sans-serif;
+                color: #334155;
                 width: 210mm;
                 min-height: 297mm;
-                padding: 15mm 15mm;
+                padding: 12mm 12mm 8mm 12mm;
                 box-sizing: border-box;
                 background: white;
-                color: #334155;
                 font-size: 9pt;
                 display: flex;
                 flex-direction: column;
-            }
-            .cert-section-header { 
-                background: #003366 !important; 
-                color: white !important; 
-                padding: 6px 10px; 
-                font-weight: bold; 
-                text-transform: uppercase; 
-                margin-top: 20px; 
-                margin-bottom: 10px; 
-                border-left: 5px solid #000; 
-                -webkit-print-color-adjust: exact;
-            }
-            .cert-table th { 
-                background: #1e293b !important; 
-                color: white !important; 
-                -webkit-print-color-adjust: exact;
+                margin: ${isPrint ? '0' : '0 auto 20px auto'};
+                box-shadow: ${isPrint ? 'none' : '0 10px 25px rgba(0, 0, 0, 0.15)'};
+                position: relative;
+                border-radius: 2px;
+                page-break-inside: avoid;
+                page-break-after: always;
             }
             .cert-page:last-child { page-break-after: avoid; }
-            .cert-header-combined { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; width: 100%; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
-            .cert-logo img { max-height: 55px; object-fit: contain; }
+            
+            .cert-header-combined { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: flex-start; 
+                margin-bottom: 8px; 
+                width: 100%; 
+                border-bottom: 1px solid #f1f5f9; 
+                padding-bottom: 8px; 
+            }
+            .cert-logo img { max-height: 50px; object-fit: contain; }
             .cert-emitter-info { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-            .cert-emitter-info div { font-size: 8.5pt; color: #475569; line-height: 1.3; }
+            .cert-emitter-info div { font-size: 8.5pt; color: #475569; line-height: 1.4; }
             .cert-emitter-info span { color:#0f172a; font-weight: 600; }
             .cert-emitter-info .signature-title { font-weight: 700; color: #003366; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
-            .cert-client-box { text-align: left; min-width: 250px; border-left: 2px solid #e2e8f0; padding-left: 15px; }
+            
+            .cert-client-box { text-align: left; min-width: 250px; border-left: 2px solid #003366; padding-left: 12px; }
             .cert-client-info { font-family: sans-serif; }
-            .cert-client-info div { font-size: 9.5pt; color: #1e293b; line-height: 1.3; }
+            .cert-client-info div { font-size: 9pt; color: #1e293b; line-height: 1.4; }
             .cert-client-info .cert-main-title { font-size: 11pt; color: #0f172a; text-transform: uppercase; margin-bottom: 2px; font-weight: 900; }
-            .cert-client-info .ref-box { margin-top: 8px; padding: 4px 10px; background: #003366; color: white; border-radius: 4px; display: inline-block; }
-            .cert-client-info .ref-box div { font-size: 9pt; font-weight: 700; }
-            .cert-main-title-box { margin-bottom: 4px; border: 2px solid #000; padding: 2px 8px; box-shadow: none; width: 100%; box-sizing: border-box; }
-            .cert-main-title-box h1 { letter-spacing: 1px; margin-bottom: 0px; font-size: 13pt; color: #000; }
-            .cert-main-title-box div { font-size: 9pt; color: #003366; font-weight: 800; border-top: 1px solid #000; padding-top: 1px; margin-top: 1px; text-transform: uppercase; }
-            .cert-info-row { display: flex; margin-bottom: 0; }
-            .cert-info-label { width: 130px; font-size: 8pt; }
-            .cert-info-val { font-size: 8pt; }
-            .cert-section-header { margin-top: 2px; font-size: 9pt; padding: 2px 8px; background: #e2e8f0; color: #003366; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
-            .cert-text-block { margin-bottom: 8px; font-size: 9.5pt; line-height: 1.35; }
-            .cert-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 10px; }
-            .cert-table th, .cert-table td { border: 1px solid #e2e8f0; padding: 4px 8px; text-align: center; }
-            .cert-table th { background-color: #f8fafc; font-weight: bold; color: #003366; }
+            .cert-client-info .ref-box { margin-top: 6px; padding: 3px 8px; background: #003366; color: #ffffff !important; border-radius: 4px; display: inline-block; font-size: 8pt; font-weight: 700; }
+            
+            .cert-main-title-box { 
+                margin-bottom: 8px; 
+                border: 2px solid #003366; 
+                padding: 6px 10px; 
+                box-shadow: none; 
+                width: 100%; 
+                box-sizing: border-box; 
+                text-align: left; 
+                background: #f8fafc;
+                border-radius: 6px;
+            }
+            .cert-main-title-box h1 { letter-spacing: 1px; margin-bottom: 0px; font-size: 14pt; color: #003366; font-weight: 900; }
+            .cert-main-title-box div { font-size: 9.5pt; color: #000; font-weight: 800; border-top: 1px solid #cbd5e1; padding-top: 2px; margin-top: 2px; text-transform: uppercase; }
+            
+            .cert-section-header { 
+                background: #f1f5f9 !important; 
+                color: #000 !important; 
+                padding: 6px 10px; 
+                font-weight: 900; 
+                font-size: 9.5pt;
+                text-transform: uppercase; 
+                margin-top: 12px; 
+                margin-bottom: 6px; 
+                border-left: 5px solid #003366; 
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .cert-text-block { margin-bottom: 8px; font-size: 9pt; line-height: 1.4; text-align: left; white-space: pre-wrap; color: #1e293b; }
+            
+            .cert-conclusion-box {
+                margin-bottom: 12px;
+                font-size: 9.5pt;
+                font-weight: 500;
+                line-height: 1.4;
+                text-align: left;
+                white-space: pre-wrap;
+                color: #1e293b;
+                border: 1px solid #cbd5e1;
+                padding: 10px 14px;
+                background: #f8fafc;
+                border-left: 5px solid #003366;
+                border-radius: 0 4px 4px 0;
+            }
+            
+            .cert-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 8px; }
+            .cert-table th, .cert-table td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; }
+            .cert-table th { background-color: #1e293b !important; font-weight: bold; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .cert-table td { color: #334155; }
             .cert-table tbody tr:nth-child(even) { background-color: #f8fafc; }
-            .cert-value-essential { font-weight: 700; color: #0f172a; }
-            .highlight-card { padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; background: #f8fafc; text-align: center; }
-            .highlight-card .hc-title { font-size: 7pt; margin-bottom: 0px; color: #64748b; text-transform: uppercase; }
-            .highlight-card .hc-val { font-size: 11pt; font-weight: bold; color: #0f172a; }
-            .highlight-card .hc-unit { font-size: 7.5pt; color: #64748b; margin-left: 2px; }
-            .cert-signature-block { margin-top: 2px; width: 220px; text-align: left; margin-left: auto; margin-right: 0; }
-            .signature-date { font-size: 9pt; font-style: italic; margin-bottom: 5px; color: #475569; }
-            .signature-title { font-size: 10pt; font-weight: bold; text-decoration: underline; margin-bottom: 30px; color: #003366; }
-            .signature-name { font-size: 11pt; font-weight: 900; color: #003366; }
-            .btp-modal {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);
-    display: flex; justify-content: center; align-items: center; z-index: 1000;
-}
-            .btp-modal-content {
-    background: white; padding: 20px; border-radius: 8px; max-height: 90vh; overflow-y: auto;
-    width: 90%; max-width: 800px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-            .btp-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-            .btp-modal-header h2 { margin: 0; font-size: 1.25rem; font-weight: bold; color: #003366; }
-            .btp-modal-header button { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #94a3b8; }
-            .btp-modal-header button:hover { color: #64748b; }
-            .btp-btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 10px 15px; border-radius: 6px; font-weight: 600; cursor: pointer;
-    transition: all 0.2s ease-in-out;
-}
-            .btp-btn-primary { background-color: #003366; color: white; border: 1px solid #003366; }
-            .btp-btn-primary:hover { background-color: #002244; }
-            .btp-btn-print { background-color: #22c55e; color: white; border: 1px solid #22c55e; }
-            .btp-btn-print:hover { background-color: #16a34a; }
-            .btp-btn-save { background-color: #f97316; color: white; border: 1px solid #f97316; }
-            .btp-btn-save:hover { background-color: #ea580c; }
-            .text-xs { font-size: 0.75rem; }
-            .font-bold { font-weight: 700; }
-            .text-blue-600 { color: #2563eb; }
-            .bg-blue-50 { background-color: #eff6ff; }
-            .px-10 { padding-left: 10px; padding-right: 10px; }
-            .py-5 { padding-top: 5px; padding-bottom: 5px; }
-            .rounded { border-radius: 0.25rem; }
-            .border { border-width: 1px; border-style: solid; }
-            .border-blue-200 { border-color: #bfdbfe; }
-            .hover\:bg-blue-100:hover { background-color: #dbeafe; }
-            .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
-            .flex { display: flex; }
-            .items-center { align-items: center; }
-            .gap-2 { gap: 8px; }
-            .mb-15 { margin-bottom: 15px; }
-            .btp-layout { display: flex; height: 100vh; }
-            .btp-panel { width: 350px; flex-shrink: 0; background-color: #f8fafc; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto; }
-            .btp-preview-container { flex-grow: 1; background-color: #e2e8f0; display: flex; justify-content: center; align-items: center; padding: 20px; overflow-y: auto; }
+            
+            .cert-value-essential { font-weight: 800; color: #003366; }
+            
+            .highlight-card { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; text-align: left; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+            .highlight-card .hc-title { font-size: 7.5pt; margin-bottom: 2px; color: #64748b; text-transform: uppercase; font-weight: bold; }
+            .highlight-card .hc-val { font-size: 14pt; font-weight: 900; color: #003366; }
+            .highlight-card .hc-unit { font-size: 9pt; color: #64748b; margin-left: 2px; }
+            
+            .cert-signature-block { margin-top: 15px; width: 220px; text-align: left; margin-left: 0; margin-right: auto; padding-left: 10px; }
+            .signature-date { font-size: 8.5pt; font-style: italic; margin-bottom: 4px; color: #64748b; }
+            .signature-title { font-size: 9.5pt; font-weight: bold; text-decoration: underline; margin-bottom: 15px; color: #003366; }
+            .signature-name { font-size: 10.5pt; font-weight: 900; color: #003366; }
+            
             .certificat-full-preview {
-    background: white;
-    width: 210mm; /* A4 width */
-    min-height: 297mm; /* A4 height */
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    overflow: hidden; /* To contain page-break-after */
-}
-            .no-print { display: block; }
-@media print {
-                body { margin: 0; }
-                .no-print { display: none!important; }
-                .cert-page {
-        width: 210mm;
-        min-height: 297mm;
-        padding: 15mm 15mm 10mm 15mm;
-        box-sizing: border-box;
-        background: white;
-        color: #334155;
-        font-size: 9pt;
-        page-break-inside: avoid;
-    }
-                .certificat-full-preview {
-        width: auto;
-        min-height: auto;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-    }
-}
-        </style >
+                width: auto;
+                min-height: auto;
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
+            }
+        </style>
     `;
 
     const handlePrint = () => {
@@ -1391,7 +1767,7 @@ const CertificatMeteoManager = () => {
             <html>
                 <head>
                     <title>Certificat Météo - ${clientName || 'Export'}</title>
-                    ${getCommonStyles()}
+                    ${getCommonStyles(true)}
                 </head>
                 <body>
                     ${contentToPrint}
@@ -1454,7 +1830,7 @@ Période: ${dateLabel}
 Lieu: ${clientCity} (${clientZip})
 Phénomène: ${certType}
 
-OBSERVATIONS STATION ${stationMeteo} :
+OBSERVATIONS STATION ${stationMeteoTemp === stationMeteoRain && stationMeteoRain === stationMeteoWind ? stationMeteoTemp : `Temp: ${stationMeteoTemp || '?'}, Pluie: ${stationMeteoRain || '?'}, Vent: ${stationMeteoWind || '?'}`} :
 - Température Min / Max : ${stats.tempMin}°C / ${stats.tempMax}°C
     - Pluie cumulée: ${stats.rainTotal.toFixed(1)} mm
         - Rafale Max: ${stats.windGustMax} km / h ${stats.windGustTime ? `(le ${stats.windGustTime.toLocaleDateString('fr-FR')})` : ''}
@@ -1473,7 +1849,7 @@ Ce relevé est certifié conforme aux données de la station météorologique de
 
             <div className="btp-layout">
                 {/* SIDEBAR UNIFIÉE (Comme Attestation Intempérie) */}
-                <div className="btp-panel no-print" style={{ width: '350px', flexShrink: 0, backgroundColor: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '20px', overflowY: 'auto' }}>
+                <div className="btp-panel no-print btp-sidebar-scroll">
                     <div className="flex justify-between items-center mb-15">
                         <button className="text-xs font-bold text-blue-600 bg-blue-50 px-10 py-5 rounded border border-blue-200 hover:bg-blue-100 transition-all flex items-center gap-2" onClick={fetchArchives}>
                             <Briefcase size={14} /> Consulter les Archives
@@ -1481,14 +1857,16 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                     </div>
 
                     {/* 1. CONFIGURATION */}
-                    <div className="btp-panel-head">
+                    <div className="btp-panel-head cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, config: !prev.config }))}>
                         <div className="flex items-center">
                             <div className="btp-step-num">1</div>
                             <div className="btp-panel-title">Configuration</div>
                         </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.config ? '▼' : '►'}</span>
                     </div>
 
-                    <div className="btp-form-grid">
+                    {panelOpen.config && (
+                        <div className="btp-form-grid">
                         <div className="btp-form-group">
                             <label>Nom du Client / Tiers</label>
                             <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ex: Jean Dupont" />
@@ -1520,8 +1898,8 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                                     onClick={() => setIsPeriod(!isPeriod)}
                                     title="Basculer entre Date unique et Période"
                                 >
-                                    <span className={`text - xs px - 3 py - 1 rounded - full transition - all ${!isPeriod ? 'bg-white shadow font-bold text-blue-600' : 'text-slate-500'} `}>Date</span>
-                                    <span className={`text - xs px - 3 py - 1 rounded - full transition - all ${isPeriod ? 'bg-white shadow font-bold text-blue-600' : 'text-slate-500'} `}>Période</span>
+                                    <span className={`text-xs px-3 py-1 rounded-full transition-all ${!isPeriod ? 'bg-white shadow font-bold text-blue-600' : 'text-slate-500'} `}>Date</span>
+                                    <span className={`text-xs px-3 py-1 rounded-full transition-all ${isPeriod ? 'bg-white shadow font-bold text-blue-600' : 'text-slate-500'} `}>Période</span>
                                 </div>
                             </div>
                             <div className="flex gap-2">
@@ -1572,24 +1950,111 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                             </div>
                         </div>
 
+                        <div className="flex items-center gap-2 mt-10 mb-5">
+                            <input 
+                                type="checkbox" 
+                                id="chk-show-detailed-stations"
+                                checked={showDetailedStations} 
+                                onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setShowDetailedStations(checked);
+                                    if (!checked) {
+                                        setStationMeteoTemp(stationMeteo);
+                                        setStationMeteoRain(stationMeteo);
+                                        setStationMeteoWind(stationMeteo);
+                                    }
+                                }} 
+                            />
+                            <label htmlFor="chk-show-detailed-stations" className="text-xs cursor-pointer font-semibold text-slate-700">
+                                Différencier les stations par paramètre
+                            </label>
+                        </div>
+
+                        {!showDetailedStations ? (
+                            <div className="btp-form-group">
+                                <label>Poste de référence (éditable)</label>
+                                <input 
+                                    value={stationMeteo} 
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setStationMeteo(val);
+                                        setStationMeteoTemp(val);
+                                        setStationMeteoRain(val);
+                                        setStationMeteoWind(val);
+                                    }} 
+                                    placeholder="Nom de la station..." 
+                                />
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 p-10 rounded border border-slate-200 flex flex-col gap-2 mt-5">
+                                <div className="btp-form-group">
+                                    <label className="text-xs font-bold text-slate-600">Température</label>
+                                    <input 
+                                        className="text-xs p-5 border rounded w-full"
+                                        value={stationMeteoTemp} 
+                                        onChange={(e) => setStationMeteoTemp(e.target.value)} 
+                                        placeholder="Poste Température..." 
+                                    />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label className="text-xs font-bold text-slate-600">Précipitations</label>
+                                    <input 
+                                        className="text-xs p-5 border rounded w-full"
+                                        value={stationMeteoRain} 
+                                        onChange={(e) => setStationMeteoRain(e.target.value)} 
+                                        placeholder="Poste Précipitations..." 
+                                    />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label className="text-xs font-bold text-slate-600">Vent & Rafales</label>
+                                    <input 
+                                        className="text-xs p-5 border rounded w-full"
+                                        value={stationMeteoWind} 
+                                        onChange={(e) => setStationMeteoWind(e.target.value)} 
+                                        placeholder="Poste Vent..." 
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <button className="btp-btn btp-btn-primary mt-15" onClick={handleFetchData}>
                             <Download size={18} /> Générer le Certificat
                         </button>
 
+                        <div className="mt-10">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
+                                accept=".csv"
+                                onChange={handleFileUpload}
+                            />
+                            <button
+                                className="btp-btn btp-btn-secondary w-full"
+                                style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <FileText size={18} /> Importer un fichier CSV (Données BTP)
+                            </button>
+                        </div>
+
                         {status && <div className="mt-10 p-10 border rounded text-xs bg-slate-50 border-blue-100 text-blue-800" dangerouslySetInnerHTML={{ __html: status }} />}
-                    </div>
+                        </div>
+                    )}
 
                     {/* 2. PERSONNALISATION */}
                     {globalData.rows && (
                         <>
-                            <div className="btp-panel-head mt-20">
+                            <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, custom: !prev.custom }))}>
                                 <div className="flex items-center">
                                     <div className="btp-step-num">2</div>
                                     <div className="btp-panel-title">Personnalisation</div>
                                 </div>
+                                <span className="text-xs text-slate-400 font-bold">{panelOpen.custom ? '▼' : '►'}</span>
                             </div>
 
-                            <div className="btp-form-grid">
+                            {panelOpen.custom && (
+                                <div className="btp-form-grid">
                                 <div className="btp-form-group">
                                     <label className="text-xs font-bold text-slate-500 mb-5 uppercase">Synthèse de l'Expert</label>
                                     <textarea
@@ -1617,8 +2082,49 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                                         <input type="checkbox" checked={showValuesUnderTitle} onChange={e => setShowValuesUnderTitle(e.target.checked)} />
                                         Inclure Tableaux Synthèse
                                     </label>
+                                    <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                        <input type="checkbox" checked={showDetailedRecords} onChange={e => setShowDetailedRecords(e.target.checked)} />
+                                        Inclure l'Annexe (Relevés détaillés)
+                                    </label>
+
+                                    {showDetailedRecords && (
+                                        <div className="ml-15 pl-10 border-l-2 border-slate-200 mt-5 bg-slate-50/50 p-5 rounded">
+                                            <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider mb-2">Paramètres de l'annexe</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.temp} onChange={e => setAnnexCols(prev => ({ ...prev, temp: e.target.checked }))} />
+                                                    Température (°C)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.rain} onChange={e => setAnnexCols(prev => ({ ...prev, rain: e.target.checked }))} />
+                                                    Précipitations (mm)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.windA} onChange={e => setAnnexCols(prev => ({ ...prev, windA: e.target.checked }))} />
+                                                    Vent Moyen (km/h)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.windG} onChange={e => setAnnexCols(prev => ({ ...prev, windG: e.target.checked }))} />
+                                                    Rafales (km/h)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.humi} onChange={e => setAnnexCols(prev => ({ ...prev, humi: e.target.checked }))} />
+                                                    Humidité (%)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.pres} onChange={e => setAnnexCols(prev => ({ ...prev, pres: e.target.checked }))} />
+                                                    Pression (hPa)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={annexCols.vis} onChange={e => setAnnexCols(prev => ({ ...prev, vis: e.target.checked }))} />
+                                                    Visibilité (km)
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
+                        )}
                         </>
                     )}
 
@@ -1725,6 +2231,79 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                     </div>
                 )
             }
+
+            {/* MERGE OPTIONS MODAL */}
+            {showMergeModal && (
+                <div className="btp-modal open">
+                    <div className="btp-modal-content" style={{ maxWidth: '500px' }}>
+                        <div className="btp-modal-header">
+                            <h2 className="text-xl font-bold flex items-center gap-2"><FileText /> Option d'Importation CSV</h2>
+                            <button onClick={() => setShowMergeModal(false)} className="text-slate-400 hover:text-slate-600">×</button>
+                        </div>
+                        <div className="p-20">
+                            <p className="text-xs text-slate-500 mb-10">
+                                Fichier station : <strong>{csvStationId}</strong><br/>
+                                Période du fichier : {csvDates.firstDate?.toLocaleDateString()} au {csvDates.lastDate?.toLocaleDateString()}
+                            </p>
+
+                            <div className="mb-15">
+                                <label className="block text-xs font-bold text-slate-700 mb-5">Nom du poste de référence :</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-slate-300 rounded p-8 text-sm focus:outline-none focus:border-blue-500" 
+                                    value={csvStationName} 
+                                    onChange={e => setCsvStationName(e.target.value)} 
+                                    placeholder="Ex: Lille, Douai..."
+                                />
+                                <span className="text-xxs text-slate-400 block mt-2">Ce nom sera appliqué aux paramètres cochés ci-dessous lors de l'intégration.</span>
+                            </div>
+
+                            <div className="mb-20">
+                                <label className="block text-sm font-bold text-slate-700 mb-10">Paramètres à importer :</label>
+                                <div className="flex flex-col gap-3 bg-slate-50 p-10 rounded border border-slate-200">
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" checked={mergeOptionTemp} onChange={e => setMergeOptionTemp(e.target.checked)} />
+                                        Températures (Min / Max / Moyenne)
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" checked={mergeOptionRain} onChange={e => setMergeOptionRain(e.target.checked)} />
+                                        Pluie (Cumul)
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" checked={mergeOptionWind} onChange={e => setMergeOptionWind(e.target.checked)} />
+                                        Vent & Rafales
+                                    </label>
+                                </div>
+                            </div>
+
+                            {globalData.rows && globalData.rows.length > 0 && (
+                                <div className="mb-20">
+                                    <label className="block text-sm font-bold text-slate-700 mb-10">Mode d'intégration :</label>
+                                    <div className="flex gap-15">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                            <input type="radio" name="mergeMode" checked={mergeMode === 'merge'} onChange={() => setMergeMode('merge')} />
+                                            Fusionner avec les données existantes
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                            <input type="radio" name="mergeMode" checked={mergeMode === 'overwrite'} onChange={() => setMergeMode('overwrite')} />
+                                            Écraser (Remplacer tout)
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-10 mt-20">
+                                <button className="bg-slate-200 text-slate-700 px-15 py-8 rounded font-semibold hover:bg-slate-300 transition-all text-sm" onClick={() => setShowMergeModal(false)}>
+                                    Annuler
+                                </button>
+                                <button className="bg-emerald-600 text-white px-15 py-8 rounded font-semibold hover:bg-emerald-700 transition-all text-sm flex items-center gap-5" onClick={handleConfirmMerge}>
+                                    <Save size={16} /> Importer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

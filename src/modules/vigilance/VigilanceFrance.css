@@ -358,29 +358,48 @@
 
 .map-legend-official {
     display: flex;
-    justify-content: center;
-    gap: 30px;
-    margin-top: 25px;
-    padding: 15px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 15px;
+    padding: 8px 16px;
     background: #f8fafc;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid #e2e8f0;
+}
+
+.map-legend-official .legend-prefix {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #475569;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.map-legend-official .legend-items-list {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .map-legend-official .legend-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 1rem;
-    font-weight: 800;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
     color: #1e293b;
+    white-space: nowrap;
 }
 
 .map-legend-official .dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, 0.2);
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
 }
 
 /* 📅 STYLE OVERLAY SUR CARTE PRINCIPALE */
@@ -1769,4 +1788,97 @@
 
 .region-hub-map-container:hover svg {
     transform: scale(1.05);
+}
+
+/* --- FOREST FIRE Danger levels explanation inside map panel --- */
+.forest-fire-explanation-panel {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.forest-fire-explanation-panel .explanation-title {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #1e3a8a;
+    margin-top: 0;
+    margin-bottom: 12px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.forest-fire-levels-grid-mini {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.forest-fire-level-card-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.level-card-header-mini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.level-circle-icon-mini {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.level-circle-icon-mini .tree-svg {
+    width: 12px;
+    height: 12px;
+}
+
+.forest-fire-level-card-mini h5 {
+    font-size: 0.72rem;
+    font-weight: 800;
+    margin: 0;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.forest-fire-level-card-mini p {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: #475569;
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .forest-fire-levels-grid-mini {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+}
+
+@media (max-width: 550px) {
+    .map-legend-official {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .map-legend-official .legend-items-list {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 400px) {
+    .forest-fire-levels-grid-mini {
+        grid-template-columns: 1fr;
+    }
 }

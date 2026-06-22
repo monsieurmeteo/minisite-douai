@@ -33,10 +33,10 @@
 .btp-panel {
     background: var(--surface);
     border-radius: 12px;
-    padding: 25px;
+    padding: 15px 18px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
     border: 1px solid var(--border);
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .btp-panel-head {
@@ -129,11 +129,11 @@
 .btp-manager-container input,
 .btp-manager-container select {
     width: 100%;
-    padding: 10px;
+    padding: 6px 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 0.95rem;
-    margin-bottom: 5px;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
     box-sizing: border-box;
     background: white;
 }
@@ -428,8 +428,8 @@
 
 .btp-form-grid {
     display: grid;
-    gap: 15px;
-    margin-bottom: 15px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
 .btp-cols-2 {
@@ -446,10 +446,10 @@
 }
 
 .btp-form-group label {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #64748b;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -860,7 +860,7 @@
     min-height: 297mm;
     background: white;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-    padding: 15mm !important;
+    padding: 12mm 12mm 8mm 12mm !important;
     box-sizing: border-box;
     position: relative;
     border-radius: 2px;
@@ -1046,17 +1046,17 @@ canvas {
 
 .cert-page {
     background: white;
-    padding: 10mm 10mm;
+    padding: 12mm 12mm 8mm 12mm;
     margin: 0;
     box-shadow: none;
     border: none;
     position: relative;
     page-break-after: always;
     font-family: 'Arial', sans-serif;
-    color: #000;
+    color: #334155;
     width: 210mm;
     height: auto;
-    min-height: 290mm;
+    min-height: 297mm;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -1118,8 +1118,8 @@ canvas {
 /* Title box refinement */
 .cert-main-title-box {
     border: 2px solid #000;
-    padding: 8px;
-    text-align: center;
+    padding: 10px 15px;
+    text-align: left;
     margin: 10px 0;
     background: #fff;
 }
@@ -1160,9 +1160,9 @@ canvas {
     color: #000;
     font-weight: 800;
     font-size: 11pt;
-    padding: 6px 10px;
-    margin-top: 15px;
-    margin-bottom: 10px;
+    padding: 10px 14px;
+    margin-top: 25px;
+    margin-bottom: 12px;
     text-transform: uppercase;
     border-left: 5px solid #003366;
     display: flex;
@@ -1170,10 +1170,11 @@ canvas {
 }
 
 .cert-text-block {
-    font-size: 12pt;
-    line-height: 1.5;
-    text-align: justify;
-    margin-bottom: 15px;
+    font-size: 11.5pt;
+    line-height: 1.6;
+    text-align: left;
+    white-space: pre-wrap;
+    margin-bottom: 18px;
     color: #000;
 }
 
@@ -1181,24 +1182,22 @@ canvas {
 .cert-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 10px;
-    /* Reduced from 15px */
-    font-size: 9pt;
-    /* Reduced from 10pt */
+    margin-top: 15px;
+    font-size: 10pt;
 }
 
 .cert-table th {
     background-color: #1e293b;
     color: #ffffff;
     font-weight: 800;
-    padding: 5px 8px;
+    padding: 10px 12px;
     text-transform: uppercase;
     font-size: 10pt;
     border: 1px solid #1e293b;
 }
 
 .cert-table td {
-    padding: 4px 8px;
+    padding: 8px 12px;
     border: 1px solid #e2e8f0;
     font-size: 10pt;
     color: #000;
@@ -1236,8 +1235,8 @@ canvas {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
-    padding: 10px 15px;
-    text-align: center;
+    padding: 12px 18px;
+    text-align: left;
     flex: 1;
     min-width: 120px;
 }
@@ -1247,17 +1246,17 @@ canvas {
     text-transform: uppercase;
     color: #64748b;
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 
 .hc-val {
-    font-size: 16pt;
+    font-size: 18pt;
     font-weight: 800;
     color: #003366;
 }
 
 .hc-unit {
-    font-size: 9pt;
+    font-size: 9.5pt;
     margin-left: 3px;
     color: #334155;
 }
@@ -1270,11 +1269,12 @@ canvas {
 
 /* Signature Block */
 .cert-signature-block {
-    margin-top: 20px;
+    margin-top: 35px;
     width: 250px;
     text-align: left;
-    margin-left: auto;
-    /* Pushes block to the right in flex or block flow */
+    margin-left: 0;
+    margin-right: auto;
+    /* Aligned to the left */
     display: block;
 }
 
@@ -1352,10 +1352,10 @@ canvas {
 .cert-form-group input,
 .cert-form-group select {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .flex-row {
