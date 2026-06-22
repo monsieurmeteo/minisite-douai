@@ -59,6 +59,12 @@ const AttestationIntemperieManager = () => {
     const [archives, setArchives] = useState([]);
     const [showArchivesModal, setShowArchivesModal] = useState(false);
     const [loadingArchives, setLoadingArchives] = useState(false);
+    const [panelOpen, setPanelOpen] = useState({
+        client: true,
+        period: true,
+        thresholds: false,
+        conclusion: false
+    });
 
     const chartRefs = useRef({});
     const fileInputRef = useRef(null);
@@ -436,7 +442,7 @@ const AttestationIntemperieManager = () => {
                 color: black;
             }
             .cert-page:last-child { page-break-after: auto; }
-            .cert-main-title-box { border: 2px solid #000; padding: 8px; text-align: center; margin-bottom: 20px; }
+            .cert-main-title-box { border: 2px solid #000; padding: 10px 15px; text-align: left; margin-bottom: 20px; }
             .cert-main-title { font-size: 18pt; font-weight: 800; color: #003366; margin: 0; text-transform: uppercase; }
             .cert-section-header { background: #003366 !important; color: white !important; padding: 6px 10px; font-weight: bold; margin-top: 15px; text-transform: uppercase; border-left: 5px solid #000; }
             .cert-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 8.5pt; line-height: 1.1; }
@@ -508,6 +514,111 @@ const AttestationIntemperieManager = () => {
         `;
     };
 
+    const getExtremesClassificationTableHtml = () => {
+        if (!globalData) return '';
+        const days = Object.entries(globalData).map(([date, data]) => ({
+            date,
+            stats: data.stats
+        }));
+        if (days.length === 0) return '';
+
+        // Wind Max
+        let maxGustDay = days[0];
+        days.forEach(d => {
+            if ((d.stats.gustMax || 0) > (maxGustDay.stats.gustMax || 0)) {
+                maxGustDay = d;
+            }
+        });
+        const maxGustVal = Math.round(maxGustDay.stats.gustMax || 0);
+        const maxGustDateStr = new Date(maxGustDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const maxGustTimeStr = maxGustDay.stats.gustTime && maxGustDay.stats.gustTime !== 'N/A' ? ` à ${maxGustDay.stats.gustTime}` : '';
+        const maxGustLabel = maxGustVal >= 100 ? "TEMPÊTE" :
+                             maxGustVal >= 70 ? "VENTS TRÈS FORTS" :
+                             maxGustVal >= 40 ? "VENTS FORTS" :
+                             maxGustVal >= 20 ? "VENTS MODÉRÉS" : "Vents Faibles";
+
+        // Rain Max
+        let maxRainDay = days[0];
+        days.forEach(d => {
+            if ((d.stats.rainTotal || 0) > (maxRainDay.stats.rainTotal || 0)) {
+                maxRainDay = d;
+            }
+        });
+        const maxRainVal = maxRainDay.stats.rainTotal || 0;
+        const maxRainDateStr = new Date(maxRainDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const maxRainLabel = maxRainVal >= 40 ? "PLUIES EXCEPTIONNELLES" :
+                             maxRainVal >= 30 ? "PLUIES ABONDANTES" :
+                             maxRainVal >= 20 ? "PLUIES TRÈS FORTES" :
+                             maxRainVal >= 10 ? "PLUIES FORTES" :
+                             maxRainVal >= 5 ? "Pluies Modérées" : "Pluies Faibles";
+
+        // Temp Min
+        let minTempDay = days[0];
+        days.forEach(d => {
+            if (d.stats.tmin < minTempDay.stats.tmin) {
+                minTempDay = d;
+            }
+        });
+        const minTempVal = minTempDay.stats.tmin;
+        const minTempDateStr = new Date(minTempDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const minTempLabel = minTempVal <= -10 ? "GRAND FROID" :
+                             minTempVal <= -5 ? "FROID INTENSE" :
+                             minTempVal <= 0 ? "GEL" : "Températures Normales";
+
+        // Temp Max
+        let maxTempDay = days[0];
+        days.forEach(d => {
+            if (d.stats.tmax > maxTempDay.stats.tmax) {
+                maxTempDay = d;
+            }
+        });
+        const maxTempVal = maxTempDay.stats.tmax;
+        const maxTempDateStr = new Date(maxTempDay.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const maxTempLabel = maxTempVal >= 35 ? "CANICULE" :
+                             maxTempVal >= 30 ? "TRÈS CHAUD" :
+                             maxTempVal >= 25 ? "CHALEUR" : "Températures Normales";
+
+        return `
+            <div class="cert-section-header" style="margin-top: 15px;">VALEURS EXTRÊMES ET CLASSIFICATION</div>
+            <table class="cert-table" style="margin-top: 5px;">
+                <thead>
+                    <tr style="background:#f1f5f9;">
+                        <th style="text-align:left; border: 1px solid #000; padding: 4px;">PHÉNOMÈNE</th>
+                        <th style="border: 1px solid #000; padding: 4px;">VALEUR ENREGISTRÉE</th>
+                        <th style="border: 1px solid #000; padding: 4px;">DATE D'OBSERVATION</th>
+                        <th style="border: 1px solid #000; padding: 4px;">CLASSIFICATION D'INTENSITÉ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Rafale de vent maximale</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxGustVal} km/h</td>
+                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxGustDateStr}${maxGustTimeStr}</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxGustLabel}</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Précipitations max en 24h</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxRainVal.toFixed(1).replace('.', ',')} mm</td>
+                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxRainDateStr}</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxRainLabel}</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Température minimale</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${minTempVal.toFixed(1).replace('.', ',')} °C</td>
+                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${minTempDateStr}</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${minTempLabel}</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align:left; border: 1px solid #000; padding: 4px; font-weight: bold;">Température maximale</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxTempVal.toFixed(1).replace('.', ',')} °C</td>
+                        <td style="border: 1px solid #000; padding: 4px; color: #475569;">${maxTempDateStr}</td>
+                        <td style="border: 1px solid #000; padding: 4px; font-weight: bold; color: #003366;">${maxTempLabel}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    };
+
     const getSynthesisHtml = () => {
         if (!globalData) return '';
         const startD = new Date(startDate);
@@ -538,10 +649,12 @@ const AttestationIntemperieManager = () => {
                     </tbody>
                 </table>
 
-                <div class="cert-section-header">CONCLUSION DE L'EXPERT</div>
+                ${getExtremesClassificationTableHtml()}
+
+                <div class="cert-section-header" style="margin-top: 15px;">CONCLUSION DE L'EXPERT</div>
                 <div class="cert-text-block" style="margin-top:10px; line-height:1.6; font-size:10.5pt; white-space: pre-wrap; text-align: justify;">${expertConclusion || generateAutoConclusion()}</div>
 
-                <div style="margin-top:10px; padding:12px; border:2px solid #003366; background:#f0f9ff; text-align:center; border-radius: 8px;">
+                <div style="margin-top:10px; padding:12px 16px; border:2px solid #003366; border-left: 6px solid #003366; background:#f0f9ff; text-align:left; border-radius: 8px;">
                     <div style="font-size: 12pt; font-weight: 900; color: #003366; text-transform: uppercase; margin-bottom: 5px;">RÉSULTAT DES ANALYSES</div>
                     <div style="font-size: 11pt; color: #1e293b; font-weight: 700;">
                         ${countIntemperieDays()} JOUR(S) D'INTEMPÉRIES IDENTIFIÉ(S)
@@ -1127,205 +1240,217 @@ const AttestationIntemperieManager = () => {
                             <Briefcase size={14} /> Consulter les Archives
                         </button>
                     </div>
-                    <div className="btp-panel-head">
+                    <div className="btp-panel-head cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, client: !prev.client }))}>
                         <div className="flex items-center">
                             <div className="btp-step-num">1</div>
                             <div className="btp-panel-title">Localisation & Client</div>
                         </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.client ? '▼' : '►'}</span>
                     </div>
-                    <div className="btp-form-grid">
-                        <div className="btp-form-group">
-                            <label>Nom du Client</label>
-                            <input type="text" placeholder="Ex: Grégory Langlet" value={clientName} onChange={e => setClientName(e.target.value)} />
-                        </div>
-                        <div className="btp-form-group">
-                            <label>Nom du Chantier</label>
-                            <input type="text" placeholder="Ex: Résidence Les Chênes" value={projectName} onChange={e => setProjectName(e.target.value)} />
-                        </div>
-                        <div className="btp-form-group">
-                            <label>Adresse du site</label>
-                            <input type="text" placeholder="Ex: 41 Rue Des Perdreaux" value={clientAddress} onChange={e => setClientAddress(e.target.value)} />
-                        </div>
-                        <div className="btp-form-grid btp-cols-2">
+                    {panelOpen.client && (
+                        <div className="btp-form-grid">
                             <div className="btp-form-group">
-                                <label>Code Postal</label>
-                                <input type="text" placeholder="59000" value={clientZip} onChange={e => setClientZip(e.target.value)} />
+                                <label>Nom du Client</label>
+                                <input type="text" placeholder="Ex: Grégory Langlet" value={clientName} onChange={e => setClientName(e.target.value)} />
                             </div>
                             <div className="btp-form-group">
-                                <label>Ville</label>
-                                <input type="text" placeholder="LILLE" value={clientCity} onChange={e => setClientCity(e.target.value)} />
-                            </div>
-                        </div>
-                        <div className="btp-form-grid btp-cols-2">
-                            <div className="btp-form-group">
-                                <label>Email</label>
-                                <input type="text" value={clientEmail} onChange={e => setClientEmail(e.target.value)} />
+                                <label>Nom du Chantier</label>
+                                <input type="text" placeholder="Ex: Résidence Les Chênes" value={projectName} onChange={e => setProjectName(e.target.value)} />
                             </div>
                             <div className="btp-form-group">
-                                <label>Téléphone</label>
-                                <input type="text" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
+                                <label>Adresse du site</label>
+                                <input type="text" placeholder="Ex: 41 Rue Des Perdreaux" value={clientAddress} onChange={e => setClientAddress(e.target.value)} />
+                            </div>
+                            <div className="btp-form-grid btp-cols-2">
+                                <div className="btp-form-group">
+                                    <label>Code Postal</label>
+                                    <input type="text" placeholder="59000" value={clientZip} onChange={e => setClientZip(e.target.value)} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label>Ville</label>
+                                    <input type="text" placeholder="LILLE" value={clientCity} onChange={e => setClientCity(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="btp-form-grid btp-cols-2">
+                                <div className="btp-form-group">
+                                    <label>Email</label>
+                                    <input type="text" value={clientEmail} onChange={e => setClientEmail(e.target.value)} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label>Téléphone</label>
+                                    <input type="text" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="btp-form-group">
+                                <label>Référence Dossier</label>
+                                <input type="text" value={refDossier} onChange={e => setRefDossier(e.target.value)} />
                             </div>
                         </div>
-                        <div className="btp-form-group">
-                            <label>Référence Dossier</label>
-                            <input type="text" value={refDossier} onChange={e => setRefDossier(e.target.value)} />
-                        </div>
-                    </div>
+                    )}
 
-                    <div className="btp-panel-head mt-20">
+                    <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, period: !prev.period }))}>
                         <div className="flex items-center">
                             <div className="btp-step-num">2</div>
                             <div className="btp-panel-title">Période & Station</div>
                         </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.period ? '▼' : '►'}</span>
                     </div>
-                    <div className="btp-form-grid">
-                        <div className="btp-form-group">
-                            <label className="flex items-center gap-2 cursor-pointer mb-10" style={{ textTransform: 'none', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                                <input type="checkbox" checked={isPeriod} onChange={e => setIsPeriod(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
-                                <strong>Période de plusieurs jours</strong>
-                            </label>
-                        </div>
-
-                        <div className={`btp-form-grid ${isPeriod ? 'btp-cols-2' : ''}`}>
+                    {panelOpen.period && (
+                        <div className="btp-form-grid">
                             <div className="btp-form-group">
-                                <label>{isPeriod ? 'Date de Début' : 'Date d\'observation'}</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <label className="flex items-center gap-2 cursor-pointer mb-10" style={{ textTransform: 'none', color: 'var(--primary)', fontSize: '0.9rem' }}>
+                                    <input type="checkbox" checked={isPeriod} onChange={e => setIsPeriod(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
+                                    <strong>Période de plusieurs jours</strong>
+                                </label>
                             </div>
-                            {isPeriod && (
+
+                            <div className={`btp-form-grid ${isPeriod ? 'btp-cols-2' : ''}`}>
                                 <div className="btp-form-group">
-                                    <label>Date de Fin</label>
-                                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                    <label>{isPeriod ? 'Date de Début' : 'Date d\'observation'}</label>
+                                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
                                 </div>
-                            )}
-                        </div>
+                                {isPeriod && (
+                                    <div className="btp-form-group">
+                                        <label>Date de Fin</label>
+                                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                    </div>
+                                )}
+                            </div>
 
-                        <div className="btp-form-group mt-10">
-                            <label>Département</label>
-                            <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)}>
-                                <option value="">Choisir un département</option>
-                                {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
-                            </select>
-                        </div>
-                        <div className="btp-form-group">
-                            <label>Station Météo de référence</label>
-                            <select value={selectedStationId} onChange={(e) => {
-                                setSelectedStationId(e.target.value);
-                                const name = stationNames[e.target.value] || e.target.value;
-                                setStationMeteo(`${name} (${e.target.value})`);
-                            }} disabled={loadingStations}>
-                                <option value="">{loadingStations ? 'Chargement...' : '-- Sélectionner une station --'}</option>
-                                {stations.map(s => <option key={s.station_id} value={s.station_id}>{stationNames[s.station_id] || s.station_id} ({s.station_id})</option>)}
-                            </select>
-                        </div>
-                        <div className="btp-form-group">
-                            <label>Désignation station (Éditable)</label>
-                            <input
-                                type="text"
-                                value={stationMeteo}
-                                onChange={e => setStationMeteo(e.target.value)}
-                                placeholder="Nom de la station tel qu'il apparaîtra"
-                            />
-                        </div>
+                            <div className="btp-form-group mt-10">
+                                <label>Département</label>
+                                <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)}>
+                                    <option value="">Choisir un département</option>
+                                    {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="btp-form-group">
+                                <label>Station Météo de référence</label>
+                                <select value={selectedStationId} onChange={(e) => {
+                                    setSelectedStationId(e.target.value);
+                                    const name = stationNames[e.target.value] || e.target.value;
+                                    setStationMeteo(`${name} (${e.target.value})`);
+                                }} disabled={loadingStations}>
+                                    <option value="">{loadingStations ? 'Chargement...' : '-- Sélectionner une station --'}</option>
+                                    {stations.map(s => <option key={s.station_id} value={s.station_id}>{stationNames[s.station_id] || s.station_id} ({s.station_id})</option>)}
+                                </select>
+                            </div>
+                            <div className="btp-form-group">
+                                <label>Désignation station (Éditable)</label>
+                                <input
+                                    type="text"
+                                    value={stationMeteo}
+                                    onChange={e => setStationMeteo(e.target.value)}
+                                    placeholder="Nom de la station tel qu'il apparaîtra"
+                                />
+                            </div>
 
-                        <button className="btp-btn btp-btn-primary mt-10" onClick={handleFetchData}>
-                            <Download size={18} /> Charger (Météo-France)
-                        </button>
-
-                        <div className="mt-10">
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                style={{ display: 'none' }}
-                                accept=".csv"
-                                onChange={handleFileUpload}
-                            />
-                            <button
-                                className="btp-btn btp-btn-secondary w-full"
-                                style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #10b981' }}
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <FileText size={18} /> Importer un fichier CSV (Données BTP)
+                            <button className="btp-btn btp-btn-primary mt-10" onClick={handleFetchData}>
+                                <Download size={18} /> Charger (Météo-France)
                             </button>
+
+                            <div className="mt-10">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    style={{ display: 'none' }}
+                                    accept=".csv"
+                                    onChange={handleFileUpload}
+                                />
+                                <button
+                                    className="btp-btn btp-btn-secondary w-full"
+                                    style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #10b981' }}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <FileText size={18} /> Importer un fichier CSV (Données BTP)
+                                </button>
+                            </div>
+
+                            <div className="mt-10 p-10 border rounded text-sm bg-slate-50" dangerouslySetInnerHTML={{ __html: status || '<span style="color:#94a3b8">Aucune donnée chargée</span>' }} />
                         </div>
+                    )}
 
-                        <div className="mt-10 p-10 border rounded text-sm bg-slate-50" dangerouslySetInnerHTML={{ __html: status || '<span style="color:#94a3b8">Aucune donnée chargée</span>' }} />
-                    </div>
-
-                    <div className="btp-panel-head mt-20">
+                    <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, thresholds: !prev.thresholds }))}>
                         <div className="flex items-center">
                             <div className="btp-step-num">3</div>
                             <div className="btp-panel-title">Paramètres & Seuils</div>
                         </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.thresholds ? '▼' : '►'}</span>
                     </div>
-                    <div className="btp-form-grid">
-                        <div className="btp-form-grid btp-cols-3">
-                            <div className="btp-form-group">
-                                <label><CloudRain size={12} /> Pluie (mm)</label>
-                                <input type="number" value={limitRain} onChange={e => setLimitRain(parseFloat(e.target.value))} />
+                    {panelOpen.thresholds && (
+                        <div className="btp-form-grid">
+                            <div className="btp-form-grid btp-cols-3">
+                                <div className="btp-form-group">
+                                    <label><CloudRain size={12} /> Pluie (mm)</label>
+                                    <input type="number" value={limitRain} onChange={e => setLimitRain(parseFloat(e.target.value))} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label><Thermometer size={12} /> Gel (min)</label>
+                                    <input type="number" value={limitTemp} onChange={e => setLimitTemp(parseFloat(e.target.value))} />
+                                </div>
+                                <div className="btp-form-group">
+                                    <label><Thermometer size={12} /> Canicule (max)</label>
+                                    <input type="number" value={limitTempMax} onChange={e => setLimitTempMax(parseFloat(e.target.value))} />
+                                </div>
                             </div>
-                            <div className="btp-form-group">
-                                <label><Thermometer size={12} /> Gel (min)</label>
-                                <input type="number" value={limitTemp} onChange={e => setLimitTemp(parseFloat(e.target.value))} />
+                            <div className="btp-form-grid btp-cols-2 mt-10">
+                                <div className="btp-form-group">
+                                    <label><Wind size={12} /> Vent (km/h)</label>
+                                    <input type="number" value={limitWind} onChange={e => setLimitWind(parseFloat(e.target.value))} />
+                                </div>
                             </div>
-                            <div className="btp-form-group">
-                                <label><Thermometer size={12} /> Canicule (max)</label>
-                                <input type="number" value={limitTempMax} onChange={e => setLimitTempMax(parseFloat(e.target.value))} />
-                            </div>
-                        </div>
-                        <div className="btp-form-grid btp-cols-2 mt-10">
-                            <div className="btp-form-group">
-                                <label><Wind size={12} /> Vent (km/h)</label>
-                                <input type="number" value={limitWind} onChange={e => setLimitWind(parseFloat(e.target.value))} />
-                            </div>
-                        </div>
 
-                        <div className="btp-form-group mt-10">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={showCharts} onChange={e => setShowCharts(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
-                                <span>Inclure Graphique Annexe</span>
-                            </label>
+                            <div className="btp-form-group mt-10">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showCharts} onChange={e => setShowCharts(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
+                                    <span>Inclure Graphique Annexe</span>
+                                </label>
+                            </div>
+                            <div className="btp-form-group mt-10">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showPersonalization} onChange={e => setShowPersonalization(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
+                                    <span>Activer Personnalisation Seuils</span>
+                                </label>
+                            </div>
+                            <div className="btp-form-group mt-10">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={excludeWeekends} onChange={e => setExcludeWeekends(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
+                                    <span>Exclure Samedi/Dimanche (Repos hebdo.)</span>
+                                </label>
+                            </div>
                         </div>
-                        <div className="btp-form-group mt-10">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={showPersonalization} onChange={e => setShowPersonalization(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
-                                <span>Activer Personnalisation Seuils</span>
-                            </label>
-                        </div>
-                        <div className="btp-form-group mt-10">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={excludeWeekends} onChange={e => setExcludeWeekends(e.target.checked)} style={{ width: '18px', height: '18px', margin: 0 }} />
-                                <span>Exclure Samedi/Dimanche (Repos hebdo.)</span>
-                            </label>
-                        </div>
-                    </div>
+                    )}
 
-                    <div className="btp-panel-head mt-20">
+                    <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, conclusion: !prev.conclusion }))}>
                         <div className="flex items-center">
                             <div className="btp-step-num">4</div>
                             <div className="btp-panel-title">Conclusion de l'Expert</div>
                         </div>
+                        <span className="text-xs text-slate-400 font-bold">{panelOpen.conclusion ? '▼' : '►'}</span>
                     </div>
-                    <div className="p-15 bg-white border rounded-b">
-                        <textarea
-                            className="w-full text-sm p-10 border rounded font-sans leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
-                            style={{ minHeight: '350px', width: '100%', resize: 'vertical' }}
-                            value={expertConclusion}
-                            onChange={e => {
-                                setExpertConclusion(e.target.value);
-                                setIsConclusionManual(true);
-                            }}
-                            placeholder="La conclusion s'affichera ici après le chargement des données..."
-                        />
-                        <button
-                            className="text-xs text-blue-600 mt-5 font-bold hover:underline flex items-center gap-1"
-                            onClick={() => {
-                                setIsConclusionManual(false);
-                                setExpertConclusion(generateAutoConclusion());
-                            }}
-                        >
-                            <Eraser size={12} /> Réinitialiser (Auto-générer)
-                        </button>
-                    </div>
+                    {panelOpen.conclusion && (
+                        <div className="p-15 bg-white border rounded">
+                            <textarea
+                                className="w-full text-sm p-10 border rounded font-sans leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+                                style={{ minHeight: '200px', width: '100%', resize: 'vertical' }}
+                                value={expertConclusion}
+                                onChange={e => {
+                                    setExpertConclusion(e.target.value);
+                                    setIsConclusionManual(true);
+                                }}
+                                placeholder="La conclusion s'affichera ici après le chargement des données..."
+                            />
+                            <button
+                                className="text-xs text-blue-600 mt-5 font-bold hover:underline flex items-center gap-1"
+                                onClick={() => {
+                                    setIsConclusionManual(false);
+                                    setExpertConclusion(generateAutoConclusion());
+                                }}
+                            >
+                                <Eraser size={12} /> Réinitialiser (Auto-générer)
+                            </button>
+                        </div>
+                    )}
 
                     <div className="mt-20 flex flex-col gap-5">
                         <label className="text-xs font-bold text-slate-500 uppercase">Documents à l'unité</label>
