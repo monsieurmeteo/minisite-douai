@@ -1541,29 +1541,26 @@ const CertificatMeteoManager = () => {
                 <div class="cert-section-header">CONCLUSION DE L'ANALYSE</div>
                 <div class="cert-conclusion-box">${formatCustomText(customConclusion || generateConclusion(stats, certType))}</div>
 
-
                 ${customClassification ? `
-                <div style="margin-top: 18px; page-break-inside: avoid;">
-                    <div style="font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #003366; margin-bottom: 6px; text-align: center;">── CLASSEMENT ──</div>
+                <div style="margin-top: 14px; page-break-inside: avoid;">
+                    <div style="font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #003366; margin-bottom: 4px; text-align: center;">── CLASSEMENT ──</div>
                     <div style="
-                        background: linear-gradient(135deg, #003366 0%, #0055a4 100%);
-                        border: 3px solid #003366;
-                        border-radius: 10px;
-                        padding: 18px 24px;
+                        background: #003366;
+                        border: 2px solid #003366;
+                        border-radius: 6px;
+                        padding: 12px 20px;
                         text-align: center;
                         font-family: sans-serif;
-                        font-size: 17pt;
+                        font-size: 13pt;
                         font-weight: 900;
                         color: #ffffff;
                         letter-spacing: 1px;
                         line-height: 1.4;
                         text-transform: uppercase;
                         white-space: pre-wrap;
-                        box-shadow: 0 3px 10px rgba(0,51,102,0.3);
                     ">${customClassification}</div>
                 </div>
                 ` : ''}
-
 
                 <div class="cert-signature-block">
                     <div class="signature-date">Fait à Raimbeaucourt, le ${todayFr}</div>
@@ -1675,16 +1672,16 @@ const CertificatMeteoManager = () => {
             .cert-main-title-box { 
                 margin-bottom: 8px; 
                 border: 2px solid #003366; 
-                padding: 6px 10px; 
+                padding: 10px 16px; 
                 box-shadow: none; 
                 width: 100%; 
                 box-sizing: border-box; 
-                text-align: left; 
-                background: #f8fafc;
+                text-align: center; 
+                background: #003366;
                 border-radius: 6px;
             }
-            .cert-main-title-box h1 { letter-spacing: 1px; margin-bottom: 0px; font-size: 14pt; color: #003366; font-weight: 900; }
-            .cert-main-title-box div { font-size: 9.5pt; color: #000; font-weight: 800; border-top: 1px solid #cbd5e1; padding-top: 2px; margin-top: 2px; text-transform: uppercase; }
+            .cert-main-title-box h1 { letter-spacing: 2px; margin-bottom: 0px; font-size: 17pt; color: #ffffff; font-weight: 900; }
+            .cert-main-title-box div { font-size: 11pt; color: #ffffff; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 4px; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
             
             .cert-section-header { 
                 background: #f1f5f9 !important; 

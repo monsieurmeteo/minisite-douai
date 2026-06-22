@@ -435,7 +435,7 @@ const AttestationIntemperieManager = () => {
             .cert-page { 
                 width: 210mm; 
                 min-height: 296mm; 
-                padding: 12mm 15mm; 
+                padding: 8mm 12mm; 
                 box-sizing: border-box; 
                 position: relative; 
                 page-break-after: always;
@@ -443,14 +443,14 @@ const AttestationIntemperieManager = () => {
                 color: black;
             }
             .cert-page:last-child { page-break-after: auto; }
-            .cert-main-title-box { border: 2px solid #000; padding: 10px 15px; text-align: left; margin-bottom: 20px; }
-            .cert-main-title { font-size: 18pt; font-weight: 800; color: #003366; margin: 0; text-transform: uppercase; }
-            .cert-section-header { background: #003366 !important; color: white !important; padding: 6px 10px; font-weight: bold; margin-top: 15px; text-transform: uppercase; border-left: 5px solid #000; }
-            .cert-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 8.5pt; line-height: 1.1; }
+            .cert-main-title-box { border: 2px solid #000; padding: 4px 10px; text-align: left; margin-bottom: 8px; }
+            .cert-main-title { font-size: 15pt; font-weight: 800; color: #003366; margin: 0; text-transform: uppercase; }
+            .cert-section-header { background: #003366 !important; color: white !important; padding: 4px 10px; font-weight: bold; margin-top: 8px; text-transform: uppercase; border-left: 5px solid #000; font-size: 9pt; }
+            .cert-table { width: 100%; border-collapse: collapse; margin-top: 3px; font-size: 8.5pt; line-height: 1.1; }
             .cert-table th { background: #1e293b !important; color: white !important; padding: 3px 2px; border: 1px solid #000; text-transform: uppercase; font-size: 8pt; }
             .cert-table td { padding: 2px; border: 1px solid #000; text-align: center; }
             .cert-table tr:nth-child(even) { background-color: #f8fafc !important; }
-            .cert-info-row { display: flex; font-size: 9pt; margin-bottom: 5px; align-items: center; }
+            .cert-info-row { display: flex; font-size: 9pt; margin-bottom: 3px; align-items: center; }
             .cert-info-label { width: 140px; font-weight: bold; color: #003366; }
             .cert-info-val { font-weight: bold; }
         </style>
@@ -502,7 +502,7 @@ const AttestationIntemperieManager = () => {
                 </div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; font-size: 8.5pt; margin-bottom: 10px; background: #f8fafc; padding: 5px 10px; border-bottom: 1px solid #e2e8f0; margin-top:10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 8pt; margin-bottom: 6px; background: #f8fafc; padding: 4px 10px; border-bottom: 1px solid #e2e8f0; margin-top:6px;">
                 <div class="cert-info-row" style="margin-bottom: 0; flex: 1;">
                     <span class="cert-info-label" style="width: auto; margin-right: 10px; font-weight:bold;">PÉRIODE ANALYSÉE :</span>
                     <span class="cert-info-val">${dateLabel}</span>
@@ -546,19 +546,21 @@ const AttestationIntemperieManager = () => {
                 </table>
 
                 ${customClassification ? `
-                <div class="cert-section-header" style="margin-top: 15px;">CLASSEMENT</div>
-                <div class="cert-text-block" style="margin-top:10px; padding:12px 16px; border:2px solid #003366; background:#f8fafc; text-align:left; border-radius: 8px; font-size:10.5pt; white-space: pre-wrap;">${customClassification}</div>
+                <div style="margin-top: 8px; page-break-inside: avoid;">
+                    <div style="font-size: 6.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #003366; margin-bottom: 3px; text-align: center;">── CLASSEMENT ──</div>
+                    <div style="background: #003366; border: 2px solid #003366; border-radius: 5px; padding: 8px 16px; text-align: center; font-family: sans-serif; font-size: 13pt; font-weight: 900; color: #ffffff; letter-spacing: 1px; line-height: 1.3; text-transform: uppercase; white-space: pre-wrap;">${customClassification}</div>
+                </div>
                 ` : ''}
 
-                <div class="cert-section-header" style="margin-top: 15px;">CONCLUSION DE L'EXPERT</div>
-                <div class="cert-text-block" style="margin-top:10px; line-height:1.6; font-size:10.5pt; white-space: pre-wrap; text-align: justify;">${expertConclusion || generateAutoConclusion()}</div>
+                <div class="cert-section-header" style="margin-top: 8px;">CONCLUSION DE L'EXPERT</div>
+                <div class="cert-text-block" style="margin-top:6px; line-height:1.5; font-size:9.5pt; white-space: pre-wrap; text-align: justify;">${expertConclusion || generateAutoConclusion()}</div>
 
-                <div style="margin-top:10px; padding:12px 16px; border:2px solid #003366; border-left: 6px solid #003366; background:#f0f9ff; text-align:left; border-radius: 8px;">
-                    <div style="font-size: 12pt; font-weight: 900; color: #003366; text-transform: uppercase; margin-bottom: 5px;">RÉSULTAT DES ANALYSES</div>
-                    <div style="font-size: 11pt; color: #1e293b; font-weight: 700;">
+                <div style="margin-top:8px; padding:8px 14px; border:2px solid #003366; border-left: 6px solid #003366; background:#f0f9ff; text-align:left; border-radius: 6px;">
+                    <div style="font-size: 10pt; font-weight: 900; color: #003366; text-transform: uppercase; margin-bottom: 3px;">RÉSULTAT DES ANALYSES</div>
+                    <div style="font-size: 10pt; color: #1e293b; font-weight: 700;">
                         ${countIntemperieDays()} JOUR(S) D'INTEMPÉRIES IDENTIFIÉ(S)
                     </div>
-                    <div style="font-size: 8.5pt; color: #64748b; margin-top: 5px;">
+                    <div style="font-size: 8pt; color: #64748b; margin-top: 3px;">
                         Station de ${stationMeteo} | Période du ${startD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} au ${endD.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </div>
                 </div>
