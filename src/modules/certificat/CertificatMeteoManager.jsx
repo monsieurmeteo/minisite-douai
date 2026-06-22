@@ -57,6 +57,7 @@ const CertificatMeteoManager = () => {
 
     const [customConclusion, setCustomConclusion] = useState(''); // Pour l'édition manuelle
     const [customSynthesis, setCustomSynthesis] = useState(''); // Pour l'édition manuelle
+    const [customClassification, setCustomClassification] = useState(''); // Classement manuel
     const [showValuesUnderTitle, setShowValuesUnderTitle] = useState(true); // Toggle pour les highlights
 
     // --- États d'affichage des paramètres ---
@@ -97,7 +98,8 @@ const CertificatMeteoManager = () => {
     const [loadingArchives, setLoadingArchives] = useState(false);
     const [panelOpen, setPanelOpen] = useState({
         config: true,
-        custom: false
+        custom: false,
+        classification: false
     });
 
     const chartRefs = useRef({});
@@ -1141,12 +1143,11 @@ const CertificatMeteoManager = () => {
         let htmlRows = '';
         const tLower = (type || '').toLowerCase();
 
-        const addRow = (param, val, time, classification) => {
+        const addRow = (param, val, time) => {
             htmlRows += `<tr style="border-bottom: 1px solid #e2e8f0;">
                 <td style="padding: 8px 12px; font-size: 10pt;">${param}</td>
                 <td style="padding: 8px 12px; font-size: 10pt;"><span class="cert-value-essential">${val}</span></td>
                 <td style="padding: 8px 12px; font-size: 9.5pt; color:#475569;">${time}</td>
-                <td style="padding: 8px 12px; color:#003366; font-size: 9.5pt; font-weight:bold;">${classification}</td>
             </tr>`;
         };
 
@@ -1159,52 +1160,26 @@ const CertificatMeteoManager = () => {
         if (showWindParams) {
             const t = stats.windGustMaxTime ? new Date(stats.windGustMaxTime) : null;
             const g = Math.round(stats.windGustMax);
-            let label = "Vents Faibles";
-            if (g >= 100) label = "TEMPÊTE";
-            else if (g >= 70) label = "VENTS TRÈS FORTS";
-            else if (g >= 40) label = "VENTS FORTS";
-            else if (g >= 20) label = "VENTS MODÉRÉS";
-
-            addRow("Rafale Max", `${g} km/h`, t ? timeDisplay(t) : '-', label);
+            addRow("Rafale Max", `${g} km/h`, t ? timeDisplay(t) : '-');
         }
         if (showRainParams) {
             const r = stats.rainTotal;
 
             if (tLower.includes('neige')) {
                 const snow = stats.snowTotal || 0;
-                let label = "Chutes faibles";
-                if (snow >= 15) label = "CHUTES EXCEPTIONNELLES";
-                else if (snow >= 10) label = "CHUTES IMPORTANTES";
-                else if (snow >= 5) label = "CHUTES MODÉRÉES";
-
-                addRow("Cumul Neige (estimé)", `${snow.toFixed(1).replace('.', ',')} cm`, "Période", label);
+                addRow("Cumul Neige (estimé)", `${snow.toFixed(1).replace('.', ',')} cm`, "Période");
             } else {
-                let label = "Pluies Faibles";
-                if (r >= 40) label = "PLUIES EXCEPTIONNELLES";
-                else if (r >= 30) label = "PLUIES ABONDANTES";
-                else if (r >= 20) label = "PLUIES TRÈS FORTES";
-                else if (r >= 10) label = "PLUIES FORTES";
-                else if (r >= 5) label = "Pluies Modérées";
-
-                addRow("Cumul Pluie", `${r.toFixed(1).replace('.', ',')} mm`, "Période", label);
+                addRow("Cumul Pluie", `${r.toFixed(1).replace('.', ',')} mm`, "Période");
             }
         }
         if (showTempParams) {
             const tMax = stats.tempMaxTime ? new Date(stats.tempMaxTime) : null;
             const tMin = stats.tempMinTime ? new Date(stats.tempMinTime) : null;
 
-            let label = "Températures Normales";
-
             if (tLower.includes('froid') || tLower.includes('gel') || tLower.includes('neige') || tLower.includes('verglas')) {
-                if (stats.tempMin <= -10) label = "GRAND FROID";
-                else if (stats.tempMin <= -5) label = "FROID INTENSE";
-                else if (stats.tempMin <= 0) label = "GEL";
-                addRow("Temp. Min", `${stats.tempMin}°C`, tMin ? timeDisplay(tMin) : '-', label);
+                addRow("Temp. Min", `${stats.tempMin}°C`, tMin ? timeDisplay(tMin) : '-');
             } else {
-                if (stats.tempMax >= 35) label = "CANICULE";
-                else if (stats.tempMax >= 30) label = "TRÈS CHAUD";
-                else if (stats.tempMax >= 25) label = "CHALEUR";
-                addRow("Temp. Max", `${stats.tempMax}°C`, tMax ? timeDisplay(tMax) : '-', label);
+                addRow("Temp. Max", `${stats.tempMax}°C`, tMax ? timeDisplay(tMax) : '-');
             }
         }
         return htmlRows;
@@ -1557,7 +1532,7 @@ const CertificatMeteoManager = () => {
                     </div>
                 `}
                 <table class="cert-table">
-                    <thead><tr><th>PARAMÈTRE</th><th>VALEUR RELEVÉE</th><th>HEURE / PÉRIODE</th><th>CLASSEMENT</th></tr></thead>
+                    <thead><tr><th>PARAMÈTRE</th><th>VALEUR RELEVÉE</th><th>HEURE / PÉRIODE</th></tr></thead>
                     <tbody>${getMeasureRows(stats, rows, certType)}</tbody>
                 </table>
 
@@ -1565,6 +1540,11 @@ const CertificatMeteoManager = () => {
 
                 <div class="cert-section-header">CONCLUSION DE L'ANALYSE</div>
                 <div class="cert-conclusion-box">${formatCustomText(customConclusion || generateConclusion(stats, certType))}</div>
+
+                ${customClassification ? `
+                <div class="cert-section-header" style="margin-top: 15px;">CLASSEMENT</div>
+                <div style="margin-top:10px; padding:12px 16px; border:2px solid #003366; background:#f8fafc; text-align:left; border-radius: 8px; font-size:10.5pt; white-space: pre-wrap; font-family: sans-serif; color: #1e293b; line-height: 1.6;">${customClassification}</div>
+                ` : ''}
 
                 <div class="cert-signature-block">
                     <div class="signature-date">Fait à Raimbeaucourt, le ${todayFr}</div>
@@ -2125,15 +2105,37 @@ Ce relevé est certifié conforme aux données de la station météorologique de
                                 </div>
                             </div>
                         )}
+
+                            {/* CLASSEMENT MANUEL */}
+                            <div className="btp-panel-head mt-20 cursor-pointer hover:bg-slate-100/50 transition-all p-5 rounded" onClick={() => setPanelOpen(prev => ({ ...prev, classification: !prev.classification }))}>
+                                <div className="flex items-center">
+                                    <div className="btp-step-num">3</div>
+                                    <div className="btp-panel-title">Classement</div>
+                                </div>
+                                <span className="text-xs text-slate-400 font-bold">{panelOpen.classification ? '▼' : '►'}</span>
+                            </div>
+                            {panelOpen.classification && (
+                                <div className="btp-form-grid">
+                                    <div className="btp-form-group">
+                                        <label className="text-xs font-bold text-slate-500 mb-5 uppercase">Classement manuel</label>
+                                        <textarea
+                                            value={customClassification}
+                                            onChange={(e) => setCustomClassification(e.target.value)}
+                                            placeholder="Saisissez ici le classement manuel (ex : Vent modéré, épisode de catégorie 2...)..."
+                                            style={{ height: '100px', fontSize: '11px' }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
 
-                    {/* 3. ACTIONS */}
+                    {/* 4. ACTIONS */}
                     {globalData.rows && (
                         <>
                             <div className="btp-panel-head mt-20">
                                 <div className="flex items-center">
-                                    <div className="btp-step-num">3</div>
+                                    <div className="btp-step-num">4</div>
                                     <div className="btp-panel-title">Actions</div>
                                 </div>
                             </div>
