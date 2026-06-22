@@ -210,7 +210,7 @@ const CertificatMeteoManager = () => {
     // Mise à jour du rapport quand les données changent
     useEffect(() => {
         generateReport();
-    }, [globalData, clientName, clientAddress, clientCity, clientZip, startDate, endDate, isPeriod, certType, showCharts, multiChartMode, chartDesign, showWindAvg, nearbyStations, selectedStationDist, showValuesUnderTitle, showWindParams, showRainParams, showTempParams, stationMeteo, showDetailedRecords, stationMeteoTemp, stationMeteoRain, stationMeteoWind, annexCols]);
+    }, [globalData, clientName, clientAddress, clientCity, clientZip, startDate, endDate, isPeriod, certType, showCharts, multiChartMode, chartDesign, showWindAvg, nearbyStations, selectedStationDist, showValuesUnderTitle, showWindParams, showRainParams, showTempParams, stationMeteo, showDetailedRecords, stationMeteoTemp, stationMeteoRain, stationMeteoWind, annexCols, customClassification, customConclusion, customSynthesis]);
 
     // --- Calcul "Live" des stations proches si la ville change ---
     useEffect(() => {
