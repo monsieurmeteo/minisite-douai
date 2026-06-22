@@ -1543,7 +1543,7 @@ const CertificatMeteoManager = () => {
 
                 ${customClassification ? `
                 <div style="margin-top: 14px; page-break-inside: avoid;">
-                    <div style="font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #003366; margin-bottom: 4px; text-align: center;">── CLASSEMENT ──</div>
+                    <div style="font-size: 10pt; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #003366; margin-bottom: 6px; text-align: center;">── CLASSEMENT ──</div>
                     <div style="
                         background: #003366;
                         border: 2px solid #003366;

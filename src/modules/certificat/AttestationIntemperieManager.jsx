@@ -547,7 +547,7 @@ const AttestationIntemperieManager = () => {
 
                 ${customClassification ? `
                 <div style="margin-top: 8px; page-break-inside: avoid;">
-                    <div style="font-size: 6.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #003366; margin-bottom: 3px; text-align: center;">── CLASSEMENT ──</div>
+                    <div style="font-size: 10pt; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #003366; margin-bottom: 5px; text-align: center;">── CLASSEMENT ──</div>
                     <div style="background: #003366; border: 2px solid #003366; border-radius: 5px; padding: 8px 16px; text-align: center; font-family: sans-serif; font-size: 13pt; font-weight: 900; color: #ffffff; letter-spacing: 1px; line-height: 1.3; text-transform: uppercase; white-space: pre-wrap;">${customClassification}</div>
                 </div>
                 ` : ''}
