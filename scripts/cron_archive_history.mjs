@@ -59,7 +59,9 @@ async function runCronArchive() {
             }
 
             if (daySuccess) {
-                console.log(`   ✅ Journée ${dateStr} entièrement archivée.`);
+                console.log(`   ✅ Journée ${dateStr} entièrement archivée en slices.`);
+                // Générer le fichier unifié journalier pour accélèrer le chargement frontend
+                await generateUnifiedDayFile(dateStr, SLICES);
                 await cleanupDaySQL(dateStr);
             }
 
@@ -145,6 +147,43 @@ async function archiveSlice(targetDate, slice) {
         fs.unlinkSync(tempFilePath);
     }
     return true;
+}
+
+async function generateUnifiedDayFile(targetDate, slices) {
+    console.log(`   -> Génération du fichier unifié ${targetDate}.json...`);
+    const [y, m, d] = targetDate.split('-');
+    let allObs = [];
+
+    for (const slice of slices) {
+        const slicePath = `6mn/${y}/${m}/${d}/${slice.id}.json`;
+        const { data, error } = await supabase.storage.from('observations-archives').download(slicePath);
+        if (!error && data) {
+            try {
+                const text = await data.text();
+                const parsed = JSON.parse(text);
+                allObs = allObs.concat(parsed);
+            } catch (e) {
+                console.warn(`      ⚠️ Impossible de parser ${slicePath}: ${e.message}`);
+            }
+        }
+    }
+
+    if (allObs.length === 0) {
+        console.log(`      ℹ️ Aucune donnée pour le fichier unifié de ${targetDate}.`);
+        return;
+    }
+
+    const unifiedJson = JSON.stringify(allObs);
+    const unifiedPath = `6mn/${y}/${m}/${d}.json`;
+    const { error: uploadError } = await supabase.storage
+        .from('observations-archives')
+        .upload(unifiedPath, Buffer.from(unifiedJson), { contentType: 'application/json', upsert: true });
+
+    if (uploadError) {
+        console.warn(`      ⚠️ Erreur upload fichier unifié: ${uploadError.message}`);
+    } else {
+        console.log(`      ✅ Fichier unifié uploadé: ${unifiedPath} (${allObs.length} obs)`);
+    }
 }
 
 async function cleanupDaySQL(targetDate) {
