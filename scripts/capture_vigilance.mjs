@@ -53,44 +53,50 @@ const REGIONS = [
 async function captureAndUpload() {
     console.log('\n📸 CAPTURE VIGILANCE (FRANCE & RÉGIONS)\n');
 
-    const periods = [
-        { id: 0, suffix: 'today' },
-        { id: 1, suffix: 'tomorrow' }
-    ];
+    const browser = await puppeteer.launch({
+        headless: "new",
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
+    });
 
-    for (const period of periods) {
-        // 1. Capture France nationale
-        const browser1 = await puppeteer.launch({
-            headless: "new",
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
-        });
-        try {
-            const page = await browser1.newPage();
+    try {
+        const periods = [
+            { id: 0, suffix: 'today' },
+            { id: 1, suffix: 'tomorrow' }
+        ];
+
+        for (const period of periods) {
+            // 1. Capture France nationale
+            console.log(`\n⏳ [FRANCE] [${period.suffix}] capture...`);
+            const page = await browser.newPage();
             await page.setViewport(CONFIG.viewport);
-            await captureScope(page, null, period.id, period.suffix);
-        } catch (e) {
-            console.error(`❌ Erreur France [${period.suffix}]:`, e.message);
-        } finally {
-            await browser1.close();
-        }
-
-        // 2. Capture chaque région (navigateur frais pour chaque région)
-        for (const region of REGIONS) {
-            console.log(`\n📍 CAPTURE RÉGION: ${region.name} (${region.id})`);
-            const browser2 = await puppeteer.launch({
-                headless: "new",
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
-            });
             try {
-                const page = await browser2.newPage();
-                await page.setViewport(CONFIG.viewport);
-                await captureScope(page, region.id, period.id, period.suffix);
+                await captureScope(page, null, period.id, period.suffix);
             } catch (e) {
-                console.error(`❌ Erreur ${region.id} [${period.suffix}]:`, e.message);
+                console.error(`❌ Erreur France [${period.suffix}]:`, e.message);
             } finally {
-                await browser2.close();
+                await page.close();
+            }
+
+            // 2. Capture chaque région (concurrence de 3 pages en parallèle pour aller vite)
+            const CONCURRENCY = 3;
+            for (let i = 0; i < REGIONS.length; i += CONCURRENCY) {
+                const chunk = REGIONS.slice(i, i + CONCURRENCY);
+                await Promise.all(chunk.map(async (region) => {
+                    console.log(`📍 CAPTURE RÉGION: ${region.name} (${region.id}) [${period.suffix}]`);
+                    const page = await browser.newPage();
+                    await page.setViewport(CONFIG.viewport);
+                    try {
+                        await captureScope(page, region.id, period.id, period.suffix);
+                    } catch (e) {
+                        console.error(`❌ Erreur ${region.id} [${period.suffix}]:`, e.message);
+                    } finally {
+                        await page.close();
+                    }
+                }));
             }
         }
+    } finally {
+        await browser.close();
     }
 
     console.log(`\n✅ TOUTES LES CAPTURES TERMINÉES!\n`);

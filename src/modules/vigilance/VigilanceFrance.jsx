@@ -778,17 +778,30 @@ const VigilanceFrance = () => {
                                             <ImageIcon size={18} />
                                             <h4>{region.name}</h4>
                                         </div>
-                                        <button 
-                                            className="copy-region-link-btn"
-                                            onClick={() => {
-                                                const suffix = period === 0 ? 'today' : 'tomorrow';
-                                                const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_region_${region.id}_${suffix}.png`;
-                                                navigator.clipboard.writeText(url);
-                                                alert(`Lien ${region.id} copié !`);
-                                            }}
-                                        >
-                                            <LinkIcon size={14} /> Link
-                                        </button>
+                                        <div className="region-actions">
+                                            <button 
+                                                className="copy-region-link-btn"
+                                                title="Copier le lien pour Aujourd'hui"
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_region_${region.id}_today.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert(`Lien Aujourd'hui (${region.id}) copié !`);
+                                                }}
+                                            >
+                                                <LinkIcon size={12} /> Auj.
+                                            </button>
+                                            <button 
+                                                className="copy-region-link-btn highlight-tomorrow-btn"
+                                                title="Copier le lien pour Demain"
+                                                onClick={() => {
+                                                    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/vigilance-captures/vigilance_region_${region.id}_tomorrow.png`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert(`Lien Demain (${region.id}) copié !`);
+                                                }}
+                                            >
+                                                <LinkIcon size={12} /> Demain
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     <div className="region-hub-map-container">

@@ -1723,6 +1723,12 @@
     color: #3453a2;
 }
 
+.region-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
 .copy-region-link-btn {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -1742,6 +1748,17 @@
     background: #3453a2;
     color: white;
     border-color: #3453a2;
+}
+
+.highlight-tomorrow-btn {
+    border-color: #ea580c;
+    color: #ea580c;
+}
+
+.highlight-tomorrow-btn:hover {
+    background: #ea580c;
+    color: white;
+    border-color: #ea580c;
 }
 
 .region-hub-bulletin {
