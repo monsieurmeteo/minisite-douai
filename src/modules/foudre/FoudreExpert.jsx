@@ -239,6 +239,24 @@ export default function FoudreExpert() {
         return <circle key={s.id} cx={coords[0]} cy={coords[1]} r={s.isRecent?sz*1.3:sz} fill={color} stroke="rgba(0,0,0,0.25)" strokeWidth={sw*0.8}/>;
     };
 
+    // Rendu d'un impact directement en coordonnées écran (évite les bugs de précision SVG/Browser sous zoom fort)
+    const renderStrikeScreen = (s, colorOverride) => {
+        const pCoord = projection([s.lon, s.lat]);
+        if (!pCoord || !communeZoom) return null;
+        const sx = COM_MAP/2 + (pCoord[0] - communeZoom.cx) * communeZoom.scale;
+        const sy = COM_H/2 + (pCoord[1] - communeZoom.cy) * communeZoom.scale;
+        const sz = strikeSize;
+        const color = colorOverride || HOUR_COLORS[s.h] || '#ff0000';
+        
+        if (foudreDesign==='Glow')    return <g key={s.id}><circle cx={sx} cy={sy} r={sz*3} fill={color} fillOpacity={0.25}/><circle cx={sx} cy={sy} r={sz} fill={color}/></g>;
+        if (foudreDesign==='Cross')   return <g key={s.id} stroke={color} strokeWidth={1.5}><line x1={sx-sz*1.5} y1={sy} x2={sx+sz*1.5} y2={sy}/><line x1={sx} y1={sy-sz*1.5} x2={sx} y2={sy+sz*1.5}/></g>;
+        if (foudreDesign==='Ring')    return <g key={s.id}><circle cx={sx} cy={sy} r={sz*1.5} fill="none" stroke={color} strokeWidth={2}/><circle cx={sx} cy={sy} r={sz*0.5} fill={color}/></g>;
+        if (foudreDesign==='Diamond') return <path key={s.id} d={`M${sx} ${sy-sz*1.5}L${sx+sz*1.5} ${sy}L${sx} ${sy+sz*1.5}L${sx-sz*1.5} ${sy}Z`} fill={color} strokeWidth={0}/>;
+        if (foudreDesign==='Bolt')    return <path key={s.id} d={`M${sx} ${sy-sz*2}L${sx-sz} ${sy+sz*.5}L${sx} ${sy+sz*.5}L${sx-sz*.5} ${sy+sz*2}L${sx+sz} ${sy-sz*.5}L${sx} ${sy-sz*.5}Z`} fill={color}/>;
+        
+        return <circle key={s.id} cx={sx} cy={sy} r={s.isRecent?sz*1.3:sz} fill={color} stroke="rgba(0,0,0,0.25)" strokeWidth={0.8}/>;
+    };
+
     const mp = MAP_PALETTES[mapPalette];
     const dateLabel = isValid(new Date(startDate))
         ? (isRange&&endDate&&isValid(new Date(endDate))
@@ -521,91 +539,95 @@ export default function FoudreExpert() {
                         {/* ── CARTE SVG COMMUNE (carrée) ── */}
                         <div style={{flex:1,background:mp.bg,position:'relative',overflow:'hidden'}}>
                             <svg width={COM_MAP} height={COM_H}>
-                                {/* Groupe zoomé sur la commune */}
+                                {/* Groupe zoomé contenant les cartes de fond uniquement */}
                                 <g transform={communeZoom?.svgTransform||''}>
                                     {/* Fond départements */}
                                     {geoData?.features.map((f,i)=>(
                                         <path key={i} d={pathGenerator?.(f)} fill={mp.fill} stroke="#999" strokeWidth={communeZoom?0.6/communeZoom.scale:0.6}/>
                                     ))}
+                                </g>
 
-                                    {/* Cercles concentriques (dans l'espace projection) */}
-                                    {selectedCommune&&communeZoom&&(
-                                        communeZoomRange === 20 ? (
-                                            RADII_KM.map((r,idx)=>(
-                                                <circle key={r} cx={communeZoom.cx} cy={communeZoom.cy}
-                                                    r={r*communeZoom.pxPerKm}
+                                {/* Cercles concentriques rendus en coordonnées écran (évite le flou/disparition sous zoom fort) */}
+                                {selectedCommune&&communeZoom&&(
+                                    communeZoomRange === 20 ? (
+                                        RADII_KM.map((r,idx)=>{
+                                            const rScreen = r * communeZoom.pxPerKm * communeZoom.scale;
+                                            return (
+                                                <circle key={r} cx={COM_MAP/2} cy={COM_H/2}
+                                                    r={rScreen}
                                                     fill={`${RADII_COLORS[idx]}08`}
                                                     stroke={RADII_COLORS[idx]}
-                                                    strokeWidth={2/communeZoom.scale}
-                                                    strokeDasharray={`${10/communeZoom.scale} ${5/communeZoom.scale}`}/>
-                                            ))
-                                        ) : (
-                                            // Mode 2km : cercles tous les 100m (0.1 à 2.0)
-                                            Array.from({length: 20}, (_, i) => parseFloat(((i + 1) * 0.1).toFixed(1))).map(r => {
-                                                const isMain = [0.1, 0.5, 1.0, 1.5, 2.0].includes(r);
-                                                const mainIdx = isMain ? [0.1, 0.5, 1.0, 1.5, 2.0].indexOf(r) : -1;
-                                                const color = isMain ? RADII_COLORS[mainIdx] : 'rgba(255,255,255,0.25)';
-                                                return (
-                                                    <circle key={r} cx={communeZoom.cx} cy={communeZoom.cy}
-                                                        r={r*communeZoom.pxPerKm}
-                                                        fill={isMain ? `${color}05` : 'none'}
-                                                        stroke={color}
-                                                        strokeWidth={(isMain ? 1.5 : 0.6)/communeZoom.scale}
-                                                        strokeDasharray={isMain ? `${8/communeZoom.scale} ${4/communeZoom.scale}` : `${3/communeZoom.scale} ${3/communeZoom.scale}`}
-                                                        opacity={isMain ? 0.8 : 0.3}/>
-                                                );
-                                            })
-                                        )
-                                    )}
-
-                                    {/* Impacts colorés par rayon (Red, Orange, Yellow, Green, Blue) */}
-                                    {projection&&strikes
-                                        .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=(communeZoomRange+0.2):true)
-                                        .map(s=>{
-                                            let color = '#ff0000';
-                                            if (selectedCommune) {
-                                                const d = haversineKm(selectedCommune.lat, selectedCommune.lon, s.lat, s.lon);
-                                                if (communeZoomRange === 2) {
-                                                    if (d <= 0.1) color = RADII_COLORS[0];
-                                                    else if (d <= 0.5) color = RADII_COLORS[1];
-                                                    else if (d <= 1.0) color = RADII_COLORS[2];
-                                                    else if (d <= 1.5) color = RADII_COLORS[3];
-                                                    else color = RADII_COLORS[4];
-                                                } else {
-                                                    if (d <= 1) color = RADII_COLORS[0];
-                                                    else if (d <= 3) color = RADII_COLORS[1];
-                                                    else if (d <= 5) color = RADII_COLORS[2];
-                                                    else if (d <= 10) color = RADII_COLORS[3];
-                                                    else color = RADII_COLORS[4];
-                                                }
-                                            }
-                                            return renderStrike(s,projection,communeZoom?strikeSize/communeZoom.scale:strikeSize,communeZoom?.scale,color);
+                                                    strokeWidth={2}
+                                                    strokeDasharray="10 5"/>
+                                            );
                                         })
-                                    }
+                                    ) : (
+                                        // Mode 2km : cercles tous les 100m (0.1 à 2.0)
+                                        Array.from({length: 20}, (_, i) => parseFloat(((i + 1) * 0.1).toFixed(1))).map(r => {
+                                            const isMain = [0.1, 0.5, 1.0, 1.5, 2.0].includes(r);
+                                            const mainIdx = isMain ? [0.1, 0.5, 1.0, 1.5, 2.0].indexOf(r) : -1;
+                                            const color = isMain ? RADII_COLORS[mainIdx] : 'rgba(255,255,255,0.25)';
+                                            const rScreen = r * communeZoom.pxPerKm * communeZoom.scale;
+                                            return (
+                                                <circle key={r} cx={COM_MAP/2} cy={COM_H/2}
+                                                    r={rScreen}
+                                                    fill={isMain ? `${color}05` : 'none'}
+                                                    stroke={color}
+                                                    strokeWidth={isMain ? 1.5 : 0.6}
+                                                    strokeDasharray={isMain ? "8 4" : "3 3"}
+                                                    opacity={isMain ? 0.8 : 0.3}/>
+                                            );
+                                        })
+                                    )
+                                )}
 
-                                    {/* Marqueur commune / adresse */}
-                                    {selectedCommune&&communeZoom&&(
-                                        <g transform={`translate(${communeZoom.cx}, ${communeZoom.cy})`}>
-                                            {selectedCommune.isAddress ? (
-                                                // Icone Maison premium pour l'adresse
-                                                <g>
-                                                    <circle cx={0} cy={0} r={14/communeZoom.scale} fill="rgba(56,189,248,0.15)" stroke="none"/>
-                                                    {/* Toit et murs de la maison */}
-                                                    <path d={`M ${-6/communeZoom.scale} ${2/communeZoom.scale} L ${-6/communeZoom.scale} ${8/communeZoom.scale} L ${6/communeZoom.scale} ${8/communeZoom.scale} L ${6/communeZoom.scale} ${2/communeZoom.scale} L 0 ${-4/communeZoom.scale} Z`} fill="#00b4d8" stroke="white" strokeWidth={1.5/communeZoom.scale}/>
-                                                    {/* Porte */}
-                                                    <rect x={-2/communeZoom.scale} y={4/communeZoom.scale} width={4/communeZoom.scale} height={4/communeZoom.scale} fill="white"/>
-                                                </g>
-                                            ) : (
-                                                // Cercle classique pour la commune
-                                                <g>
-                                                    <circle cx={0} cy={0} r={12/communeZoom.scale} fill="rgba(204,0,0,0.15)" stroke="none"/>
-                                                    <circle cx={0} cy={0} r={6/communeZoom.scale} fill="#cc0000" stroke="white" strokeWidth={2/communeZoom.scale}/>
-                                                    <circle cx={0} cy={0} r={2/communeZoom.scale} fill="white"/>
-                                                </g>
-                                            )}
-                                        </g>
-                                    )}
-                                </g>
+                                {/* Impacts de foudre dessinés en coordonnées écran */}
+                                {projection&&strikes
+                                    .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=(communeZoomRange+0.2):true)
+                                    .map(s=>{
+                                        let color = '#ff0000';
+                                        if (selectedCommune) {
+                                            const d = haversineKm(selectedCommune.lat, selectedCommune.lon, s.lat, s.lon);
+                                            if (communeZoomRange === 2) {
+                                                if (d <= 0.1) color = RADII_COLORS[0];
+                                                else if (d <= 0.5) color = RADII_COLORS[1];
+                                                else if (d <= 1.0) color = RADII_COLORS[2];
+                                                else if (d <= 1.5) color = RADII_COLORS[3];
+                                                else color = RADII_COLORS[4];
+                                            } else {
+                                                if (d <= 1) color = RADII_COLORS[0];
+                                                else if (d <= 3) color = RADII_COLORS[1];
+                                                else if (d <= 5) color = RADII_COLORS[2];
+                                                else if (d <= 10) color = RADII_COLORS[3];
+                                                else color = RADII_COLORS[4];
+                                            }
+                                        }
+                                        return renderStrikeScreen(s, color);
+                                    })
+                                }
+
+                                {/* Marqueur commune / adresse dessiné au centre écran en taille pixel fixe */}
+                                {selectedCommune&&communeZoom&&(
+                                    <g transform={`translate(${COM_MAP/2}, ${COM_H/2})`}>
+                                        {selectedCommune.isAddress ? (
+                                            // Icone Maison premium pour l'adresse
+                                            <g>
+                                                <circle cx={0} cy={0} r={14} fill="rgba(56,189,248,0.15)" stroke="none"/>
+                                                {/* Toit et murs de la maison */}
+                                                <path d="M -6 2 L -6 8 L 6 8 L 6 2 L 0 -4 Z" fill="#00b4d8" stroke="white" strokeWidth={1.5}/>
+                                                {/* Porte */}
+                                                <rect x={-2} y={4} width={4} height={4} fill="white"/>
+                                            </g>
+                                        ) : (
+                                            // Cercle classique pour la commune
+                                            <g>
+                                                <circle cx={0} cy={0} r={12} fill="rgba(204,0,0,0.15)" stroke="none"/>
+                                                <circle cx={0} cy={0} r={6} fill="#cc0000" stroke="white" strokeWidth={2}/>
+                                                <circle cx={0} cy={0} r={2} fill="white"/>
+                                            </g>
+                                        )}
+                                    </g>
+                                )}
 
                                 {/* Labels cercles (hors groupe zoomé = taille écran fixe) */}
                                 {selectedCommune&&communeZoom&&activeRadii.map((r,idx)=>{
