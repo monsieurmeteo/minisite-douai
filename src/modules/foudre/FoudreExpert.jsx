@@ -387,47 +387,51 @@ export default function FoudreExpert() {
                                 </div>
                             )}
 
-                            {/* Chronologie */}
-                            {selectedCommune&&visibleStrikes.length>0&&(
-                                <div style={{margin:'0 16px 10px'}}>
-                                    <div style={{fontSize:'0.6rem',fontWeight:900,color:'#475569',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'8px'}}>Chronologie (≤20 km)</div>
-                                    <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'3px'}}>
-                                        {[0,4,8,12,16,20].map(hBase=>{
-                                            const hCount=visibleStrikes.filter(s=>s.h>=hBase&&s.h<hBase+4).length;
-                                            const maxH=Math.max(...[0,4,8,12,16,20].map(h=>visibleStrikes.filter(s=>s.h>=h&&s.h<h+4).length),1);
-                                            return (
-                                                <div key={hBase} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
-                                                    <div style={{width:'100%',height:'28px',display:'flex',alignItems:'flex-end'}}>
-                                                        <div style={{width:'100%',height:`${Math.max(2,(hCount/maxH)*28)}px`,background:HOUR_COLORS[hBase],borderRadius:'2px 2px 0 0',opacity:hCount?1:0.2}}/>
-                                                    </div>
-                                                    <span style={{fontSize:'0.44rem',fontWeight:800,color:'#475569'}}>{hBase}h</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
+                            {/* Ligne séparatrice */}
+                            <div style={{height:'1px',background:'rgba(255,255,255,0.06)',margin:'0 16px'}}/>
+
+                            {/* Chronologie / Légende heures */}
+                            <div style={{padding:'12px 20px 8px',display:'flex',alignItems:'center',gap:'7px'}}>
+                                <Zap size={13} color="#38bdf8" fill="#38bdf8"/>
+                                <span style={{fontSize:'0.65rem',fontWeight:900,color:'#38bdf8',textTransform:'uppercase',letterSpacing:'1px'}}>Chronologie & Couleurs</span>
+                            </div>
+
+                            <div style={{padding:'0 16px',flex:'0 0 auto',display:'flex',flexDirection:'column',gap:'4px'}}>
+                                {[0,4,8,12,16,20].map(hBase=>{
+                                    const count=visibleStrikes.filter(s=>s.h>=hBase&&s.h<hBase+4).length;
+                                    const color=HOUR_COLORS[hBase];
+                                    const txtColor=['#FFFF00','#FFCC00','#FFAA00','#00FFDD','#00FFBB','#00FF99','#00FF77','#00FF00','#77FF00','#BBFF00'].includes(color)?'#0f172a':'white';
+                                    return (
+                                        <div key={hBase} style={{display:'flex',alignItems:'center',gap:'8px',padding:'4px 8px',borderRadius:'6px',background:count>0?'rgba(255,255,255,0.03)':'transparent',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.05)':'transparent'}}>
+                                            {/* Badge heure coloré faisant office de légende */}
+                                            <div style={{
+                                                background:color,
+                                                color:txtColor,
+                                                fontWeight:850,fontSize:'0.68rem',padding:'3px 6px',borderRadius:'5px',minWidth:'55px',textAlign:'center',
+                                                boxShadow:'0 2px 4px rgba(0,0,0,0.2)'
+                                            }}>
+                                                {hBase}h - {hBase+4}h
+                                            </div>
+                                            {/* Mini-barre de proportion */}
+                                            <div style={{flex:1,height:'4px',background:'rgba(255,255,255,0.05)',borderRadius:'2px',overflow:'hidden'}}>
+                                                <div style={{width:`${Math.min(100,(count/Math.max(1,visibleStrikes.length))*100)}%`,height:'100%',background:color}}/>
+                                            </div>
+                                            {/* Nombre d'impacts */}
+                                            <span style={{fontSize:'0.72rem',fontWeight:900,color:count>0?'#38bdf8':'#475569',minWidth:'20px',textAlign:'right'}}>{count}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
 
                             {/* TOTAL */}
-                            <div style={{margin:'0 16px',padding:'10px 12px',borderRadius:'10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.06)',textAlign:'center'}}>
-                                <div style={{fontSize:'0.58rem',fontWeight:900,color:'#475569',textTransform:'uppercase',letterSpacing:'0.8px'}}>Total ≤ 20 km</div>
+                            <div style={{margin:'12px 16px 8px',padding:'10px 12px',borderRadius:'10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.06)',textAlign:'center'}}>
+                                <div style={{fontSize:'0.58rem',fontWeight:900,color:'#475569',textTransform:'uppercase',letterSpacing:'0.8px'}}>Total (≤20 km)</div>
                                 <div style={{fontSize:'1.8rem',fontWeight:900,color:'white',lineHeight:1.1}}>{visibleStrikes.length.toLocaleString()}</div>
                                 <div style={{fontSize:'0.62rem',color:'#64748b'}}>impacts détectés</div>
                             </div>
 
                             {/* Spacer */}
                             <div style={{flex:1}}/>
-
-                            {/* Légende chrono couleurs */}
-                            <div style={{padding:'8px 16px'}}>
-                                <div style={{fontSize:'0.58rem',fontWeight:800,color:'#334155',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'5px'}}>Heure de l'impact</div>
-                                <div style={{display:'flex',borderRadius:'5px',overflow:'hidden',height:'8px'}}>
-                                    {[0,4,8,12,16,20].map(h=><div key={h} style={{flex:1,background:HOUR_COLORS[h]}}/>)}
-                                </div>
-                                <div style={{display:'flex',justifyContent:'space-between',marginTop:'3px'}}>
-                                    {['0h','4h','8h','12h','16h','20h'].map(l=><span key={l} style={{fontSize:'0.5rem',color:'#475569',fontWeight:700}}>{l}</span>)}
-                                </div>
-                            </div>
 
                             {/* Bouton téléchargement */}
                             <div style={{padding:'10px 16px'}}>
