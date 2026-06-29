@@ -197,17 +197,20 @@ export default function FoudreExpert() {
         });
     };
 
-    // ── Rendu d'un impact ──────────────────────────────────
-    const renderStrike = (s,proj,sz,scale)=>{
-        const coords=proj([s.lon,s.lat]);
+    // ── Rendu d'un impact ──────────────────────────────────────────────────────
+    // scale : facteur de zoom SVG appliqué (pour corriger les épaisseurs de trait)
+    // colorOverride : couleur optionnelle passée par le parent (ex. en mode commune pour colorer par rayon)
+    const renderStrike = (s, proj, sz, scale, colorOverride) => {
+        const coords = proj([s.lon, s.lat]);
         if (!coords) return null;
-        const sw=scale?1/scale:1;
-        const color=HOUR_COLORS[s.h]||'#ff0000';
-        if (foudreDesign==='Glow')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*3} fill={color} fillOpacity={0.2}/><circle cx={coords[0]} cy={coords[1]} r={sz} fill={color}/></g>;
+        const sw = scale ? 1 / scale : 1; // strokeWidth en espace projection
+        const color = colorOverride || HOUR_COLORS[s.h] || '#ff0000';
+        if (foudreDesign==='Glow')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*3} fill={color} fillOpacity={0.25}/><circle cx={coords[0]} cy={coords[1]} r={sz} fill={color}/></g>;
         if (foudreDesign==='Cross')   return <g key={s.id} stroke={color} strokeWidth={sw*1.5}><line x1={coords[0]-sz*1.5} y1={coords[1]} x2={coords[0]+sz*1.5} y2={coords[1]}/><line x1={coords[0]} y1={coords[1]-sz*1.5} x2={coords[0]} y2={coords[1]+sz*1.5}/></g>;
         if (foudreDesign==='Ring')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*1.5} fill="none" stroke={color} strokeWidth={sw*2}/><circle cx={coords[0]} cy={coords[1]} r={sz*0.5} fill={color}/></g>;
         if (foudreDesign==='Diamond') return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*1.5}L${coords[0]+sz*1.5} ${coords[1]}L${coords[0]} ${coords[1]+sz*1.5}L${coords[0]-sz*1.5} ${coords[1]}Z`} fill={color} strokeWidth={0}/>;
         if (foudreDesign==='Bolt')    return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*2}L${coords[0]-sz} ${coords[1]+sz*.5}L${coords[0]} ${coords[1]+sz*.5}L${coords[0]-sz*.5} ${coords[1]+sz*2}L${coords[0]+sz} ${coords[1]-sz*.5}L${coords[0]} ${coords[1]-sz*.5}Z`} fill={color}/>;
+        // Classic (default)
         return <circle key={s.id} cx={coords[0]} cy={coords[1]} r={s.isRecent?sz*1.3:sz} fill={color} stroke="rgba(0,0,0,0.25)" strokeWidth={sw*0.8}/>;
     };
 
@@ -400,29 +403,28 @@ export default function FoudreExpert() {
 
                             {/* Titre section */}
                             <div style={{padding:'8px 16px 4px',display:'flex',alignItems:'center',gap:'6px'}}>
-                                <Zap size={12} color="#38bdf8" fill="#38bdf8"/>
-                                <span style={{fontSize:'0.62rem',fontWeight:900,color:'#38bdf8',textTransform:'uppercase',letterSpacing:'1px'}}>Chronologie & Couleurs</span>
+                                <Target size={12} color="#38bdf8"/>
+                                <span style={{fontSize:'0.62rem',fontWeight:900,color:'#38bdf8',textTransform:'uppercase',letterSpacing:'1px'}}>Chronologie des impacts</span>
                             </div>
 
                             <div style={{padding:'0 12px',flex:'0 0 auto',display:'flex',flexDirection:'column',gap:'3px'}}>
                                 {[0,4,8,12,16,20].map(hBase=>{
                                     const count=visibleStrikes.filter(s=>s.h>=hBase&&s.h<hBase+4).length;
-                                    const color=HOUR_COLORS[hBase];
-                                    const txtColor=['#FFFF00','#FFCC00','#FFAA00','#00FFDD','#00FFBB','#00FF99','#00FF77','#00FF00','#77FF00','#BBFF00'].includes(color)?'#0f172a':'white';
                                     return (
                                         <div key={hBase} style={{display:'flex',alignItems:'center',gap:'6px',padding:'2px 6px',borderRadius:'5px',background:count>0?'rgba(255,255,255,0.02)':'transparent',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.04)':'transparent'}}>
-                                            {/* Badge heure coloré */}
+                                            {/* Badge heure neutre sans couleur */}
                                             <div style={{
-                                                background:color,
-                                                color:txtColor,
-                                                fontWeight:850,fontSize:'0.62rem',padding:'2px 4px',borderRadius:'4px',minWidth:'52px',textAlign:'center',
+                                                background:'rgba(255,255,255,0.08)',
+                                                color:'#e2e8f0',
+                                                fontWeight:800,fontSize:'0.62rem',padding:'2px 4px',borderRadius:'4px',minWidth:'52px',textAlign:'center',
+                                                border:'1px solid rgba(255,255,255,0.1)',
                                                 boxShadow:'0 1.5px 3px rgba(0,0,0,0.2)'
                                             }}>
                                                 {hBase}h - {hBase+4}h
                                             </div>
-                                            {/* Mini-barre */}
+                                            {/* Mini-barre de proportion neutre (bleu ciel) */}
                                             <div style={{flex:1,height:'4px',background:'rgba(255,255,255,0.04)',borderRadius:'2px',overflow:'hidden'}}>
-                                                <div style={{width:`${Math.min(100,(count/Math.max(1,visibleStrikes.length))*100)}%`,height:'100%',background:color}}/>
+                                                <div style={{width:`${Math.min(100,(count/Math.max(1,visibleStrikes.length))*100)}%`,height:'100%',background:'#38bdf8'}}/>
                                             </div>
                                             {/* Nombre */}
                                             <span style={{fontSize:'0.68rem',fontWeight:900,color:count>0?'#38bdf8':'#475569',minWidth:'20px',textAlign:'right'}}>{count}</span>
@@ -474,10 +476,21 @@ export default function FoudreExpert() {
                                             strokeDasharray={`${10/communeZoom.scale} ${5/communeZoom.scale}`}/>
                                     ))}
 
-                                    {/* Impacts */}
+                                    {/* Impacts colorés par rayon (Red, Orange, Yellow, Green, Blue) */}
                                     {projection&&strikes
                                         .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=22:true)
-                                        .map(s=>renderStrike(s,projection,communeZoom?strikeSize/communeZoom.scale:strikeSize,communeZoom?.scale))
+                                        .map(s=>{
+                                            let color = '#ff0000';
+                                            if (selectedCommune) {
+                                                const d = haversineKm(selectedCommune.lat, selectedCommune.lon, s.lat, s.lon);
+                                                if (d <= 1) color = RADII_COLORS[0];
+                                                else if (d <= 3) color = RADII_COLORS[1];
+                                                else if (d <= 5) color = RADII_COLORS[2];
+                                                else if (d <= 10) color = RADII_COLORS[3];
+                                                else color = RADII_COLORS[4];
+                                            }
+                                            return renderStrike(s,projection,communeZoom?strikeSize/communeZoom.scale:strikeSize,communeZoom?.scale,color);
+                                        })
                                     }
 
                                     {/* Marqueur commune */}
