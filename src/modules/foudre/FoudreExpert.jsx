@@ -466,19 +466,18 @@ export default function FoudreExpert() {
                             </div>
 
                             {/* Bouton de téléchargement & Logo côte à côte */}
-                            <div style={{padding:'8px 12px 12px',borderTop:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',marginTop:'auto'}}>
-                                {showLogo && <img src="/logo.jpg" style={{height:'32px',borderRadius:'7px',opacity:0.95}}/>}
-                                <button onClick={exportMap} style={{flex:1,padding:'8px',border:'none',borderRadius:'8px',background:'rgba(255,255,255,0.1)',color:'white',cursor:'pointer',fontWeight:800,fontSize:'0.72rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',letterSpacing:'0.2px',transition:'background .15s'}}
-                                    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.16)'}
-                                    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.1)'}>
-                                    <Download size={13}/> TÉLÉCHARGER LA VUE
+                            <div style={{padding:'8px 12px 12px',borderTop:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',marginTop:'auto',width:'100%'}}>
+                                {showLogo && (
+                                    <div style={{background:'white',padding:'3px 6px',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 4px rgba(0,0,0,0.15)',height:'30px'}}>
+                                        <img src="/logo.jpg" style={{height:'20px',display:'block'}}/>
+                                    </div>
+                                )}
+                                <button data-html2canvas-ignore="true" onClick={exportMap} style={{flex:1,padding:'8px 10px',border:'none',borderRadius:'8px',background:'#00b4d8',color:'#07131e',cursor:'pointer',fontWeight:900,fontSize:'0.7rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'5px',letterSpacing:'0.2px',boxShadow:'0 2px 8px rgba(0,180,216,0.35)',transition:'all .15s'}}
+                                    onMouseEnter={e=>{e.currentTarget.style.background='#00c4f8';e.currentTarget.style.transform='scale(1.02)';}}
+                                    onMouseLeave={e=>{e.currentTarget.style.background='#00b4d8';e.currentTarget.style.transform='scale(1)';}}>
+                                    <Download size={12}/> VUE
                                 </button>
                             </div>
-
-                            {/* Logo */}
-                            {showLogo&&<div style={{padding:'0 16px 14px',display:'flex',alignItems:'center',gap:'8px'}}>
-                                <img src="/logo.jpg" style={{height:'36px',borderRadius:'7px',opacity:0.9}}/>
-                            </div>}
                         </div>
 
                         {/* ── CARTE SVG COMMUNE (carrée) ── */}
