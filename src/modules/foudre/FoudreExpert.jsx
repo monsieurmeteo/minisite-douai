@@ -66,6 +66,7 @@ export default function FoudreExpert() {
     const [selectedCommune, setSelectedCommune]     = useState(null);
     const [showSuggestions, setShowSuggestions]     = useState(false);
     const [communeZoomRange, setCommuneZoomRange]   = useState(20); // 20 ou 2
+    const [searchMode, setSearchMode]               = useState('commune'); // 'commune' ou 'adresse'
     const inputRef   = useRef(null);
     const suggestRef = useRef(null);
 
@@ -104,19 +105,37 @@ export default function FoudreExpert() {
         load();
     }, [geoMode, selectedRegion, selectedDept]);
 
-    // ── Recherche commune ─────────────────────────────────
+    // ── Recherche commune / adresse ────────────────────────
     const searchCommune = useCallback(async (q) => {
         if (q.length < 2) { setCommuneSuggestions([]); setShowSuggestions(false); return; }
         try {
-            const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(q)}&limit=8&fields=nom,code,codesPostaux,centre,codeDepartement&boost=population`);
-            if (!res.ok) return;
-            const data = await res.json();
-            const list = data.map(c => ({ name:c.nom, cp:c.codesPostaux?.[0]||'', dept:c.codeDepartement, lat:c.centre?.coordinates?.[1], lon:c.centre?.coordinates?.[0] })).filter(c=>c.lat&&c.lon);
-            setCommuneSuggestions(list);
-            setShowSuggestions(list.length > 0);
+            if (searchMode === 'commune') {
+                const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(q)}&limit=8&fields=nom,code,codesPostaux,centre,codeDepartement&boost=population`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const list = data.map(c => ({ name:c.nom, cp:c.codesPostaux?.[0]||'', dept:c.codeDepartement, lat:c.centre?.coordinates?.[1], lon:c.centre?.coordinates?.[0] })).filter(c=>c.lat&&c.lon);
+                setCommuneSuggestions(list);
+                setShowSuggestions(list.length > 0);
+            } else {
+                // Recherche d'adresse via l'API nationale geo.api.gouv.fr
+                const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=6`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const list = (data.features || []).map(f => ({
+                    name: f.properties.name,
+                    cp: `${f.properties.postcode} ${f.properties.city}`,
+                    dept: f.properties.postcode?.substring(0, 2) || '',
+                    lat: f.geometry?.coordinates?.[1],
+                    lon: f.geometry?.coordinates?.[0],
+                    isAddress: true,
+                    label: f.properties.label
+                })).filter(c => c.lat && c.lon);
+                setCommuneSuggestions(list);
+                setShowSuggestions(list.length > 0);
+            }
         } catch(e) {}
-    }, []);
-    useEffect(() => { const t = setTimeout(()=>searchCommune(communeQuery),300); return ()=>clearTimeout(t); }, [communeQuery, searchCommune]);
+    }, [searchMode]);
+    useEffect(() => { const t = setTimeout(()=>searchCommune(communeQuery), 300); return ()=>clearTimeout(t); }, [communeQuery, searchCommune]);
     useEffect(() => {
         const h = e => { if (suggestRef.current&&!suggestRef.current.contains(e.target)&&inputRef.current&&!inputRef.current.contains(e.target)) setShowSuggestions(false); };
         document.addEventListener('mousedown', h);
@@ -269,28 +288,47 @@ export default function FoudreExpert() {
                     {geoMode==='region'&&<select value={selectedRegion} onChange={e=>setSelectedRegion(e.target.value)} style={{padding:'7px',borderRadius:'9px',border:'1px solid #cbd5e1',fontWeight:700,outline:'none',fontSize:'0.82rem'}}>{Object.keys(REGIONS).sort().map(r=><option key={r} value={r}>{r}</option>)}</select>}
                     {geoMode==='dept'&&<select value={selectedDept} onChange={e=>setSelectedDept(e.target.value)} style={{padding:'7px',borderRadius:'9px',border:'1px solid #cbd5e1',fontWeight:700,outline:'none',fontSize:'0.82rem'}}>{DEPARTMENTS.map(d=><option key={d.code} value={d.code}>{d.code} - {d.name}</option>)}</select>}
 
-                    {/* Recherche commune */}
+                    {/* Recherche commune ou adresse précise */}
                     {geoMode==='commune'&&(
-                        <div style={{position:'relative'}}>
-                            <div style={{display:'flex',alignItems:'center',gap:'7px',background:'#f8fafc',border:'1.5px solid #cbd5e1',borderRadius:'9px',padding:'5px 11px'}}>
-                                <Search size={15} color="#64748b"/>
-                                <input ref={inputRef} type="text" placeholder="Rechercher une commune..." value={communeQuery}
-                                    onChange={e=>setCommuneQuery(e.target.value)} onFocus={()=>communeSuggestions.length>0&&setShowSuggestions(true)}
-                                    style={{border:'none',background:'transparent',outline:'none',fontWeight:700,fontSize:'0.83rem',width:'200px',color:'#0f172a'}}/>
-                                {communeQuery&&<button onClick={()=>{setCommuneQuery('');setSelectedCommune(null);setCommuneSuggestions([]);}} style={{border:'none',background:'none',cursor:'pointer',padding:0,display:'flex'}}><X size={13} color="#94a3b8"/></button>}
+                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                            {/* Sélecteur de mode de recherche */}
+                            <div style={{display:'flex',gap:'2px',background:'#f1f5f9',padding:'2px',borderRadius:'7px'}}>
+                                <button onClick={()=>{setSearchMode('commune');setCommuneQuery('');setSelectedCommune(null);}}
+                                    style={{padding:'4px 9px',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'0.72rem',fontWeight:850,background:searchMode==='commune'?'white':'transparent',color:searchMode==='commune'?'#00b4d8':'#64748b',transition:'all .15s'}}>
+                                    Commune
+                                </button>
+                                <button onClick={()=>{setSearchMode('adresse');setCommuneQuery('');setSelectedCommune(null);}}
+                                    style={{padding:'4px 9px',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'0.72rem',fontWeight:850,background:searchMode==='adresse'?'white':'transparent',color:searchMode==='adresse'?'#00b4d8':'#64748b',transition:'all .15s'}}>
+                                    Adresse
+                                </button>
                             </div>
-                            {showSuggestions&&communeSuggestions.length>0&&(
-                                <div ref={suggestRef} style={{position:'absolute',top:'100%',left:0,marginTop:'4px',background:'white',border:'1px solid #e2e8f0',borderRadius:'12px',boxShadow:'0 10px 25px rgba(0,0,0,0.12)',zIndex:1000,minWidth:'260px',overflow:'hidden'}}>
-                                    {communeSuggestions.map((c,i)=>(
-                                        <button key={i} onClick={()=>{setSelectedCommune(c);setCommuneQuery(`${c.name} (${c.cp})`);setShowSuggestions(false);}}
-                                            style={{display:'flex',alignItems:'center',gap:'9px',width:'100%',padding:'9px 13px',border:'none',borderBottom:i<communeSuggestions.length-1?'1px solid #f1f5f9':'none',background:'white',cursor:'pointer',textAlign:'left'}}
-                                            onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'} onMouseLeave={e=>e.currentTarget.style.background='white'}>
-                                            <MapPin size={13} color="#ef4444"/>
-                                            <div><div style={{fontWeight:800,fontSize:'0.83rem',color:'#0f172a'}}>{c.name}</div><div style={{fontSize:'0.7rem',color:'#64748b'}}>{c.cp} — Dép. {c.dept}</div></div>
-                                        </button>
-                                    ))}
+
+                            <div style={{position:'relative'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'7px',background:'#f8fafc',border:'1.5px solid #cbd5e1',borderRadius:'9px',padding:'5px 11px'}}>
+                                    <Search size={15} color="#64748b"/>
+                                    <input ref={inputRef} type="text"
+                                        placeholder={searchMode==='commune'?"Rechercher une commune...":"8 rue de la Gare, 75000..."}
+                                        value={communeQuery}
+                                        onChange={e=>setCommuneQuery(e.target.value)} onFocus={()=>communeSuggestions.length>0&&setShowSuggestions(true)}
+                                        style={{border:'none',background:'transparent',outline:'none',fontWeight:700,fontSize:'0.83rem',width:'220px',color:'#0f172a'}}/>
+                                    {communeQuery&&<button onClick={()=>{setCommuneQuery('');setSelectedCommune(null);setCommuneSuggestions([]);}} style={{border:'none',background:'none',cursor:'pointer',padding:0,display:'flex'}}><X size={13} color="#94a3b8"/></button>}
                                 </div>
-                            )}
+                                {showSuggestions&&communeSuggestions.length>0&&(
+                                    <div ref={suggestRef} style={{position:'absolute',top:'100%',left:0,marginTop:'4px',background:'white',border:'1px solid #e2e8f0',borderRadius:'12px',boxShadow:'0 10px 25px rgba(0,0,0,0.12)',zIndex:1000,minWidth:'280px',overflow:'hidden'}}>
+                                        {communeSuggestions.map((c,i)=>(
+                                            <button key={i} onClick={()=>{setSelectedCommune(c);setCommuneQuery(c.isAddress ? `${c.name}, ${c.cp}` : `${c.name} (${c.cp})`);setShowSuggestions(false);}}
+                                                style={{display:'flex',alignItems:'center',gap:'9px',width:'100%',padding:'9px 13px',border:'none',borderBottom:i<communeSuggestions.length-1?'1px solid #f1f5f9':'none',background:'white',cursor:'pointer',textAlign:'left'}}
+                                                onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'} onMouseLeave={e=>e.currentTarget.style.background='white'}>
+                                                <MapPin size={13} color={c.isAddress ? "#00b4d8" : "#ef4444"}/>
+                                                <div style={{flex:1}}>
+                                                    <div style={{fontWeight:800,fontSize:'0.83rem',color:'#0f172a'}}>{c.isAddress ? c.name : c.name}</div>
+                                                    <div style={{fontSize:'0.7rem',color:'#64748b'}}>{c.isAddress ? c.label : `${c.cp} — Dép. ${c.dept}`}</div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -545,12 +583,26 @@ export default function FoudreExpert() {
                                         })
                                     }
 
-                                    {/* Marqueur commune */}
+                                    {/* Marqueur commune / adresse */}
                                     {selectedCommune&&communeZoom&&(
-                                        <g>
-                                            <circle cx={communeZoom.cx} cy={communeZoom.cy} r={12/communeZoom.scale} fill="rgba(204,0,0,0.15)" stroke="none"/>
-                                            <circle cx={communeZoom.cx} cy={communeZoom.cy} r={6/communeZoom.scale} fill="#cc0000" stroke="white" strokeWidth={2/communeZoom.scale}/>
-                                            <circle cx={communeZoom.cx} cy={communeZoom.cy} r={2/communeZoom.scale} fill="white"/>
+                                        <g transform={`translate(${communeZoom.cx}, ${communeZoom.cy})`}>
+                                            {selectedCommune.isAddress ? (
+                                                // Icone Maison premium pour l'adresse
+                                                <g>
+                                                    <circle cx={0} cy={0} r={14/communeZoom.scale} fill="rgba(56,189,248,0.15)" stroke="none"/>
+                                                    {/* Toit et murs de la maison */}
+                                                    <path d={`M ${-6/communeZoom.scale} ${2/communeZoom.scale} L ${-6/communeZoom.scale} ${8/communeZoom.scale} L ${6/communeZoom.scale} ${8/communeZoom.scale} L ${6/communeZoom.scale} ${2/communeZoom.scale} L 0 ${-4/communeZoom.scale} Z`} fill="#00b4d8" stroke="white" strokeWidth={1.5/communeZoom.scale}/>
+                                                    {/* Porte */}
+                                                    <rect x={-2/communeZoom.scale} y={4/communeZoom.scale} width={4/communeZoom.scale} height={4/communeZoom.scale} fill="white"/>
+                                                </g>
+                                            ) : (
+                                                // Cercle classique pour la commune
+                                                <g>
+                                                    <circle cx={0} cy={0} r={12/communeZoom.scale} fill="rgba(204,0,0,0.15)" stroke="none"/>
+                                                    <circle cx={0} cy={0} r={6/communeZoom.scale} fill="#cc0000" stroke="white" strokeWidth={2/communeZoom.scale}/>
+                                                    <circle cx={0} cy={0} r={2/communeZoom.scale} fill="white"/>
+                                                </g>
+                                            )}
                                         </g>
                                     )}
                                 </g>
