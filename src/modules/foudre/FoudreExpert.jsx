@@ -40,7 +40,7 @@ const haversineKm = (lat1, lon1, lat2, lon2) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 };
 
-const WIDTH = 1200, HEIGHT = 900;
+const WIDTH = 960, HEIGHT = 720;
 
 export default function FoudreExpert() {
     const navigate = useNavigate();
@@ -236,19 +236,21 @@ export default function FoudreExpert() {
 
     const mp = MAP_PALETTES[mapPalette];
 
-    // ── Rendu d'un impact ──────────────────────────────────
-    const renderStrike = (s, proj, sizeOverride) => {
+    // ── Rendu d'un impact ──────────────────────────────────────────────────────
+    // scale : facteur de zoom SVG appliqué (pour corriger les épaisseurs de trait)
+    const renderStrike = (s, proj, sizeOverride, scale) => {
         const coords = proj([s.lon, s.lat]);
         if (!coords) return null;
         const sz = sizeOverride ?? strikeSize;
+        const sw = scale ? 1 / scale : 1; // strokeWidth en espace projection
         const color = HOUR_COLORS[s.h] || '#ff0000';
         if (foudreDesign==='Glow')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*3} fill={color} fillOpacity={0.25}/><circle cx={coords[0]} cy={coords[1]} r={sz} fill="#fff"/></g>;
-        if (foudreDesign==='Cross')   return <g key={s.id} stroke={color} strokeWidth={1.5}><line x1={coords[0]-sz*1.5} y1={coords[1]} x2={coords[0]+sz*1.5} y2={coords[1]}/><line x1={coords[0]} y1={coords[1]-sz*1.5} x2={coords[0]} y2={coords[1]+sz*1.5}/><circle cx={coords[0]} cy={coords[1]} r={sz*0.4} fill="#fff" stroke="none"/></g>;
-        if (foudreDesign==='Ring')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*1.5} fill="none" stroke={color} strokeWidth={2}/><circle cx={coords[0]} cy={coords[1]} r={sz*0.5} fill={color}/></g>;
-        if (foudreDesign==='Diamond') return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*1.5}L${coords[0]+sz*1.5} ${coords[1]}L${coords[0]} ${coords[1]+sz*1.5}L${coords[0]-sz*1.5} ${coords[1]}Z`} fill={color} stroke="#fff" strokeWidth={0.8}/>;
-        if (foudreDesign==='Bolt')    return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*2}L${coords[0]-sz} ${coords[1]+sz*.5}L${coords[0]} ${coords[1]+sz*.5}L${coords[0]-sz*.5} ${coords[1]+sz*2}L${coords[0]+sz} ${coords[1]-sz*.5}L${coords[0]} ${coords[1]-sz*.5}Z`} fill={color} stroke="#000" strokeWidth={0.4}/>;
+        if (foudreDesign==='Cross')   return <g key={s.id} stroke={color} strokeWidth={sw*1.5}><line x1={coords[0]-sz*1.5} y1={coords[1]} x2={coords[0]+sz*1.5} y2={coords[1]}/><line x1={coords[0]} y1={coords[1]-sz*1.5} x2={coords[0]} y2={coords[1]+sz*1.5}/><circle cx={coords[0]} cy={coords[1]} r={sz*0.4} fill="#fff" stroke="none"/></g>;
+        if (foudreDesign==='Ring')    return <g key={s.id}><circle cx={coords[0]} cy={coords[1]} r={sz*1.5} fill="none" stroke={color} strokeWidth={sw*2}/><circle cx={coords[0]} cy={coords[1]} r={sz*0.5} fill={color}/></g>;
+        if (foudreDesign==='Diamond') return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*1.5}L${coords[0]+sz*1.5} ${coords[1]}L${coords[0]} ${coords[1]+sz*1.5}L${coords[0]-sz*1.5} ${coords[1]}Z`} fill={color} stroke="rgba(255,255,255,0.5)" strokeWidth={sw*0.8}/>;
+        if (foudreDesign==='Bolt')    return <path key={s.id} d={`M${coords[0]} ${coords[1]-sz*2}L${coords[0]-sz} ${coords[1]+sz*.5}L${coords[0]} ${coords[1]+sz*.5}L${coords[0]-sz*.5} ${coords[1]+sz*2}L${coords[0]+sz} ${coords[1]-sz*.5}L${coords[0]} ${coords[1]-sz*.5}Z`} fill={color} stroke="rgba(0,0,0,0.3)" strokeWidth={sw*0.4}/>;
         // Classic (default)
-        return <circle key={s.id} cx={coords[0]} cy={coords[1]} r={s.isRecent?sz*1.3:sz} fill={color} stroke="#000" strokeWidth={0.8}/>;
+        return <circle key={s.id} cx={coords[0]} cy={coords[1]} r={s.isRecent?sz*1.3:sz} fill={color} stroke="rgba(0,0,0,0.4)" strokeWidth={sw}/>;
     };
 
     return (
@@ -382,10 +384,10 @@ export default function FoudreExpert() {
                                             strokeWidth={communeZoom?1/communeZoom.scale:1}/>
                                     ))}
 
-                                    {/* Impacts dans un rayon de 22km */}
+                                    {/* Impacts dans un rayon de 22km — couleurs identiques au mode national */}
                                     {projection&&strikes
                                         .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=22:true)
-                                        .map(s=>renderStrike(s, projection, communeZoom?strikeSize/communeZoom.scale:strikeSize))
+                                        .map(s=>renderStrike(s, projection, communeZoom?strikeSize/communeZoom.scale:strikeSize, communeZoom?.scale))
                                     }
 
                                     {/* Cercles concentriques */}
