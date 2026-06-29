@@ -65,6 +65,7 @@ export default function FoudreExpert() {
     const [communeSuggestions, setCommuneSuggestions] = useState([]);
     const [selectedCommune, setSelectedCommune]     = useState(null);
     const [showSuggestions, setShowSuggestions]     = useState(false);
+    const [communeZoomRange, setCommuneZoomRange]   = useState(20); // 20 ou 2
     const inputRef   = useRef(null);
     const suggestRef = useRef(null);
 
@@ -156,6 +157,11 @@ export default function FoudreExpert() {
     },[geoData]);
     const pathGenerator = useMemo(()=>projection?geoPath().projection(projection):null,[projection]);
 
+    // activeRadii : s'adapte selon le zoom sélectionné (20 km ou 2 km)
+    const activeRadii = useMemo(() => {
+        return communeZoomRange === 2 ? [0.1, 0.5, 1.0, 1.5, 2.0] : RADII_KM;
+    }, [communeZoomRange]);
+
     // ── Zoom commune : projection France + transform SVG ──
     // La carte commune est un carré COM_MAP × COM_MAP
     const communeZoom = useMemo(()=>{
@@ -163,18 +169,18 @@ export default function FoudreExpert() {
         const [cx,cy]=projection([selectedCommune.lon,selectedCommune.lat]);
         const [,cy2]=projection([selectedCommune.lon,selectedCommune.lat+1/111.32]);
         const pxPerKm=Math.abs(cy-cy2);
-        // On veut que le rayon 20km tienne dans (COM_MAP/2 - 40px) de marge
-        const scale=(COM_MAP/2-50)/(20*pxPerKm);
+        // On veut que le rayon ciblé tienne dans (COM_MAP/2 - 50px)
+        const scale=(COM_MAP/2-50)/(communeZoomRange*pxPerKm);
         const tx=COM_MAP/2-cx*scale;
         const ty=COM_H/2-cy*scale;
         return{cx,cy,scale,pxPerKm,tx,ty,svgTransform:`translate(${tx},${ty}) scale(${scale})`};
-    },[selectedCommune,projection,geoMode]);
+    },[selectedCommune,projection,geoMode,communeZoomRange]);
 
     // ── Impacts par rayon ──────────────────────────────────
     const impactsByRadius = useMemo(()=>{
         if (!selectedCommune) return {};
-        return RADII_KM.reduce((acc,r)=>{ acc[r]=strikes.filter(s=>haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=r).length; return acc; },{});
-    },[strikes,selectedCommune]);
+        return activeRadii.reduce((acc,r)=>{ acc[r]=strikes.filter(s=>haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=r).length; return acc; },{});
+    },[strikes,selectedCommune,activeRadii]);
 
     const closestStrike = useMemo(()=>{
         if (!selectedCommune||strikes.length===0) return null;
@@ -184,10 +190,10 @@ export default function FoudreExpert() {
     },[strikes,selectedCommune]);
 
     const visibleStrikes = useMemo(()=>{
-        if (geoMode==='commune'&&selectedCommune) return strikes.filter(s=>haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=20);
+        if (geoMode==='commune'&&selectedCommune) return strikes.filter(s=>haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=communeZoomRange);
         if (!projection) return [];
         return strikes.filter(s=>{const c=projection([s.lon,s.lat]);return c&&c[0]>=0&&c[0]<=STD_W&&c[1]>=0&&c[1]<=STD_H;});
-    },[strikes,geoMode,selectedCommune,projection]);
+    },[strikes,geoMode,selectedCommune,projection,communeZoomRange]);
 
     const exportMap = ()=>{
         html2canvas(document.getElementById("export-foudre"),{scale:2}).then(canvas=>{
@@ -351,7 +357,23 @@ export default function FoudreExpert() {
                                         <button onClick={()=>{setSelectedCommune(null);setCommuneQuery('');}} style={{border:'none',background:'rgba(255,255,255,0.08)',borderRadius:'5px',color:'#94a3b8',cursor:'pointer',padding:'2px 5px',fontSize:'0.68rem',lineHeight:1}}>✕</button>
                                     )}
                                 </div>
-                                <div style={{fontSize:'0.62rem',color:'#475569',fontWeight:700,marginTop:'5px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{dateLabel}</div>
+                                <div style={{fontSize:'0.62rem',color:'#475569',fontWeight:700,marginTop:'5px',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'8px'}}>{dateLabel}</div>
+                                
+                                {/* Sélecteur de Zoom (20km ou 2km) */}
+                                {selectedCommune&&(
+                                    <div style={{display:'flex',gap:'3px',background:'rgba(255,255,255,0.06)',padding:'2px',borderRadius:'7px',marginTop:'4px'}}>
+                                        {[20, 2].map(r => (
+                                            <button key={r} onClick={()=>setCommuneZoomRange(r)} style={{
+                                                flex:1,padding:'4.5px 0',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'0.7rem',fontWeight:850,
+                                                background:communeZoomRange===r?'#38bdf8':'transparent',
+                                                color:communeZoomRange===r?'#0f172a':'#94a3b8',
+                                                transition:'all .1s'
+                                            }}>
+                                                {r === 2 ? 'Zoom 2 km' : 'Radar 20 km'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Ligne séparatrice */}
@@ -365,19 +387,22 @@ export default function FoudreExpert() {
 
                             {/* Rayons */}
                             <div style={{padding:'0 12px',flex:'0 0 auto'}}>
-                                {RADII_KM.map((r,idx)=>{
+                                {activeRadii.map((r,idx)=>{
                                     const count=selectedCommune?(impactsByRadius[r]||0):0;
-                                    const prev=idx>0?(impactsByRadius[RADII_KM[idx-1]]||0):0;
+                                    const prev=idx>0?(impactsByRadius[activeRadii[idx-1]]||0):0;
                                     const ring=count-prev;
+                                    const label = r >= 1 ? `≤ ${r} km` : `≤ ${r*1000} m`;
+                                    const ringLabel = r >= 1 ? `dans l'anneau` : `dans la zone`;
+                                    const circleLabel = r >= 1 ? `${r}k` : `${r*1000}`;
                                     return (
                                         <div key={r} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',borderRadius:'8px',background:count>0?'rgba(255,255,255,0.04)':'transparent',marginBottom:'2px',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.07)':'transparent'}}>
                                             {/* Indicateur couleur */}
                                             <div style={{width:'22px',height:'22px',borderRadius:'50%',border:`1.5px dashed ${RADII_COLORS[idx]}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:`${RADII_COLORS[idx]}10`}}>
-                                                <span style={{fontSize:'0.52rem',fontWeight:900,color:RADII_COLORS[idx]}}>{r}k</span>
+                                                <span style={{fontSize:'0.48rem',fontWeight:900,color:RADII_COLORS[idx]}}>{circleLabel}</span>
                                             </div>
                                             <div style={{flex:1}}>
-                                                <div style={{fontSize:'0.76rem',fontWeight:700,color:'#cbd5e1'}}>≤ {r} km</div>
-                                                {idx>0&&ring>0&&<div style={{fontSize:'0.58rem',color:'#475569'}}>+{ring} dans l'anneau</div>}
+                                                <div style={{fontSize:'0.76rem',fontWeight:700,color:'#cbd5e1'}}>{label}</div>
+                                                {idx>0&&ring>0&&<div style={{fontSize:'0.58rem',color:'#475569'}}>+{ring} {ringLabel}</div>}
                                             </div>
                                             <div style={{fontSize:'0.92rem',fontWeight:900,color:count>0?RADII_COLORS[idx]:'#334155',minWidth:'28px',textAlign:'right'}}>{count}</div>
                                         </div>
@@ -467,27 +492,55 @@ export default function FoudreExpert() {
                                     ))}
 
                                     {/* Cercles concentriques (dans l'espace projection) */}
-                                    {selectedCommune&&communeZoom&&RADII_KM.map((r,idx)=>(
-                                        <circle key={r} cx={communeZoom.cx} cy={communeZoom.cy}
-                                            r={r*communeZoom.pxPerKm}
-                                            fill={`${RADII_COLORS[idx]}08`}
-                                            stroke={RADII_COLORS[idx]}
-                                            strokeWidth={2/communeZoom.scale}
-                                            strokeDasharray={`${10/communeZoom.scale} ${5/communeZoom.scale}`}/>
-                                    ))}
+                                    {selectedCommune&&communeZoom&&(
+                                        communeZoomRange === 20 ? (
+                                            RADII_KM.map((r,idx)=>(
+                                                <circle key={r} cx={communeZoom.cx} cy={communeZoom.cy}
+                                                    r={r*communeZoom.pxPerKm}
+                                                    fill={`${RADII_COLORS[idx]}08`}
+                                                    stroke={RADII_COLORS[idx]}
+                                                    strokeWidth={2/communeZoom.scale}
+                                                    strokeDasharray={`${10/communeZoom.scale} ${5/communeZoom.scale}`}/>
+                                            ))
+                                        ) : (
+                                            // Mode 2km : cercles tous les 100m (0.1 à 2.0)
+                                            Array.from({length: 20}, (_, i) => parseFloat(((i + 1) * 0.1).toFixed(1))).map(r => {
+                                                const isMain = [0.1, 0.5, 1.0, 1.5, 2.0].includes(r);
+                                                const mainIdx = isMain ? [0.1, 0.5, 1.0, 1.5, 2.0].indexOf(r) : -1;
+                                                const color = isMain ? RADII_COLORS[mainIdx] : 'rgba(255,255,255,0.25)';
+                                                return (
+                                                    <circle key={r} cx={communeZoom.cx} cy={communeZoom.cy}
+                                                        r={r*communeZoom.pxPerKm}
+                                                        fill={isMain ? `${color}05` : 'none'}
+                                                        stroke={color}
+                                                        strokeWidth={(isMain ? 1.5 : 0.6)/communeZoom.scale}
+                                                        strokeDasharray={isMain ? `${8/communeZoom.scale} ${4/communeZoom.scale}` : `${3/communeZoom.scale} ${3/communeZoom.scale}`}
+                                                        opacity={isMain ? 0.8 : 0.3}/>
+                                                );
+                                            })
+                                        )
+                                    )}
 
                                     {/* Impacts colorés par rayon (Red, Orange, Yellow, Green, Blue) */}
                                     {projection&&strikes
-                                        .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=22:true)
+                                        .filter(s=>selectedCommune?haversineKm(selectedCommune.lat,selectedCommune.lon,s.lat,s.lon)<=(communeZoomRange+0.2):true)
                                         .map(s=>{
                                             let color = '#ff0000';
                                             if (selectedCommune) {
                                                 const d = haversineKm(selectedCommune.lat, selectedCommune.lon, s.lat, s.lon);
-                                                if (d <= 1) color = RADII_COLORS[0];
-                                                else if (d <= 3) color = RADII_COLORS[1];
-                                                else if (d <= 5) color = RADII_COLORS[2];
-                                                else if (d <= 10) color = RADII_COLORS[3];
-                                                else color = RADII_COLORS[4];
+                                                if (communeZoomRange === 2) {
+                                                    if (d <= 0.1) color = RADII_COLORS[0];
+                                                    else if (d <= 0.5) color = RADII_COLORS[1];
+                                                    else if (d <= 1.0) color = RADII_COLORS[2];
+                                                    else if (d <= 1.5) color = RADII_COLORS[3];
+                                                    else color = RADII_COLORS[4];
+                                                } else {
+                                                    if (d <= 1) color = RADII_COLORS[0];
+                                                    else if (d <= 3) color = RADII_COLORS[1];
+                                                    else if (d <= 5) color = RADII_COLORS[2];
+                                                    else if (d <= 10) color = RADII_COLORS[3];
+                                                    else color = RADII_COLORS[4];
+                                                }
                                             }
                                             return renderStrike(s,projection,communeZoom?strikeSize/communeZoom.scale:strikeSize,communeZoom?.scale,color);
                                         })
@@ -504,13 +557,14 @@ export default function FoudreExpert() {
                                 </g>
 
                                 {/* Labels cercles (hors groupe zoomé = taille écran fixe) */}
-                                {selectedCommune&&communeZoom&&RADII_KM.map((r,idx)=>{
+                                {selectedCommune&&communeZoom&&activeRadii.map((r,idx)=>{
                                     const rScreen=r*communeZoom.pxPerKm*communeZoom.scale;
+                                    const label = r >= 1 ? `${r} km` : `${r*1000} m`;
                                     return (
                                         <text key={r} x={COM_MAP/2} y={COM_H/2-rScreen+14}
                                             textAnchor="middle"
-                                            style={{fontSize:'12px',fontWeight:800,fill:RADII_COLORS[idx],stroke:'rgba(255,255,255,0.9)',strokeWidth:'3px',paintOrder:'stroke'}}>
-                                            {r} km
+                                            style={{fontSize:'11px',fontWeight:800,fill:RADII_COLORS[idx],stroke:'rgba(255,255,255,0.95)',strokeWidth:'3px',paintOrder:'stroke'}}>
+                                            {label}
                                         </text>
                                     );
                                 })}
