@@ -18,10 +18,18 @@ const supabase = createClient(
 const GEO_CACHE = new Map();
 
 const HOUR_COLORS = [
-    "#0000FF","#0022FF","#0044FF","#0066FF","#0088FF","#00AAFF",
-    "#00CCFF","#00EEFF","#00FFDD","#00FFBB","#00FF99","#00FF77",
-    "#00FF00","#77FF00","#BBFF00","#FFFF00","#FFCC00","#FFAA00",
-    "#FF8800","#FF6600","#FF4400","#FF2200","#FF0000","#8B0000"
+    // 0h - 4h
+    "#0055ff", "#0055ff", "#0055ff", "#0055ff",
+    // 4h - 8h
+    "#00aaff", "#00aaff", "#00aaff", "#00aaff",
+    // 8h - 12h
+    "#00ffaa", "#00ffaa", "#00ffaa", "#00ffaa",
+    // 12h - 16h
+    "#22c55e", "#22c55e", "#22c55e", "#22c55e",
+    // 16h - 20h
+    "#eab308", "#eab308", "#eab308", "#eab308",
+    // 20h - 24h
+    "#ef4444", "#ef4444", "#ef4444", "#ef4444"
 ];
 
 const MAP_PALETTES = {
@@ -325,50 +333,50 @@ export default function FoudreExpert() {
                             <div style={{position:'absolute',top:0,left:0,right:0,height:'3px',background:'linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6)'}}/>
 
                             {/* En-tête commune */}
-                            <div style={{padding:'20px 20px 14px'}}>
-                                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'4px'}}>
+                            <div style={{padding:'12px 16px 8px'}}>
+                                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'2px'}}>
                                     <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                                        <div style={{background:'rgba(239,68,68,0.15)',borderRadius:'8px',padding:'5px',display:'flex'}}>
-                                            <Target size={14} color="#ef4444"/>
+                                        <div style={{background:'rgba(239,68,68,0.15)',borderRadius:'6px',padding:'4px',display:'flex'}}>
+                                            <Target size={12} color="#ef4444"/>
                                         </div>
                                         <div>
-                                            <div style={{fontWeight:900,fontSize:'1.1rem',color:'white',lineHeight:1.1}}>{selectedCommune?.name||'—'}</div>
-                                            {selectedCommune&&<div style={{fontSize:'0.7rem',color:'#64748b',fontWeight:600}}>{selectedCommune.cp}</div>}
+                                            <div style={{fontWeight:900,fontSize:'1rem',color:'white',lineHeight:1.1}}>{selectedCommune?.name||'—'}</div>
+                                            {selectedCommune&&<div style={{fontSize:'0.65rem',color:'#64748b',fontWeight:600}}>{selectedCommune.cp}</div>}
                                         </div>
                                     </div>
                                     {selectedCommune&&(
-                                        <button onClick={()=>{setSelectedCommune(null);setCommuneQuery('');}} style={{border:'none',background:'rgba(255,255,255,0.08)',borderRadius:'6px',color:'#94a3b8',cursor:'pointer',padding:'4px 7px',fontSize:'0.72rem',lineHeight:1}}>✕</button>
+                                        <button onClick={()=>{setSelectedCommune(null);setCommuneQuery('');}} style={{border:'none',background:'rgba(255,255,255,0.08)',borderRadius:'5px',color:'#94a3b8',cursor:'pointer',padding:'2px 5px',fontSize:'0.68rem',lineHeight:1}}>✕</button>
                                     )}
                                 </div>
-                                <div style={{fontSize:'0.68rem',color:'#475569',fontWeight:700,marginTop:'8px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{dateLabel}</div>
+                                <div style={{fontSize:'0.62rem',color:'#475569',fontWeight:700,marginTop:'5px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{dateLabel}</div>
                             </div>
 
                             {/* Ligne séparatrice */}
-                            <div style={{height:'1px',background:'rgba(255,255,255,0.06)',margin:'0 16px'}}/>
+                            <div style={{height:'1px',background:'rgba(255,255,255,0.06)',margin:'0 12px'}}/>
 
                             {/* Titre section */}
-                            <div style={{padding:'12px 20px 8px',display:'flex',alignItems:'center',gap:'7px'}}>
-                                <Zap size={13} color="#fbbf24" fill="#fbbf24"/>
-                                <span style={{fontSize:'0.65rem',fontWeight:900,color:'#fbbf24',textTransform:'uppercase',letterSpacing:'1px'}}>Impacts foudre par rayon</span>
+                            <div style={{padding:'8px 16px 4px',display:'flex',alignItems:'center',gap:'6px'}}>
+                                <Zap size={12} color="#fbbf24" fill="#fbbf24"/>
+                                <span style={{fontSize:'0.62rem',fontWeight:900,color:'#fbbf24',textTransform:'uppercase',letterSpacing:'1px'}}>Impacts foudre par rayon</span>
                             </div>
 
                             {/* Rayons */}
-                            <div style={{padding:'0 16px',flex:'0 0 auto'}}>
+                            <div style={{padding:'0 12px',flex:'0 0 auto'}}>
                                 {RADII_KM.map((r,idx)=>{
                                     const count=selectedCommune?(impactsByRadius[r]||0):0;
                                     const prev=idx>0?(impactsByRadius[RADII_KM[idx-1]]||0):0;
-                                    const ring=count-prev; // impacts dans l'anneau
+                                    const ring=count-prev;
                                     return (
-                                        <div key={r} style={{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',borderRadius:'10px',background:count>0?'rgba(255,255,255,0.04)':'transparent',marginBottom:'3px',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.07)':'transparent'}}>
+                                        <div key={r} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',borderRadius:'8px',background:count>0?'rgba(255,255,255,0.04)':'transparent',marginBottom:'2px',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.07)':'transparent'}}>
                                             {/* Indicateur couleur */}
-                                            <div style={{width:'28px',height:'28px',borderRadius:'50%',border:`2px dashed ${RADII_COLORS[idx]}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:`${RADII_COLORS[idx]}10`}}>
-                                                <span style={{fontSize:'0.55rem',fontWeight:900,color:RADII_COLORS[idx]}}>{r}k</span>
+                                            <div style={{width:'22px',height:'22px',borderRadius:'50%',border:`1.5px dashed ${RADII_COLORS[idx]}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:`${RADII_COLORS[idx]}10`}}>
+                                                <span style={{fontSize:'0.52rem',fontWeight:900,color:RADII_COLORS[idx]}}>{r}k</span>
                                             </div>
                                             <div style={{flex:1}}>
-                                                <div style={{fontSize:'0.8rem',fontWeight:700,color:'#cbd5e1'}}>≤ {r} km</div>
-                                                {idx>0&&ring>0&&<div style={{fontSize:'0.62rem',color:'#475569'}}>+{ring} dans l'anneau</div>}
+                                                <div style={{fontSize:'0.76rem',fontWeight:700,color:'#cbd5e1'}}>≤ {r} km</div>
+                                                {idx>0&&ring>0&&<div style={{fontSize:'0.58rem',color:'#475569'}}>+{ring} dans l'anneau</div>}
                                             </div>
-                                            <div style={{fontSize:'1.05rem',fontWeight:900,color:count>0?RADII_COLORS[idx]:'#334155',minWidth:'30px',textAlign:'right'}}>{count}</div>
+                                            <div style={{fontSize:'0.92rem',fontWeight:900,color:count>0?RADII_COLORS[idx]:'#334155',minWidth:'28px',textAlign:'right'}}>{count}</div>
                                         </div>
                                     );
                                 })}
@@ -376,66 +384,64 @@ export default function FoudreExpert() {
 
                             {/* Plus proche */}
                             {closestStrike?(
-                                <div style={{margin:'10px 16px',padding:'10px 12px',borderRadius:'10px',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)'}}>
-                                    <div style={{fontSize:'0.6rem',fontWeight:900,color:'#ef4444',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'4px'}}>⚡ Impact le plus proche</div>
-                                    <div style={{fontSize:'1.1rem',fontWeight:900,color:'white'}}>{closestStrike.distance.toFixed(1)} km</div>
-                                    <div style={{fontSize:'0.7rem',color:'#94a3b8'}}>{closestStrike.raw}</div>
+                                <div style={{margin:'6px 12px',padding:'6px 10px',borderRadius:'8px',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)'}}>
+                                    <div style={{fontSize:'0.58rem',fontWeight:900,color:'#ef4444',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'2px'}}>⚡ Impact le plus proche</div>
+                                    <div style={{fontSize:'0.95rem',fontWeight:900,color:'white'}}>{closestStrike.distance.toFixed(1)} km</div>
+                                    <div style={{fontSize:'0.65rem',color:'#94a3b8'}}>{closestStrike.raw}</div>
                                 </div>
                             ):(
-                                <div style={{margin:'10px 16px',padding:'10px 12px',borderRadius:'10px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}>
-                                    <div style={{fontSize:'0.62rem',color:'#334155',fontWeight:700}}>{selectedCommune?'Aucun impact dans les 20 km':'Sélectionnez une commune'}</div>
+                                <div style={{margin:'6px 12px',padding:'6px 10px',borderRadius:'8px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}>
+                                    <div style={{fontSize:'0.58rem',color:'#334155',fontWeight:700}}>{selectedCommune?'Aucun impact dans les 20 km':'Sélectionnez une commune'}</div>
                                 </div>
                             )}
 
                             {/* Ligne séparatrice */}
-                            <div style={{height:'1px',background:'rgba(255,255,255,0.06)',margin:'0 16px'}}/>
+                            <div style={{height:'1px',background:'rgba(255,255,255,0.06)',margin:'0 12px'}}/>
 
-                            {/* Chronologie / Légende heures */}
-                            <div style={{padding:'12px 20px 8px',display:'flex',alignItems:'center',gap:'7px'}}>
-                                <Zap size={13} color="#38bdf8" fill="#38bdf8"/>
-                                <span style={{fontSize:'0.65rem',fontWeight:900,color:'#38bdf8',textTransform:'uppercase',letterSpacing:'1px'}}>Chronologie & Couleurs</span>
+                            {/* Titre section */}
+                            <div style={{padding:'8px 16px 4px',display:'flex',alignItems:'center',gap:'6px'}}>
+                                <Zap size={12} color="#38bdf8" fill="#38bdf8"/>
+                                <span style={{fontSize:'0.62rem',fontWeight:900,color:'#38bdf8',textTransform:'uppercase',letterSpacing:'1px'}}>Chronologie & Couleurs</span>
                             </div>
 
-                            <div style={{padding:'0 16px',flex:'0 0 auto',display:'flex',flexDirection:'column',gap:'4px'}}>
+                            <div style={{padding:'0 12px',flex:'0 0 auto',display:'flex',flexDirection:'column',gap:'3px'}}>
                                 {[0,4,8,12,16,20].map(hBase=>{
                                     const count=visibleStrikes.filter(s=>s.h>=hBase&&s.h<hBase+4).length;
                                     const color=HOUR_COLORS[hBase];
                                     const txtColor=['#FFFF00','#FFCC00','#FFAA00','#00FFDD','#00FFBB','#00FF99','#00FF77','#00FF00','#77FF00','#BBFF00'].includes(color)?'#0f172a':'white';
                                     return (
-                                        <div key={hBase} style={{display:'flex',alignItems:'center',gap:'8px',padding:'4px 8px',borderRadius:'6px',background:count>0?'rgba(255,255,255,0.03)':'transparent',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.05)':'transparent'}}>
-                                            {/* Badge heure coloré faisant office de légende */}
+                                        <div key={hBase} style={{display:'flex',alignItems:'center',gap:'6px',padding:'2px 6px',borderRadius:'5px',background:count>0?'rgba(255,255,255,0.02)':'transparent',border:'1px solid',borderColor:count>0?'rgba(255,255,255,0.04)':'transparent'}}>
+                                            {/* Badge heure coloré */}
                                             <div style={{
                                                 background:color,
                                                 color:txtColor,
-                                                fontWeight:850,fontSize:'0.68rem',padding:'3px 6px',borderRadius:'5px',minWidth:'55px',textAlign:'center',
-                                                boxShadow:'0 2px 4px rgba(0,0,0,0.2)'
+                                                fontWeight:850,fontSize:'0.62rem',padding:'2px 4px',borderRadius:'4px',minWidth:'52px',textAlign:'center',
+                                                boxShadow:'0 1.5px 3px rgba(0,0,0,0.2)'
                                             }}>
                                                 {hBase}h - {hBase+4}h
                                             </div>
-                                            {/* Mini-barre de proportion */}
-                                            <div style={{flex:1,height:'4px',background:'rgba(255,255,255,0.05)',borderRadius:'2px',overflow:'hidden'}}>
+                                            {/* Mini-barre */}
+                                            <div style={{flex:1,height:'4px',background:'rgba(255,255,255,0.04)',borderRadius:'2px',overflow:'hidden'}}>
                                                 <div style={{width:`${Math.min(100,(count/Math.max(1,visibleStrikes.length))*100)}%`,height:'100%',background:color}}/>
                                             </div>
-                                            {/* Nombre d'impacts */}
-                                            <span style={{fontSize:'0.72rem',fontWeight:900,color:count>0?'#38bdf8':'#475569',minWidth:'20px',textAlign:'right'}}>{count}</span>
+                                            {/* Nombre */}
+                                            <span style={{fontSize:'0.68rem',fontWeight:900,color:count>0?'#38bdf8':'#475569',minWidth:'20px',textAlign:'right'}}>{count}</span>
                                         </div>
                                     );
                                 })}
                             </div>
 
                             {/* TOTAL */}
-                            <div style={{margin:'12px 16px 8px',padding:'10px 12px',borderRadius:'10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.06)',textAlign:'center'}}>
-                                <div style={{fontSize:'0.58rem',fontWeight:900,color:'#475569',textTransform:'uppercase',letterSpacing:'0.8px'}}>Total (≤20 km)</div>
-                                <div style={{fontSize:'1.8rem',fontWeight:900,color:'white',lineHeight:1.1}}>{visibleStrikes.length.toLocaleString()}</div>
-                                <div style={{fontSize:'0.62rem',color:'#64748b'}}>impacts détectés</div>
+                            <div style={{margin:'8px 12px 4px',padding:'8px 10px',borderRadius:'8px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.05)',textAlign:'center'}}>
+                                <div style={{fontSize:'0.55rem',fontWeight:900,color:'#475569',textTransform:'uppercase',letterSpacing:'0.8px'}}>Total (≤20 km)</div>
+                                <div style={{fontSize:'1.5rem',fontWeight:900,color:'white',lineHeight:1.1}}>{visibleStrikes.length.toLocaleString()}</div>
+                                <div style={{fontSize:'0.58rem',color:'#64748b'}}>impacts détectés</div>
                             </div>
 
-                            {/* Spacer */}
-                            <div style={{flex:1}}/>
-
-                            {/* Bouton téléchargement */}
-                            <div style={{padding:'10px 16px'}}>
-                                <button onClick={exportMap} style={{width:'100%',padding:'10px',border:'none',borderRadius:'10px',background:'rgba(255,255,255,0.1)',color:'white',cursor:'pointer',fontWeight:800,fontSize:'0.75rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'7px',letterSpacing:'0.3px',transition:'background .15s'}}
+                            {/* Bouton de téléchargement & Logo côte à côte */}
+                            <div style={{padding:'8px 12px 12px',borderTop:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',marginTop:'auto'}}>
+                                {showLogo && <img src="/logo.jpg" style={{height:'32px',borderRadius:'7px',opacity:0.95}}/>}
+                                <button onClick={exportMap} style={{flex:1,padding:'8px',border:'none',borderRadius:'8px',background:'rgba(255,255,255,0.1)',color:'white',cursor:'pointer',fontWeight:800,fontSize:'0.72rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',letterSpacing:'0.2px',transition:'background .15s'}}
                                     onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.16)'}
                                     onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.1)'}>
                                     <Download size={13}/> TÉLÉCHARGER LA VUE
