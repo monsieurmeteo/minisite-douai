@@ -216,14 +216,16 @@ const WindGustMap = () => {
                     let hasMore = true;
 
                     while (hasMore) {
-                        const { data, error: rpcError } = await supabase
-                            .rpc('get_daily_extremes_fast', {
-                                target_date: selectedDate,
-                                dept_codes: []
-                            })
+                        const { data, error: tableError } = await supabase
+                            .from('daily_summaries')
+                            .select('station_id, wind_gust_max, wind_mean_max, temp_min, temp_max, rain_total')
+                            .eq('date', selectedDate)
                             .range(from, from + batchSize - 1);
 
-                        if (rpcError) break;
+                        if (tableError) {
+                            console.error("[WindGustMap] Erreur de lecture daily_summaries:", tableError);
+                            break;
+                        }
                         if (data && data.length > 0) {
                             allData.push(...data);
                             if (data.length < batchSize) hasMore = false;
@@ -233,34 +235,14 @@ const WindGustMap = () => {
                         }
                     }
 
-                    if (allData.length < 300) {
-                        console.log(`[Diagnostic] Mode FAST incomplet (${allData.length} st.), passage en mode FULL SCAN...`);
-                        allData = [];
-                        from = 0;
-                        hasMore = true;
-                        while (hasMore) {
-                            const { data, error: rpcError } = await supabase
-                                .rpc('get_daily_extremes_full', { target_date: selectedDate })
-                                .range(from, from + batchSize - 1);
-
-                            if (rpcError) throw rpcError;
-                            if (data && data.length > 0) {
-                                allData.push(...data);
-                                if (data.length < batchSize) hasMore = false;
-                                else from += batchSize;
-                            } else {
-                                hasMore = false;
-                            }
-                        }
-                    }
-
                     if (allData.length > 0) {
                         console.log(`[Diagnostic] ${allData.length} stations traitées pour le ${selectedDate}`);
 
                         const uniqueStations = new Map();
 
                         allData.forEach(s => {
-                            const gust = s.wind_gust_max;
+                            // On utilise en priorité wind_gust_max, avec fallback sur wind_mean_max
+                            const gust = s.wind_gust_max !== null && s.wind_gust_max !== undefined ? s.wind_gust_max : s.wind_mean_max;
                             if (gust !== null && gust !== undefined && gust > 0) {
                                 let sid = String(s.station_id);
                                 if (sid.length === 7) sid = "0" + sid;
@@ -281,7 +263,7 @@ const WindGustMap = () => {
                                             lat,
                                             lon,
                                             value: gust,
-                                            name: stationNamesData[sid] || meta?.name || s.station_name || sid
+                                            name: stationNamesData[sid] || meta?.name || sid
                                         });
                                     }
                                 }
@@ -633,6 +615,13 @@ const WindGustMap = () => {
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
                             <div className="loader" style={{ width: '48px', height: '48px', border: '5px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                             <p style={{ marginTop: '20px', fontWeight: '700', color: '#1e40af', fontSize: '1.1rem' }}>Saisie des mesures météo...</p>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 5, padding: '20px', textAlign: 'center' }}>
+                            <Info size={40} style={{ color: '#ef4444', marginBottom: '12px' }} />
+                            <p style={{ fontWeight: '700', color: '#64748b', fontSize: '1.1rem', margin: 0 }}>{error}</p>
                         </div>
                     )}
 
