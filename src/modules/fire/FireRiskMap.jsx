@@ -74,7 +74,7 @@ const FireRiskMap = () => {
     const mapContainerRef = useRef(null);
 
     const WIDTH = 1000;
-    const HEIGHT = 900;
+    const HEIGHT = 1000;
 
     // Index stations par lat/lon
     const stationLookup = useMemo(() => {
@@ -92,10 +92,11 @@ const FireRiskMap = () => {
     }, []);
 
     // Projection D3
+    // Projection D3 — scale augmenté pour remplir la carte
     const projection = useMemo(() => geoConicConformal()
         .center([2.5, 46.5])
-        .scale(3400)
-        .translate([WIDTH / 2, HEIGHT / 2]), []);
+        .scale(4200)
+        .translate([WIDTH / 2, HEIGHT / 2 + 30]), []);
     const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
 
     // Charger GeoJSON
@@ -337,29 +338,68 @@ const FireRiskMap = () => {
                 )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 0, minHeight: 'calc(100vh - 100px)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 0, minHeight: 'calc(100vh - 100px)' }}>
 
                 {/* ─── PANNEAU GAUCHE ─── */}
                 <div style={{ background: '#1e293b', borderRight: '1px solid #334155', padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                    {/* Recherche */}
+                    {/* Recherche intelligente */}
                     <form onSubmit={handleSearch}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
-                            RECHERCHE PAR COMMUNE
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Search size={12} /> RECHERCHE INTELLIGENTE
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                             <input
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                placeholder="Code postal ou nom de ville..."
-                                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: '0.85rem', outline: 'none' }}
+                                placeholder="Code postal, ville ou adresse..."
+                                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s' }}
+                                onFocus={e => e.target.style.borderColor = '#ef4444'}
+                                onBlur={e => e.target.style.borderColor = '#334155'}
                             />
                             <button type="submit" disabled={searchLoading} style={{ background: '#ef4444', border: 'none', borderRadius: 8, padding: '9px 14px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 {searchLoading ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={14} />}
                             </button>
                         </div>
+
+                        {/* Chips d'exemples cliquables */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+                            {[
+                                { label: '📮 59000', query: '59000' },
+                                { label: '🏙️ Marseille', query: 'Marseille' },
+                                { label: '🏠 Adresse', query: '15 rue Victor Hugo Douai' },
+                            ].map(ex => (
+                                <button key={ex.query} type="button"
+                                    onClick={() => setSearchQuery(ex.query)}
+                                    style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '3px 8px', color: '#94a3b8', fontSize: '0.7rem', cursor: 'pointer' }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#fca5a5'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}
+                                >{ex.label}</button>
+                            ))}
+                            <button type="button"
+                                onClick={() => {
+                                    if (!navigator.geolocation) return;
+                                    navigator.geolocation.getCurrentPosition(async pos => {
+                                        const { latitude, longitude } = pos.coords;
+                                        try {
+                                            const res = await fetch(`https://api-adresse.data.gouv.fr/reverse/?lon=${longitude}&lat=${latitude}`);
+                                            const json = await res.json();
+                                            if (json.features?.[0]) setSearchQuery(json.features[0].properties.label);
+                                        } catch(e) {}
+                                    }, () => alert('Géolocalisation refusée ou indisponible.'));
+                                }}
+                                style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '3px 8px', color: '#94a3b8', fontSize: '0.7rem', cursor: 'pointer' }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#93c5fd'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}
+                            >📍 Ma position</button>
+                        </div>
+
+                        <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: 5 }}>
+                            💡 Code postal · ville · adresse · géolocalisation
+                        </div>
                         {searchError && <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: 6 }}>{searchError}</div>}
                     </form>
+
 
                     {/* Résultat de recherche */}
                     {searchResult && (
@@ -490,7 +530,7 @@ const FireRiskMap = () => {
                 </div>
 
                 {/* ─── CARTE SVG ─── */}
-                <div style={{ background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, position: 'relative' }}>
+                <div style={{ background: '#0f172a', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: '10px 16px', position: 'relative' }}>
                     {loading && (
                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', color: '#94a3b8' }}>
                             <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
@@ -500,7 +540,7 @@ const FireRiskMap = () => {
                     {!loading && geoData && (
                         <svg
                             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-                            style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 140px)', width: '100%', cursor: 'default' }}
+                            style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 110px)', cursor: 'default', display: 'block' }}
                         >
                             <defs>
                                 <filter id="shadow">
