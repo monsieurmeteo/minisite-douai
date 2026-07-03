@@ -91,13 +91,14 @@ class MeteoFrancePosteService {
 
                 // Vent & Rafales (Conversion m/s -> km/h si nécessaire)
                 let wind = obs.ff ?? obs.ff_avg ?? 0;
-                // Priorité: fxy (rafale horaire MF) > fxi > ff_gst > fxi10 > null (PAS de fallback sur wind)
-                let rawGust = obs.fxy !== undefined && obs.fxy !== null ? obs.fxy
-                            : obs.fxi !== undefined && obs.fxi !== null ? obs.fxi
+                // Priorité: raf10 (API v2 MF depuis 16/06/2026) > fxy (horaire) > fxi > ff_gst > fxi10 > null
+                let rawGust = obs.raf10 !== undefined && obs.raf10 !== null ? obs.raf10
+                            : obs.fxy   !== undefined && obs.fxy   !== null ? obs.fxy
+                            : obs.fxi   !== undefined && obs.fxi   !== null ? obs.fxi
                             : obs.ff_gst !== undefined && obs.ff_gst !== null ? obs.ff_gst
-                            : obs.fxi10 !== undefined && obs.fxi10 !== null ? obs.fxi10
+                            : obs.fxi10  !== undefined && obs.fxi10  !== null ? obs.fxi10
                             : null;
-                const isMs = (obs.ff !== undefined || obs.fxi !== undefined || obs.fxy !== undefined);
+                const isMs = (obs.ff !== undefined || obs.fxi !== undefined || obs.fxy !== undefined || obs.raf10 !== undefined);
                 if (isMs) {
                     wind = wind * 3.6;
                     if (rawGust !== null) rawGust = rawGust * 3.6;

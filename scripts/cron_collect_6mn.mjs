@@ -79,7 +79,8 @@ async function runCronCollect() {
             console.log(`[CRON COLLECT] Slot ${dateStr} : Requête API Météo-France...`);
             
             // Appel Bulk
-            let url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/stations/infrahoraire-6m?date=${dateStr}&format=json`;
+            // ⚡ API v2 : nouveau paramètre raf10 (rafale sur 10min) remplace fxi10 depuis le 16/06/2026
+            let url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/stations/infrahoraire-6m?date=${dateStr}&format=json`;
             let res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             
             if (res.status === 401) {
@@ -108,7 +109,7 @@ async function runCronCollect() {
                     console.log(`   🔍 Récupération de ${missingPriority.length} stations prioritaires manquantes...`);
                     for (const sid of missingPriority) {
                         try {
-                            const indivUrl = `https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m?id_station=${sid}&date=${dateStr}&format=json`;
+                            const indivUrl = `https://public-api.meteofrance.fr/public/DPObs/v2/station/infrahoraire-6m?id_station=${sid}&date=${dateStr}&format=json`;
                             let resIndiv = await fetch(indivUrl, { headers: { 'Authorization': `Bearer ${token}` } });
                             if (resIndiv.status === 401) {
                                 token = await refreshToken();
@@ -140,7 +141,10 @@ async function runCronCollect() {
                     td: obs.td != null ? Math.round((obs.td - 273.15) * 10) / 10 : null,
                     u: obs.u != null ? obs.u : null,
                     ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
-                    fxi: obs.fxi10 != null ? Math.round(obs.fxi10 * 3.6) : (obs.fxi != null ? Math.round(obs.fxi * 3.6) : null),
+                    // raf10 = rafale maximale sur 10 min (nouveau nom API v2, remplace fxi10)
+                    fxi: obs.raf10 != null ? Math.round(obs.raf10 * 3.6)
+                       : obs.fxi10 != null ? Math.round(obs.fxi10 * 3.6)
+                       : obs.fxi   != null ? Math.round(obs.fxi   * 3.6) : null,
                     dd: obs.dd != null ? obs.dd : null,
                     pres: obs.pmer != null ? Math.round(obs.pmer / 100 * 10) / 10 : (obs.pres != null ? Math.round(obs.pres / 100 * 10) / 10 : null),
                     rr_per: obs.rr_per != null ? obs.rr_per : 0
