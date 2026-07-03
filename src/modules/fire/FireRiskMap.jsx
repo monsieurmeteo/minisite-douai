@@ -518,12 +518,12 @@ const FireRiskMap = () => {
                                 <div key={lvl.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                     <div style={{ width: 18, height: 18, borderRadius: 4, background: lvl.color, flexShrink: 0 }} />
                                     <div>
-                                        <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{lvl.emoji} {lvl.label}</span>
+                                        <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#e2e8f0' }}>{lvl.label}</span>
                                         <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: 6 }}>
                                             {lvl.id === 'critical' && '3 critères (T≥30, HR≤30, V≥30)'}
                                             {lvl.id === 'high'     && '2 critères sur 3'}
-                                            {lvl.id === 'warning'  && '1 critère ou proche du seuil'}
-                                            {lvl.id === 'low'      && 'Aucun seuil atteint'}
+                                            {lvl.id === 'warning'  && 'Proche seuil ou 1 critère'}
+                                            {lvl.id === 'low'      && 'Aucun seuil'}
                                         </span>
                                     </div>
                                 </div>
@@ -664,11 +664,17 @@ const FireRiskMap = () => {
                                 );
                             })}
 
-                            {/* Labels de risque sur les départements concernés */}
+                            {/* Labels de risque (émojis + nombre de postes) uniquement pour Orange/Rouge ou si sélectionné, afin d'alléger la carte */}
                             {geoData.features.map(feature => {
                                 const code = feature.properties.code;
                                 const deptData = deptRisk[code];
                                 if (!deptData || deptData.risk === 'low') return null;
+                                
+                                // Filtrage intelligent : on n'affiche sur la carte que si risque Orange/Rouge OU si sélectionné
+                                const isSelected = selectedDept === code;
+                                const isHighRisk = deptData.risk === 'high' || deptData.risk === 'critical';
+                                if (!isHighRisk && !isSelected) return null;
+
                                 const centroid = pathGenerator.centroid(feature);
                                 if (!centroid || isNaN(centroid[0])) return null;
                                 const lvl = RISK_LEVELS[deptData.risk.toUpperCase()];
