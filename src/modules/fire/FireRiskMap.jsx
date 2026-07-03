@@ -8,6 +8,8 @@ import { fr } from "date-fns/locale";
 import stationNamesData from "../../data/stationNames.json";
 import stationsListData from "../../data/stations_list.json";
 
+import { REGIONS } from "../../data/departments";
+
 // ─── Règle des 3×30 ──────────────────────────────────────────────────────────
 const RISK_LEVELS = {
     LOW:      { id: 'low',    label: 'Faible',       color: '#22c55e', bg: '#dcfce7', text: '#166534', emoji: '🟢' },
@@ -59,8 +61,11 @@ const FireRiskMap = () => {
         localStorage.getItem('fireRiskDate') || new Date().toISOString().split('T')[0]
     );
     const [geoData, setGeoData] = useState(null);
+    const [regionsGeoData, setRegionsGeoData] = useState(null); // GeoJSON des régions
+    const [viewMode, setViewMode] = useState('departments'); // 'departments' ou 'regions'
     const [stationData, setStationData] = useState([]); // [{station_id, dept, name, tempMax, humMin, windMean, risk}]
     const [deptRisk, setDeptRisk] = useState({}); // { deptCode: { risk, stations: [] } }
+    const [regionRisk, setRegionRisk] = useState({}); // { regionName: { risk, stations: [] } }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -68,7 +73,9 @@ const FireRiskMap = () => {
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState('');
     const [selectedDept, setSelectedDept] = useState(null);
+    const [selectedRegion, setSelectedRegion] = useState(null); // Région sélectionnée
     const [hoveredDept, setHoveredDept] = useState(null);
+    const [hoveredRegion, setHoveredRegion] = useState(null); // Région survolée
     const [lastUpdate, setLastUpdate] = useState(null);
     const [showInfo, setShowInfo] = useState(false);
     const mapContainerRef = useRef(null);
@@ -98,12 +105,17 @@ const FireRiskMap = () => {
         .translate([WIDTH / 2, HEIGHT / 2 + 10]), []);
     const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
 
-    // Charger GeoJSON
+    // Charger GeoJSON départements et régions
     useEffect(() => {
         fetch("https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson")
             .then(r => r.json())
             .then(setGeoData)
-            .catch(err => console.error("Erreur GeoJSON:", err));
+            .catch(err => console.error("Erreur GeoJSON Dépt:", err));
+
+        fetch("https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions-version-simplifiee.geojson")
+            .then(r => r.json())
+            .then(setRegionsGeoData)
+            .catch(err => console.error("Erreur GeoJSON Régions:", err));
     }, []);
 
     // ─── Charger données de risque (Optimisé et parallélisé) ───────────────────
@@ -186,7 +198,7 @@ const FireRiskMap = () => {
                     windMean: ds.wind_mean_max,
                     risk
                 };
-            }).filter(s => s.risk !== 'low'); // On garde seulement ceux avec risque
+            }).filter(s => s.risk === 'high' || s.risk === 'critical'); // On ne garde QUE les postes atteignant les critères critiques (risque Orange et Rouge)
 
             // 4. Agréger par département (pire risque)
             const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
@@ -200,13 +212,36 @@ const FireRiskMap = () => {
                 deptMap[s.dept].stations.push(s);
             });
 
-            // Trier les stations par risque décroissant dans chaque département
+            // Agréger par région (pire risque)
+            const regMap = {};
+            stations.forEach(s => {
+                // Trouver la région à laquelle appartient le département
+                let regionName = "Autre";
+                for (const [rName, depts] of Object.entries(REGIONS)) {
+                    if (depts.includes(s.dept)) {
+                        regionName = rName;
+                        break;
+                    }
+                }
+                if (!regMap[regionName]) {
+                    regMap[regionName] = { risk: s.risk, stations: [] };
+                } else if (riskOrder[s.risk] > riskOrder[regMap[regionName].risk]) {
+                    regMap[regionName].risk = s.risk;
+                }
+                regMap[regionName].stations.push(s);
+            });
+
+            // Trier les stations par risque décroissant dans chaque département et région
             Object.values(deptMap).forEach(d => {
                 d.stations.sort((a, b) => riskOrder[b.risk] - riskOrder[a.risk]);
+            });
+            Object.values(regMap).forEach(r => {
+                r.stations.sort((a, b) => riskOrder[b.risk] - riskOrder[a.risk]);
             });
 
             setStationData(stations);
             setDeptRisk(deptMap);
+            setRegionRisk(regMap);
             setLastUpdate(new Date());
         } catch (err) {
             console.error('[FireRiskMap] Erreur:', err);
@@ -320,6 +355,42 @@ const FireRiskMap = () => {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {/* Switch Mode de vue */}
+                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                            <button 
+                                onClick={() => setViewMode('departments')}
+                                style={{
+                                    background: viewMode === 'departments' ? '#ef4444' : 'transparent',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '6px 12px',
+                                    color: '#fff',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Départements
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('regions')}
+                                style={{
+                                    background: viewMode === 'regions' ? '#ef4444' : 'transparent',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '6px 12px',
+                                    color: '#fff',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Régions
+                            </button>
+                        </div>
+
                         {/* Sélecteur de date */}
                         <input
                             type="date"
@@ -461,7 +532,6 @@ const FireRiskMap = () => {
                             {[
                                 { key: 'critical', lvl: RISK_LEVELS.CRITICAL },
                                 { key: 'high',     lvl: RISK_LEVELS.HIGH },
-                                { key: 'warning',  lvl: RISK_LEVELS.WARNING },
                             ].map(({ key, lvl }) => {
                                 const count = Object.values(deptRisk).filter(d => d.risk === key).length;
                                 return (
@@ -472,14 +542,14 @@ const FireRiskMap = () => {
                                 );
                             })}
                             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 14px' }}>
-                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#94a3b8' }}>{stationData.length}</div>
-                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Postes concernés</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#ef4444' }}>{stationData.length}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Postes en alerte</div>
                             </div>
                         </div>
                     </div>
 
                     {/* Détail du département sélectionné */}
-                    {selectedDeptData && selectedDept && (
+                    {viewMode === 'departments' && selectedDeptData && selectedDept && (
                         <div style={{ background: '#0f172a', border: `2px solid ${RISK_LEVELS[selectedDeptData.risk.toUpperCase()]?.color}`, borderRadius: 12, padding: 16 }}>
                             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10 }}>
                                 {RISK_LEVELS[selectedDeptData.risk.toUpperCase()]?.emoji} Dépt. {selectedDept}
@@ -488,7 +558,7 @@ const FireRiskMap = () => {
                                 </span>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8 }}>
-                                {selectedDeptData.stations.length} poste(s) en risque :
+                                {selectedDeptData.stations.length} poste(s) en alerte :
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
                                 {selectedDeptData.stations.map(s => {
@@ -497,6 +567,38 @@ const FireRiskMap = () => {
                                         <div key={s.station_id} style={{ background: '#1e293b', borderLeft: `3px solid ${lvl?.color}`, borderRadius: '0 8px 8px 0', padding: '8px 12px' }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}>
                                                 {lvl?.emoji} {s.name}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 12, fontSize: '0.72rem', color: '#94a3b8' }}>
+                                                {s.tempMax != null && <span style={{ color: s.tempMax >= 30 ? '#f87171' : '#94a3b8' }}>🌡 {s.tempMax.toFixed(1)}°C</span>}
+                                                {s.humMin != null && <span style={{ color: s.humMin <= 30 ? '#f87171' : '#94a3b8' }}>💧 {s.humMin}%</span>}
+                                                {s.windMean != null && <span style={{ color: s.windMean >= 30 ? '#f87171' : '#94a3b8' }}>💨 {s.windMean} km/h</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Détail de la région sélectionnée */}
+                    {viewMode === 'regions' && selectedRegion && regionRisk[selectedRegion] && (
+                        <div style={{ background: '#0f172a', border: `2px solid ${RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.color}`, borderRadius: 12, padding: 16 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10 }}>
+                                {RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.emoji} {selectedRegion}
+                                <span style={{ marginLeft: 8, fontSize: '0.78rem', color: RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.color }}>
+                                    {RISK_LEVELS[selectedRegion].toUpperCase() === 'FAIBLE' ? 'Faible' : RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.label}
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8 }}>
+                                {regionRisk[selectedRegion].stations.length} poste(s) en alerte :
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                                {regionRisk[selectedRegion].stations.map(s => {
+                                    const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                    return (
+                                        <div key={s.station_id} style={{ background: '#1e293b', borderLeft: `3px solid ${lvl?.color}`, borderRadius: '0 8px 8px 0', padding: '8px 12px' }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}>
+                                                {lvl?.emoji} {s.name} (Dept {s.dept})
                                             </div>
                                             <div style={{ display: 'flex', gap: 12, fontSize: '0.72rem', color: '#94a3b8' }}>
                                                 {s.tempMax != null && <span style={{ color: s.tempMax >= 30 ? '#f87171' : '#94a3b8' }}>🌡 {s.tempMax.toFixed(1)}°C</span>}
@@ -624,7 +726,7 @@ const FireRiskMap = () => {
                             <div>Chargement des données...</div>
                         </div>
                     )}
-                    {!loading && geoData && (
+                    {!loading && ((viewMode === 'departments' && geoData) || (viewMode === 'regions' && regionsGeoData)) && (
                         <svg
                             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
                             style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 110px)', cursor: 'default', display: 'block' }}
@@ -638,8 +740,8 @@ const FireRiskMap = () => {
                             {/* Fond */}
                             <rect width={WIDTH} height={HEIGHT} fill="#0f172a" />
 
-                            {/* Départements */}
-                            {geoData.features.map(feature => {
+                            {/* Mode Départements */}
+                            {viewMode === 'departments' && geoData.features.map(feature => {
                                 const code = feature.properties.code;
                                 const deptData = deptRisk[code];
                                 const fillColor = getDeptColor(code);
@@ -649,7 +751,7 @@ const FireRiskMap = () => {
 
                                 return (
                                     <path
-                                        key={code}
+                                        key={`dept-${code}`}
                                         d={pathGenerator(feature)}
                                         fill={fillColor}
                                         stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
@@ -664,13 +766,38 @@ const FireRiskMap = () => {
                                 );
                             })}
 
-                            {/* Labels de risque (émojis + nombre de postes) uniquement pour Orange/Rouge ou si sélectionné, afin d'alléger la carte */}
-                            {geoData.features.map(feature => {
+                            {/* Mode Régions */}
+                            {viewMode === 'regions' && regionsGeoData.features.map(feature => {
+                                const name = feature.properties.nom;
+                                const rData = regionRisk[name];
+                                const isSelected = selectedRegion === name;
+                                const isHovered = hoveredRegion === name;
+                                const hasRisk = !!rData;
+                                const fillColor = rData ? RISK_LEVELS[rData.risk.toUpperCase()]?.color : '#e5e7eb';
+
+                                return (
+                                    <path
+                                        key={`region-${name}`}
+                                        d={pathGenerator(feature)}
+                                        fill={fillColor}
+                                        stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
+                                        strokeWidth={isSelected ? 2.5 : isHovered ? 1.5 : 0.8}
+                                        style={{ cursor: hasRisk ? 'pointer' : 'default', transition: 'stroke 0.15s, stroke-width 0.15s', filter: isSelected ? 'url(#shadow)' : 'none' }}
+                                        onClick={() => {
+                                            if (hasRisk) setSelectedRegion(selectedRegion === name ? null : name);
+                                        }}
+                                        onMouseEnter={() => setHoveredRegion(name)}
+                                        onMouseLeave={() => setHoveredRegion(null)}
+                                    />
+                                );
+                            })}
+
+                            {/* Labels de risque pour Départements */}
+                            {viewMode === 'departments' && geoData.features.map(feature => {
                                 const code = feature.properties.code;
                                 const deptData = deptRisk[code];
                                 if (!deptData || deptData.risk === 'low') return null;
                                 
-                                // Filtrage intelligent : on n'affiche sur la carte que si risque Orange/Rouge OU si sélectionné
                                 const isSelected = selectedDept === code;
                                 const isHighRisk = deptData.risk === 'high' || deptData.risk === 'critical';
                                 if (!isHighRisk && !isSelected) return null;
@@ -679,7 +806,7 @@ const FireRiskMap = () => {
                                 if (!centroid || isNaN(centroid[0])) return null;
                                 const lvl = RISK_LEVELS[deptData.risk.toUpperCase()];
                                 return (
-                                    <g key={`label-${code}`} style={{ pointerEvents: 'none' }}>
+                                    <g key={`label-dept-${code}`} style={{ pointerEvents: 'none' }}>
                                         <text
                                             x={centroid[0]}
                                             y={centroid[1]}
@@ -706,8 +833,49 @@ const FireRiskMap = () => {
                                 );
                             })}
 
-                            {/* Tooltip hover */}
-                            {hoveredDept && deptRisk[hoveredDept] && (() => {
+                            {/* Labels de risque pour Régions */}
+                            {viewMode === 'regions' && regionsGeoData.features.map(feature => {
+                                const name = feature.properties.nom;
+                                const rData = regionRisk[name];
+                                if (!rData || rData.risk === 'low') return null;
+
+                                const isSelected = selectedRegion === name;
+                                const isHighRisk = rData.risk === 'high' || rData.risk === 'critical';
+                                if (!isHighRisk && !isSelected) return null;
+
+                                const centroid = pathGenerator.centroid(feature);
+                                if (!centroid || isNaN(centroid[0])) return null;
+                                const lvl = RISK_LEVELS[rData.risk.toUpperCase()];
+                                return (
+                                    <g key={`label-reg-${name}`} style={{ pointerEvents: 'none' }}>
+                                        <text
+                                            x={centroid[0]}
+                                            y={centroid[1]}
+                                            textAnchor="middle"
+                                            dominantBaseline="middle"
+                                            fontSize="16"
+                                            style={{ userSelect: 'none' }}
+                                        >
+                                            {lvl.emoji}
+                                        </text>
+                                        <text
+                                            x={centroid[0]}
+                                            y={centroid[1] + 16}
+                                            textAnchor="middle"
+                                            dominantBaseline="middle"
+                                            fontSize="10"
+                                            fill="#fff"
+                                            fontWeight="700"
+                                            style={{ userSelect: 'none', textShadow: '0 1px 3px #000' }}
+                                        >
+                                            {rData.stations.length}p
+                                        </text>
+                                    </g>
+                                );
+                            })}
+
+                            {/* Tooltip hover pour Départements */}
+                            {viewMode === 'departments' && hoveredDept && deptRisk[hoveredDept] && (() => {
                                 const feat = geoData.features.find(f => f.properties.code === hoveredDept);
                                 if (!feat) return null;
                                 const c = pathGenerator.centroid(feat);
@@ -720,6 +888,26 @@ const FireRiskMap = () => {
                                         <rect x={Math.min(c[0]-80, WIDTH-180)} y={Math.max(c[1]-80, 5)} width={170} height={70} rx={8} fill="#1e293b" stroke={lvl.color} strokeWidth={1.5} />
                                         <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+20} fontSize="11" fill="#e2e8f0" fontWeight="700">{lvl.emoji} Dépt. {hoveredDept} — {lvl.label}</text>
                                         <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+36} fontSize="9" fill="#94a3b8">{d.stations.length} poste(s) concerné(s)</text>
+                                        {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+52} fontSize="9" fill="#94a3b8">Ex: {worst.name}</text>}
+                                        {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+64} fontSize="9" fill="#64748b">T:{worst.tempMax?.toFixed(0)}°C HR:{worst.humMin}% V:{worst.windMean}km/h</text>}
+                                    </g>
+                                );
+                            })()}
+
+                            {/* Tooltip hover pour Régions */}
+                            {viewMode === 'regions' && hoveredRegion && regionRisk[hoveredRegion] && (() => {
+                                const feat = regionsGeoData.features.find(f => f.properties.nom === hoveredRegion);
+                                if (!feat) return null;
+                                const c = pathGenerator.centroid(feat);
+                                if (!c || isNaN(c[0])) return null;
+                                const r = regionRisk[hoveredRegion];
+                                const lvl = RISK_LEVELS[r.risk.toUpperCase()];
+                                const worst = r.stations[0];
+                                return (
+                                    <g style={{ pointerEvents: 'none' }}>
+                                        <rect x={Math.min(c[0]-80, WIDTH-180)} y={Math.max(c[1]-80, 5)} width={175} height={70} rx={8} fill="#1e293b" stroke={lvl.color} strokeWidth={1.5} />
+                                        <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+20} fontSize="10" fill="#e2e8f0" fontWeight="700">{lvl.emoji} {hoveredRegion}</text>
+                                        <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+36} fontSize="9" fill="#94a3b8">{r.stations.length} poste(s) concerné(s)</text>
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+52} fontSize="9" fill="#94a3b8">Ex: {worst.name}</text>}
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+64} fontSize="9" fill="#64748b">T:{worst.tempMax?.toFixed(0)}°C HR:{worst.humMin}% V:{worst.windMean}km/h</text>}
                                     </g>
