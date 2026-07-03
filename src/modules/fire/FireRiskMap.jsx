@@ -91,12 +91,11 @@ const FireRiskMap = () => {
         return map;
     }, []);
 
-    // Projection D3
-    // Projection D3 — scale augmenté pour remplir la carte
+    // Projection D3 — scale augmenté pour remplir la carte (agrandie de 4200 à 4800)
     const projection = useMemo(() => geoConicConformal()
-        .center([2.5, 46.5])
-        .scale(4200)
-        .translate([WIDTH / 2, HEIGHT / 2 + 30]), []);
+        .center([2.5, 46.2])
+        .scale(4800)
+        .translate([WIDTH / 2, HEIGHT / 2 + 10]), []);
     const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
 
     // Charger GeoJSON
@@ -107,52 +106,62 @@ const FireRiskMap = () => {
             .catch(err => console.error("Erreur GeoJSON:", err));
     }, []);
 
-    // ─── Charger données de risque ────────────────────────────────────────────
+    // ─── Charger données de risque (Optimisé et parallélisé) ───────────────────
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            // 1. Récupérer temp_max + wind_mean depuis daily_summaries
-            let allDs = [];
-            let from = 0;
-            let hasMore = true;
-            while (hasMore) {
-                const { data, error: e } = await supabase
-                    .from('daily_summaries')
-                    .select('station_id, temp_max, wind_mean_max')
-                    .eq('date', selectedDate)
-                    .not('temp_max', 'is', null)
-                    .range(from, from + 999);
-                if (e) throw e;
-                if (data?.length > 0) {
-                    allDs = allDs.concat(data);
-                    if (data.length < 1000) hasMore = false;
-                    else from += 1000;
-                } else hasMore = false;
-            }
+            // Requête 1: daily_summaries pour la date
+            const fetchDs = async () => {
+                let allDs = [];
+                let from = 0;
+                let hasMore = true;
+                while (hasMore) {
+                    const { data, error: e } = await supabase
+                        .from('daily_summaries')
+                        .select('station_id, temp_max, wind_mean_max')
+                        .eq('date', selectedDate)
+                        .not('temp_max', 'is', null)
+                        .range(from, from + 999);
+                    if (e) throw e;
+                    if (data?.length > 0) {
+                        allDs = allDs.concat(data);
+                        if (data.length < 1000) hasMore = false;
+                        else from += 1000;
+                    } else hasMore = false;
+                }
+                return allDs;
+            };
 
-            // 2. Récupérer humidité min depuis observations_6mn
-            const humMap = {};
-            let fromH = 0;
-            let hasMoreH = true;
-            while (hasMoreH) {
-                const { data: hData } = await supabase
-                    .from('observations_6mn')
-                    .select('station_id, u')
-                    .gte('timestamp', selectedDate + 'T00:00:00Z')
-                    .lt('timestamp', selectedDate + 'T23:59:59Z')
-                    .not('u', 'is', null)
-                    .range(fromH, fromH + 999);
-                if (hData?.length > 0) {
-                    hData.forEach(o => {
-                        if (humMap[o.station_id] === undefined || o.u < humMap[o.station_id]) {
-                            humMap[o.station_id] = o.u;
-                        }
-                    });
-                    if (hData.length < 1000) hasMoreH = false;
-                    else fromH += 1000;
-                } else hasMoreH = false;
-            }
+            // Requête 2: observations_6mn pour la date (sélectionne u uniquement)
+            const fetchHum = async () => {
+                const humMap = {};
+                let fromH = 0;
+                let hasMoreH = true;
+                while (hasMoreH) {
+                    const { data: hData, error: e } = await supabase
+                        .from('observations_6mn')
+                        .select('station_id, u')
+                        .gte('timestamp', selectedDate + 'T00:00:00Z')
+                        .lt('timestamp', selectedDate + 'T23:59:59Z')
+                        .not('u', 'is', null)
+                        .range(fromH, fromH + 999);
+                    if (e) throw e;
+                    if (hData?.length > 0) {
+                        hData.forEach(o => {
+                            if (humMap[o.station_id] === undefined || o.u < humMap[o.station_id]) {
+                                humMap[o.station_id] = o.u;
+                            }
+                        });
+                        if (hData.length < 1000) hasMoreH = false;
+                        else fromH += 1000;
+                    } else hasMoreH = false;
+                }
+                return humMap;
+            };
+
+            // Exécution des deux requêtes lourdes en parallèle
+            const [allDs, humMap] = await Promise.all([fetchDs(), fetchHum()]);
 
             // 3. Calculer le risque par station
             const stations = allDs.map(ds => {
@@ -530,7 +539,85 @@ const FireRiskMap = () => {
                 </div>
 
                 {/* ─── CARTE SVG ─── */}
-                <div style={{ background: '#0f172a', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: '10px 16px', position: 'relative' }}>
+                <div style={{ background: '#0f172a', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: '10px 16px', position: 'relative', overflow: 'hidden' }}>
+                    {/* Encadré Top 30 des stations à risque (en haut à droite) */}
+                    {!loading && stationData.length > 0 && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '20px',
+                            right: '20px',
+                            width: '280px',
+                            maxHeight: '380px',
+                            background: 'rgba(30, 41, 59, 0.85)',
+                            backdropFilter: 'blur(8px)',
+                            border: '1px solid #334155',
+                            borderRadius: '12px',
+                            padding: '12px',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+                            zIndex: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
+                                <Flame size={16} style={{ color: '#ef4444' }} />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>Top 30 des postes en alerte</span>
+                            </div>
+                            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '4px' }}>
+                                {stationData
+                                    .sort((a, b) => {
+                                        const riskOrder = { critical: 3, high: 2, warning: 1, low: 0 };
+                                        if (riskOrder[b.risk] !== riskOrder[a.risk]) {
+                                            return riskOrder[b.risk] - riskOrder[a.risk];
+                                        }
+                                        return (b.tempMax || 0) - (a.tempMax || 0); // Deuxième critère : température la plus élevée
+                                    })
+                                    .slice(0, 30)
+                                    .map(s => {
+                                        const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                        return (
+                                            <div 
+                                                key={s.station_id} 
+                                                onClick={() => {
+                                                    setSelectedDept(s.dept);
+                                                    setSearchResult({
+                                                        city: s.name,
+                                                        dept: s.dept,
+                                                        station: s,
+                                                        distance: 0
+                                                    });
+                                                }}
+                                                style={{ 
+                                                    background: 'rgba(15, 23, 42, 0.6)', 
+                                                    borderLeft: `3px solid ${lvl.color}`, 
+                                                    borderRadius: '0 6px 6px 0', 
+                                                    padding: '6px 8px',
+                                                    cursor: 'pointer',
+                                                    transition: 'background 0.2s'
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(30, 41, 59, 0.9)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(15, 23, 42, 0.6)'}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+                                                        {s.name}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.65rem', background: lvl.bg, color: lvl.text, padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>
+                                                        {lvl.label}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
+                                                    <span>🌡️ {s.tempMax?.toFixed(1)}°C</span>
+                                                    <span>💧 {s.humMin}%</span>
+                                                    {s.windMean > 0 && <span>💨 {s.windMean}km/h</span>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                }
+                            </div>
+                        </div>
+                    )}
                     {loading && (
                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', color: '#94a3b8' }}>
                             <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
