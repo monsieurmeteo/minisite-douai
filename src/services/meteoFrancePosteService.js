@@ -91,11 +91,13 @@ class MeteoFrancePosteService {
 
                 // Vent & Rafales (Conversion m/s -> km/h si nécessaire)
                 let wind = obs.ff ?? obs.ff_avg ?? 0;
-                let gust = obs.fxi ?? obs.ff_gst ?? obs.fxi10 ?? wind;
-                const isMs = (obs.ff !== undefined || obs.fxi !== undefined);
+                let gust = (obs.fxy !== null && obs.fxy !== undefined) ? obs.fxy : (obs.fxi ?? obs.ff_gst ?? obs.fxi10 ?? wind);
+                const isMs = (obs.ff !== undefined || obs.fxi !== undefined || obs.fxy !== undefined);
                 if (isMs) {
                     wind = wind * 3.6;
-                    gust = gust * 3.6;
+                    if (gust !== null && gust !== undefined) {
+                        gust = gust * 3.6;
+                    }
                 }
 
                 return {
