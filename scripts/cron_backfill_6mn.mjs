@@ -71,7 +71,8 @@ async function runCronBackfill() {
                 const targetTime = `${dateStr}T${hStr}:${mStr}:00Z`;
                 
                 try {
-                    const resp = await fetch(`https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/stations/infrahoraire-6m?date=${targetTime}&format=json`, {
+                    // ⚡ API v2 : raf10 remplace fxi10 depuis le 16/06/2026
+                    const resp = await fetch(`https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/stations/infrahoraire-6m?date=${targetTime}&format=json`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     
@@ -89,7 +90,7 @@ async function runCronBackfill() {
                         t: s.t ? s.t - 273.15 : null, // Conversion Kelvin -> Celsius
                         u: s.u,
                         ff: s.ff,
-                        fxi: s.fxi10 || s.fxi,
+                        fxi: s.raf10 != null ? s.raf10 : (s.fxi10 || s.fxi || null),
                         rr_per: s.rr_per,
                         created_at: new Date().toISOString()
                     })).filter(r => r.t !== null); // On ne garde que les stations avec au moins la temp
