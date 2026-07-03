@@ -91,21 +91,25 @@ class MeteoFrancePosteService {
 
                 // Vent & Rafales (Conversion m/s -> km/h si nécessaire)
                 let wind = obs.ff ?? obs.ff_avg ?? 0;
-                let gust = (obs.fxy !== null && obs.fxy !== undefined) ? obs.fxy : (obs.fxi ?? obs.ff_gst ?? obs.fxi10 ?? wind);
+                // Priorité: fxy (rafale horaire MF) > fxi > ff_gst > fxi10 > null (PAS de fallback sur wind)
+                let rawGust = obs.fxy !== undefined && obs.fxy !== null ? obs.fxy
+                            : obs.fxi !== undefined && obs.fxi !== null ? obs.fxi
+                            : obs.ff_gst !== undefined && obs.ff_gst !== null ? obs.ff_gst
+                            : obs.fxi10 !== undefined && obs.fxi10 !== null ? obs.fxi10
+                            : null;
                 const isMs = (obs.ff !== undefined || obs.fxi !== undefined || obs.fxy !== undefined);
                 if (isMs) {
                     wind = wind * 3.6;
-                    if (gust !== null && gust !== undefined) {
-                        gust = gust * 3.6;
-                    }
+                    if (rawGust !== null) rawGust = rawGust * 3.6;
                 }
+                const gust = rawGust;
 
                 return {
                     time: d,
                     temp: temp !== undefined ? Math.round(temp * 10) / 10 : null,
                     rain: Math.round(parseFloat(rain) * 10) / 10 || 0,
                     wind: Math.round(parseFloat(wind)) || 0,
-                    gust: Math.round(parseFloat(gust)) || 0,
+                    gust: gust !== null ? (Math.round(parseFloat(gust)) || null) : null,
                     hum: parseInt(obs.u ?? obs.hu ?? 0),
                     vv: obs.vv !== undefined ? obs.vv : null
                 };
