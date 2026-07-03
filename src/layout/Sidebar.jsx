@@ -150,6 +150,10 @@ export default function Sidebar({ isOpen, onClose }) {
           <Droplets size={18} style={{ color: '#0ea5e9' }} />
           <span>Carte des Pluies</span>
         </NavLink>
+        <NavLink to="/carte-humidite" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Droplets size={18} style={{ color: '#0288D1' }} />
+          <span>Carte Humidité</span>
+        </NavLink>
         <NavLink to="/carte-temperatures" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Thermometer size={18} style={{ color: '#ef4444' }} />
           <span>Carte Températures</span>

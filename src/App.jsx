@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './layout/Sidebar';
 import StationDetail from './modules/observations/StationDetail';
 import CitySearch from './modules/search/CitySearch';
@@ -28,6 +28,7 @@ import NationalRecordsMonitor from './modules/climatology/NationalRecordsMonitor
 import Temperatures30Villes from './modules/observations/Temperatures30Villes';
 import WindGustMap from './modules/maps/WindGustMap';
 import RainfallMap from './modules/maps/RainfallMap';
+import HumidityMap from './modules/maps/HumidityMap';
 import TemperatureMap from './modules/maps/TemperatureMap';
 import MonthlyMapsHub from './modules/maps/MonthlyMapsHub';
 import MeteocielArchives from './modules/rankings/MeteocielArchives';
@@ -41,20 +42,24 @@ import './App.css';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const isEmbed = new URLSearchParams(location.search).get('embed') === '1';
 
   return (
     <div className="app-layout">
-      {/* Header uniquement visible sur mobile via CSS */}
-      <header className="mobile-header">
-        <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
-          <Menu size={24} />
-        </button>
-        <span className="mobile-title">Météo-Climat Pro</span>
-      </header>
+      {/* Header uniquement visible sur mobile via CSS, masqué en mode embed */}
+      {!isEmbed && (
+        <header className="mobile-header">
+          <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
+            <Menu size={24} />
+          </button>
+          <span className="mobile-title">Météo-Climat Pro</span>
+        </header>
+      )}
 
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {!isEmbed && <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
 
-      <main className="main-content">
+      <main className={`main-content ${isEmbed ? 'embed-mode' : ''}`}>
         <Routes>
           <Route path="/" element={<DailyExtremes />} />
           <Route path="/observations/station/:stationId" element={<StationDetail />} />
@@ -82,6 +87,7 @@ function App() {
           <Route path="/temperatures-30-villes" element={<Temperatures30Villes />} />
           <Route path="/carte-rafales" element={<WindGustMap />} />
           <Route path="/carte-pluie" element={<RainfallMap />} />
+          <Route path="/carte-humidite" element={<HumidityMap />} />
           <Route path="/carte-temperatures" element={<TemperatureMap />} />
           <Route path="/cartes-mensuelles" element={<MonthlyMapsHub />} />
           <Route path="/archives-classements" element={<MeteocielArchives />} />
