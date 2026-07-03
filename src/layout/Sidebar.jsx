@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3, Wind
+  Map as MapIcon, Zap, Table, Search, Link as LinkIcon, ShieldCheck, Waves, Radio, HardHat, Home, Activity, Clock, Image as ImageIcon, LayoutGrid, Satellite, Thermometer, FileText, Droplets, BarChart3, Wind, Flame
 } from 'lucide-react';
 import clsx from 'clsx';
 import { DEPARTMENTS } from '../data/departments';
@@ -157,6 +157,10 @@ export default function Sidebar({ isOpen, onClose }) {
         <NavLink to="/carte-temperatures" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Thermometer size={18} style={{ color: '#ef4444' }} />
           <span>Carte Températures</span>
+        </NavLink>
+        <NavLink to="/carte-feux" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Flame size={18} style={{ color: '#f97316' }} />
+          <span>🔥 Risque Incendie</span>
         </NavLink>
         <NavLink to="/cartes-mensuelles" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <BarChart3 size={18} style={{ color: '#f59e0b' }} />

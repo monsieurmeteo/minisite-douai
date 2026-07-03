@@ -27,6 +27,7 @@ import ClimatologyDashboard from './modules/climatology/ClimatologyDashboard';
 import NationalRecordsMonitor from './modules/climatology/NationalRecordsMonitor';
 import Temperatures30Villes from './modules/observations/Temperatures30Villes';
 import WindGustMap from './modules/maps/WindGustMap';
+import FireRiskMap from './modules/fire/FireRiskMap';
 import RainfallMap from './modules/maps/RainfallMap';
 import HumidityMap from './modules/maps/HumidityMap';
 import TemperatureMap from './modules/maps/TemperatureMap';
@@ -94,6 +95,7 @@ function App() {
           <Route path="/archives-station" element={<StationArchives />} />
           <Route path="/hdf-radar" element={<HDFRadar />} />
           <Route path="/windy" element={<WindyModule />} />
+          <Route path="/carte-feux" element={<FireRiskMap />} />
 
         </Routes>
 
