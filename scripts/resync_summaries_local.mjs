@@ -130,7 +130,29 @@ async function localSync() {
         }
     }
 
-    if (allRows.length === 0) {
+    console.log(`\n📡 Chargement des observations horaires du ${parisDate}...`);
+    let hourlyRows = [], hourlyFrom = 0, hourlyHasMore = true;
+    while (hourlyHasMore) {
+        const { data, error } = await supabase
+            .from('observations_horaire')
+            .select('station_id, fxi, timestamp')
+            .gte('timestamp', startUTC)
+            .lte('timestamp', endUTC)
+            .range(hourlyFrom, hourlyFrom + BATCH - 1);
+
+        if (error) { console.error("❌ Erreur chargement horaires :", error.message); break; }
+
+        if (data?.length > 0) {
+            hourlyRows.push(...data);
+            if (data.length < BATCH) hourlyHasMore = false;
+            else hourlyFrom += BATCH;
+        } else {
+            hourlyHasMore = false;
+        }
+    }
+    console.log(`   ✅ ${hourlyRows.length} observations horaires chargées.`);
+
+    if (allRows.length === 0 && hourlyRows.length === 0) {
         console.log("ℹ️ Aucune donnée pour la période — la table est peut-être vide après nettoyage.");
         return;
     }
@@ -163,6 +185,30 @@ async function localSync() {
             st.wind_gust_time = row.timestamp;
         }
         if (row.rr_per !== null && row.rr_per > 0) st.rain_total += row.rr_per;
+    }
+
+    // Fusionner les données horaires (rafales)
+    console.log(`🧮 Fusion des ${hourlyRows.length} rafales horaires...`);
+    for (const row of hourlyRows) {
+        const sid = row.station_id;
+        const rowParisDate = getParisLocalDate(row.timestamp, offsetMs);
+        if (rowParisDate !== parisDate) continue;
+
+        if (!stationMap.has(sid)) {
+            stationMap.set(sid, {
+                station_id: sid,
+                date: parisDate,
+                temp_min: 999, temp_max: -999,
+                wind_gust_max: -1, wind_gust_time: null,
+                rain_total: 0
+            });
+        }
+
+        const st = stationMap.get(sid);
+        if (row.fxi !== null && row.fxi > st.wind_gust_max) {
+            st.wind_gust_max  = row.fxi;
+            st.wind_gust_time = row.timestamp;
+        }
     }
 
     const upserts = Array.from(stationMap.values()).map(s => {
