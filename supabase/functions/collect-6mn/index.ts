@@ -30,15 +30,15 @@ Deno.serve(async (req) => {
 
         let token = secrets?.access_token;
 
-        // Function call API (Bulk)
+        // ⚡ API v2 : raf10 remplace fxi10 depuis le 16/06/2026
         const callApiBulk = async (dateStr: string, currentToken: string) => {
-            const url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/stations/infrahoraire-6m?date=${dateStr}&format=json`;
+            const url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/stations/infrahoraire-6m?date=${dateStr}&format=json`;
             return await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
         };
 
-        // Function call API (Individual - for missing stations like Steenvoorde)
+        // Function call API (Individual - for missing priority stations)
         const callApiIndividual = async (stationId: string, dateStr: string, currentToken: string) => {
-            const url = `https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m?id_station=${stationId}&date=${dateStr}&format=json`;
+            const url = `https://public-api.meteofrance.fr/public/DPObs/v2/station/infrahoraire-6m?id_station=${stationId}&date=${dateStr}&format=json`;
             return await fetch(url, { headers: { 'Authorization': `Bearer ${currentToken}` } });
         };
 
@@ -144,7 +144,10 @@ Deno.serve(async (req) => {
                     td: obs.td != null ? Math.round((obs.td - 273.15) * 10) / 10 : null,
                     u: obs.u != null ? obs.u : null,
                     ff: obs.ff != null ? Math.round(obs.ff * 3.6) : null,
-                    fxi: obs.fxi10 != null ? Math.round(obs.fxi10 * 3.6) : (obs.fxi != null ? Math.round(obs.fxi * 3.6) : null),
+                    // raf10 = rafale sur 10 min (API v2, remplace fxi10 depuis 16/06/2026)
+                    fxi: obs.raf10 != null ? Math.round(obs.raf10 * 3.6)
+                       : obs.fxi10 != null ? Math.round(obs.fxi10 * 3.6)
+                       : obs.fxi   != null ? Math.round(obs.fxi   * 3.6) : null,
                     dd: obs.dd != null ? obs.dd : null,
                     pres: obs.pmer != null ? Math.round(obs.pmer / 100 * 10) / 10 : (obs.pres != null ? Math.round(obs.pres / 100 * 10) / 10 : null),
                     rr_per: obs.rr_per != null ? obs.rr_per : 0
