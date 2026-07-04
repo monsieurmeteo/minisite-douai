@@ -163,95 +163,94 @@ const FireRiskMap = () => {
             .catch(err => console.error("Erreur GeoJSON Régions:", err));
     }, []);
 
-    // ─── Charger données de risque (Optimisé et parallélisé) ───────────────────
+    // ─── Chargement des données temps réel ─────────────────────────────────────
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
+
         try {
-            // Requête 1: daily_summaries pour la date
-            const fetchDs = async () => {
-                let allDs = [];
-                let from = 0;
-                let hasMore = true;
-                while (hasMore) {
-                    const { data, error: e } = await supabase
-                        .from('daily_summaries')
-                        .select('station_id, temp_max, wind_mean_max')
-                        .eq('date', selectedDate)
-                        .not('temp_max', 'is', null)
-                        .range(from, from + 999);
-                    if (e) throw e;
-                    if (data?.length > 0) {
-                        allDs = allDs.concat(data);
-                        if (data.length < 1000) hasMore = false;
-                        else from += 1000;
-                    } else hasMore = false;
-                }
-                return allDs;
-            };
+            console.log("[FireRiskMap] Chargement des données en direct via get_france_live...");
+            let liveData = [];
+            let from = 0;
+            const batchSize = 1000;
+            let hasMore = true;
 
-            // Requête 2: observations_6mn pour la date (sélectionne u uniquement)
-            const fetchHum = async () => {
-                const humMap = {};
-                let fromH = 0;
-                let hasMoreH = true;
-                while (hasMoreH) {
-                    const { data: hData, error: e } = await supabase
-                        .from('observations_6mn')
-                        .select('station_id, u')
-                        .gte('timestamp', selectedDate + 'T00:00:00Z')
-                        .lt('timestamp', selectedDate + 'T23:59:59Z')
-                        .not('u', 'is', null)
-                        .range(fromH, fromH + 999);
-                    if (e) throw e;
-                    if (hData?.length > 0) {
-                        hData.forEach(o => {
-                            if (humMap[o.station_id] === undefined || o.u < humMap[o.station_id]) {
-                                humMap[o.station_id] = o.u;
-                            }
-                        });
-                        if (hData.length < 1000) hasMoreH = false;
-                        else fromH += 1000;
-                    } else hasMoreH = false;
-                }
-                return humMap;
-            };
+            while (hasMore) {
+                const { data, error: liveError } = await supabase
+                    .rpc('get_france_live')
+                    .range(from, from + batchSize - 1);
 
-            // Exécution des deux requêtes lourdes en parallèle
-            const [allDs, humMap] = await Promise.all([fetchDs(), fetchHum()]);
-
-            // 3. Calculer le risque par station
-            const stations = allDs.map(ds => {
-                const sid = ds.station_id;
-                const humMin = humMap[sid] ?? null;
-                const risk = computeRisk(ds.temp_max, humMin, ds.wind_mean_max);
-                const meta = stationLookup[sid];
-                // Code département : 2 premiers chiffres (gestion Corse 20x)
-                let dept = sid.substring(0, 2);
-                if (dept === '20') {
-                    const num3 = parseInt(sid.substring(2, 5), 10);
-                    dept = num3 < 200 ? '2A' : '2B';
+                if (liveError) throw liveError;
+                if (data && data.length > 0) {
+                    liveData.push(...data);
+                    if (data.length < batchSize) hasMore = false;
+                    else from += batchSize;
+                } else {
+                    hasMore = false;
                 }
-                return {
-                    station_id: sid,
-                    name: stationNamesData[sid] || meta?.name || sid,
-                    dept,
-                    lat: meta?.lat,
-                    lon: meta?.lon,
-                    tempMax: ds.temp_max,
-                    humMin,
-                    windMean: ds.wind_mean_max,
-                    risk
-                };
-            }).filter(s => {
-                // Rétention stricte : Risque actif ET coordonnées valides en France Métropolitaine
-                if (s.risk === 'low') return false;
-                if (!s.lat || !s.lon) return false;
-                // Coordonnées France métropolitaine
-                return s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
+            }
+
+            if (liveData.length === 0) {
+                throw new Error("Aucune observation en direct disponible.");
+            }
+
+            // Trouver l'horodatage de la donnée la plus récente
+            let maxTimestamp = null;
+            liveData.forEach(item => {
+                if (item.obs_time) {
+                    const d = new Date(item.obs_time);
+                    if (!maxTimestamp || d > maxTimestamp) {
+                        maxTimestamp = d;
+                    }
+                }
             });
+            if (maxTimestamp) setLastUpdate(maxTimestamp);
 
-            // 4. Agréger par département (pire risque)
+            // Calculer le risque en direct pour chaque station
+            const stations = liveData
+                .filter(item => item.station_id < '96000000' && !item.station_id.startsWith('SIMULATION'))
+                .map(s => {
+                    let sid = String(s.station_id);
+                    if (sid.length === 7) sid = "0" + sid;
+
+                    const meta = stationLookup[sid];
+                    const lat = meta?.lat;
+                    const lon = meta?.lon;
+
+                    // Les valeurs instantanées en direct de get_france_live :
+                    const temp = s.t; // température en direct
+                    const hum = s.u;  // humidité relative en direct
+                    const windSpd = s.wind; // vitesse du vent en direct (en km/h)
+
+                    const risk = computeRisk(temp, hum, windSpd);
+
+                    let dept = sid.substring(0, 2);
+                    if (dept === '20') {
+                        const num3 = parseInt(sid.substring(2, 5), 10);
+                        dept = num3 < 200 ? '2A' : '2B';
+                    }
+
+                    return {
+                        station_id: sid,
+                        name: stationNamesData[sid] || meta?.name || sid,
+                        dept,
+                        lat,
+                        lon,
+                        tempMax: temp,
+                        humMin: hum,
+                        windMean: windSpd,
+                        risk
+                    };
+                }).filter(s => {
+                    // Filtrer pour la France métropolitaine et exclure le risque faible 'low'
+                    if (s.risk === 'low') return false;
+                    if (!s.lat || !s.lon) return false;
+                    return s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
+                });
+
+            setStationData(stations);
+
+            // Agréger par département (pire risque)
             const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
             const deptMap = {};
             stations.forEach(s => {
@@ -263,10 +262,13 @@ const FireRiskMap = () => {
                 deptMap[s.dept].stations.push(s);
             });
 
+            // S'assurer que tous les départements français existent dans la carte de risques, 
+            // sinon ils sont à faible risque (low)
+            setDeptRisk(deptMap);
+
             // Agréger par région (pire risque)
             const regMap = {};
             stations.forEach(s => {
-                // Trouver la région à laquelle appartient le département
                 let regionName = "Autre";
                 for (const [rName, depts] of Object.entries(REGIONS)) {
                     if (depts.includes(s.dept)) {
@@ -280,11 +282,6 @@ const FireRiskMap = () => {
                     regMap[regionName].risk = s.risk;
                 }
                 regMap[regionName].stations.push(s);
-            });
-
-            // Trier les stations par risque décroissant dans chaque département et région
-            Object.values(deptMap).forEach(d => {
-                d.stations.sort((a, b) => riskOrder[b.risk] - riskOrder[a.risk]);
             });
             Object.values(regMap).forEach(r => {
                 r.stations.sort((a, b) => riskOrder[b.risk] - riskOrder[a.risk]);
@@ -386,8 +383,8 @@ const FireRiskMap = () => {
     // ─── Couleur d'un département ─────────────────────────────────────────────
     const getDeptColor = (deptCode) => {
         const d = deptRisk[deptCode];
-        if (!d) return '#e5e7eb';
-        return RISK_LEVELS[d.risk.toUpperCase()]?.color || '#e5e7eb';
+        if (!d) return '#1e293b'; // Bleu nuit/ardoise sobre pour les départements sans risque
+        return RISK_LEVELS[d.risk.toUpperCase()]?.color || '#1e293b';
     };
 
     // ─── Stats globales ───────────────────────────────────────────────────────
@@ -809,6 +806,8 @@ const FireRiskMap = () => {
                                     const isHovered = hoveredDept === code;
                                     const hasRisk = !!deptData;
 
+                                    const isCritical = deptData && (deptData.risk === 'critical' || deptData.risk === 'high');
+
                                     return (
                                         <path
                                             key={`dept-${code}`}
@@ -816,7 +815,12 @@ const FireRiskMap = () => {
                                             fill={fillColor}
                                             stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
                                             strokeWidth={isSelected ? 2.5 : isHovered ? 1.5 : 0.8}
-                                            style={{ cursor: hasRisk ? 'pointer' : 'default', transition: 'stroke 0.15s, stroke-width 0.15s', filter: isSelected ? 'url(#shadow)' : 'none' }}
+                                            style={{
+                                                cursor: hasRisk ? 'pointer' : 'default',
+                                                transition: 'stroke 0.15s, stroke-width 0.15s',
+                                                filter: isSelected ? 'url(#shadow)' : 'none',
+                                                animation: isCritical ? 'pulse-dept-critical 2s infinite ease-in-out' : 'none'
+                                            }}
                                             onClick={() => {
                                                 if (hasRisk) setSelectedDept(selectedDept === code ? null : code);
                                             }}
@@ -888,20 +892,22 @@ const FireRiskMap = () => {
                             {stationData
                                 .filter(s => {
                                     if (!s.lat || !s.lon) return false;
-                                    // Pour France et Régions, on n'affiche désormais que les stations importantes (de la liste MAJOR_STATIONS)
-                                    if (!MAJOR_STATIONS.includes(s.station_id)) return false;
-
-                                    if (selectedRegionName !== "France") {
-                                        const regionDepts = REGIONS[selectedRegionName] || [];
-                                        return regionDepts.includes(s.dept);
+                                    
+                                    if (selectedRegionName === "France") {
+                                        // À l'échelle nationale, on restreint aux 30 villes majeures
+                                        return MAJOR_STATIONS.includes(s.station_id);
                                     }
-                                    return true;
+                                    
+                                    // À l'échelle régionale, on affiche TOUS les postes de la région qui sont en alerte
+                                    const regionDepts = REGIONS[selectedRegionName] || [];
+                                    return regionDepts.includes(s.dept);
                                 })
                                 .map(s => {
                                     const coords = projection([s.lon, s.lat]);
                                     if (!coords || isNaN(coords[0])) return null;
 
                                     const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                    const isCriticalStation = s.risk === 'critical' || s.risk === 'high';
                                     return (
                                         <g key={`city-point-${s.station_id}`} style={{ cursor: 'pointer' }}
                                             onClick={() => {
@@ -923,6 +929,10 @@ const FireRiskMap = () => {
                                                 fill={lvl.color}
                                                 stroke="#fff"
                                                 strokeWidth={selectedRegionName === "France" ? "1.5" : "2"}
+                                                style={{
+                                                    animation: isCriticalStation ? 'pulse-station-critical 1.5s infinite ease-in-out' : 'none',
+                                                    transformOrigin: `${coords[0]}px ${coords[1]}px`
+                                                }}
                                             />
                                         </g>
                                     );
@@ -981,6 +991,16 @@ const FireRiskMap = () => {
 
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                @keyframes pulse-dept-critical {
+                    0% { fill-opacity: 1; }
+                    50% { fill-opacity: 0.65; }
+                    100% { fill-opacity: 1; }
+                }
+                @keyframes pulse-station-critical {
+                    0% { r: 7.5px; opacity: 1; }
+                    50% { r: 10.5px; opacity: 0.7; }
+                    100% { r: 7.5px; opacity: 1; }
+                }
             `}</style>
         </div>
     );
