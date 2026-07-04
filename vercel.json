@@ -1,16 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "crons": [
-    {
-      "path": "/api/cron/archive-foudre",
-      "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/cron/sync-vigilance",
-      "schedule": "0 8 * * *"
-    }
-  ],
   "rewrites": [
     {
       "source": "/api-agate/(.*)",
