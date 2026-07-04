@@ -351,7 +351,10 @@ const FireRiskMap = () => {
                 if (!s.lat || !s.lon) return false;
                 const inMetropolitanFrance = s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
                 if (!inMetropolitanFrance) return false;
-                return s.tempMax !== null && s.humMin !== null && s.windMean !== null;
+
+                // Élimination stricte de tout ce qui est null, undefined ou invalide (ex: NaN)
+                return s.tempMax != null && s.humMin != null && s.windMean != null && 
+                       !isNaN(s.tempMax) && !isNaN(s.humMin) && !isNaN(s.windMean);
             });
 
             setStationData(filtered);
@@ -947,7 +950,12 @@ const FireRiskMap = () => {
                                     const isHovered = hoveredDept === code;
                                     const hasRisk = !!deptData;
 
-                                    const isCritical = deptData && (deptData.risk === 'critical' || deptData.risk === 'high');
+                                    // En mode 'daily_max', on ne fait clignoter que le Rouge (critical). En direct, on fait clignoter Rouge et Orange (critical/high)
+                                    const isCritical = deptData && (
+                                        viewMode === 'daily_max' 
+                                            ? deptData.risk === 'critical' 
+                                            : (deptData.risk === 'critical' || deptData.risk === 'high')
+                                    );
 
                                     return (
                                         <path
@@ -1051,7 +1059,9 @@ const FireRiskMap = () => {
                                     if (!coords || isNaN(coords[0])) return null;
 
                                     const lvl = RISK_LEVELS[s.risk.toUpperCase()];
-                                    const isCriticalStation = s.risk === 'critical' || s.risk === 'high';
+                                    const isCriticalStation = viewMode === 'daily_max' 
+                                        ? s.risk === 'critical' 
+                                        : (s.risk === 'critical' || s.risk === 'high');
                                     return (
                                         <g key={`city-point-${s.station_id}`} style={{ cursor: 'pointer' }}
                                             onClick={() => {
