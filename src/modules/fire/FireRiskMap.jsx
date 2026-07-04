@@ -243,7 +243,13 @@ const FireRiskMap = () => {
                     windMean: ds.wind_mean_max,
                     risk
                 };
-            }).filter(s => s.risk !== 'low'); // On garde tous les postes avec risque (Jaune, Orange, Rouge)
+            }).filter(s => {
+                // Rétention stricte : Risque actif ET coordonnées valides en France Métropolitaine
+                if (s.risk === 'low') return false;
+                if (!s.lat || !s.lon) return false;
+                // Coordonnées France métropolitaine
+                return s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
+            });
 
             // 4. Agréger par département (pire risque)
             const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
@@ -369,6 +375,13 @@ const FireRiskMap = () => {
             setSearchLoading(false);
         }
     };
+
+    // Filtrage des stations de la région sélectionnée
+    const filteredStations = useMemo(() => {
+        if (selectedRegionName === "France") return stationData;
+        const regionDepts = REGIONS[selectedRegionName] || [];
+        return stationData.filter(s => regionDepts.includes(s.dept));
+    }, [stationData, selectedRegionName]);
 
     // ─── Couleur d'un département ─────────────────────────────────────────────
     const getDeptColor = (deptCode) => {
@@ -582,7 +595,7 @@ const FireRiskMap = () => {
                                 );
                             })}
                             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 14px' }}>
-                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#eab308' }}>{stationData.length}</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#eab308' }}>{filteredStations.length}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Postes concernés</div>
                             </div>
                         </div>
@@ -682,7 +695,7 @@ const FireRiskMap = () => {
                 {/* ─── CARTE SVG ─── */}
                 <div style={{ background: '#0f172a', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: '10px 16px', position: 'relative', overflow: 'hidden' }}>
                     {/* Encadré Top 30 des stations à risque (en haut à droite) */}
-                    {!loading && stationData.length > 0 && (
+                    {!loading && filteredStations.length > 0 && (
                         <div style={{
                             position: 'absolute',
                             top: '20px',
@@ -702,10 +715,12 @@ const FireRiskMap = () => {
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
                                 <Flame size={16} style={{ color: '#ef4444' }} />
-                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>Top 30 des postes en alerte</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>
+                                    {selectedRegionName === "France" ? "Top 30 des postes en alerte" : `Postes en alerte (${selectedRegionName})`}
+                                </span>
                             </div>
                             <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '4px' }}>
-                                {stationData
+                                {filteredStations
                                     .sort((a, b) => {
                                         const riskOrder = { critical: 3, high: 2, warning: 1, low: 0 };
                                         if (riskOrder[b.risk] !== riskOrder[a.risk]) {
@@ -869,15 +884,18 @@ const FireRiskMap = () => {
                                 })
                             }
 
-                            {/* Villes principales (si France) ou locales (si Région) */}
+                            {/* Villes principales (si France ou si Région) */}
                             {stationData
                                 .filter(s => {
                                     if (!s.lat || !s.lon) return false;
-                                    if (selectedRegionName === "France") {
-                                        return MAJOR_STATIONS.includes(s.station_id);
+                                    // Pour France et Régions, on n'affiche désormais que les stations importantes (de la liste MAJOR_STATIONS)
+                                    if (!MAJOR_STATIONS.includes(s.station_id)) return false;
+
+                                    if (selectedRegionName !== "France") {
+                                        const regionDepts = REGIONS[selectedRegionName] || [];
+                                        return regionDepts.includes(s.dept);
                                     }
-                                    const regionDepts = REGIONS[selectedRegionName] || [];
-                                    return regionDepts.includes(s.dept);
+                                    return true;
                                 })
                                 .map(s => {
                                     const coords = projection([s.lon, s.lat]);
