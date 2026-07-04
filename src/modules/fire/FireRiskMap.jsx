@@ -10,6 +10,40 @@ import stationsListData from "../../data/stations_list.json";
 
 import { REGIONS } from "../../data/departments";
 
+// Liste des codes de postes météo des 30 plus grandes villes françaises pour affichage ciblé
+const MAJOR_STATIONS = [
+    "75114001", // Paris Montsouris
+    "13055001", // Marseille
+    "69387005", // Lyon Bron
+    "31555001", // Toulouse Blagnac
+    "06088001", // Nice
+    "44109001", // Nantes
+    "34172001", // Montpellier
+    "67124001", // Strasbourg Entzheim
+    "33069001", // Bordeaux Mérignac
+    "59350001", // Lille Lesquin
+    "35238001", // Rennes St-Jacques
+    "51454001", // Reims
+    "83070001", // Toulon
+    "42218001", // Saint-Étienne
+    "76351001", // Le Havre
+    "38382001", // Grenoble St-Geoirs
+    "21054001", // Dijon
+    "49007001", // Angers
+    "30189001", // Nîmes Courbessac
+    "63113001", // Clermont-Ferrand
+    "13001001", // Aix-en-Provence
+    "29019001", // Brest
+    "87085006", // Limoges Bellegarde
+    "80021001", // Amiens
+    "74010001", // Annecy
+    "66136001", // Perpignan
+    "57463001", // Metz Frescaty
+    "25056001", // Besançon
+    "86194004", // Poitiers Biard
+    "59178001"  // Douai (poste de référence locale)
+];
+
 // ─── Règle des 3×30 ──────────────────────────────────────────────────────────
 const RISK_LEVELS = {
     LOW:      { id: 'low',    label: 'Faible',       color: '#22c55e', bg: '#dcfce7', text: '#166534', emoji: '🟢' },
@@ -62,7 +96,7 @@ const FireRiskMap = () => {
     );
     const [geoData, setGeoData] = useState(null);
     const [regionsGeoData, setRegionsGeoData] = useState(null); // GeoJSON des régions
-    const [viewMode, setViewMode] = useState('departments'); // 'departments' ou 'regions'
+    const [selectedRegionName, setSelectedRegionName] = useState("France"); // "France" ou nom de région
     const [stationData, setStationData] = useState([]); // [{station_id, dept, name, tempMax, humMin, windMean, risk}]
     const [deptRisk, setDeptRisk] = useState({}); // { deptCode: { risk, stations: [] } }
     const [regionRisk, setRegionRisk] = useState({}); // { regionName: { risk, stations: [] } }
@@ -73,7 +107,6 @@ const FireRiskMap = () => {
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState('');
     const [selectedDept, setSelectedDept] = useState(null);
-    const [selectedRegion, setSelectedRegion] = useState(null); // Région sélectionnée
     const [hoveredDept, setHoveredDept] = useState(null);
     const [hoveredRegion, setHoveredRegion] = useState(null); // Région survolée
     const [lastUpdate, setLastUpdate] = useState(null);
@@ -98,12 +131,20 @@ const FireRiskMap = () => {
         return map;
     }, []);
 
-    // Projection D3 — scale augmenté pour remplir la carte (agrandie de 4200 à 4800)
-    const projection = useMemo(() => geoConicConformal()
-        .center([2.5, 46.2])
-        .scale(4800)
-        .translate([WIDTH / 2, HEIGHT / 2 + 10]), []);
-    const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
+    // Projection D3 Dynamique avec fitExtent (comme sur les autres cartes)
+    const projection = useMemo(() => {
+        if (!geoData) return null;
+        if (selectedRegionName !== "France" && regionsGeoData) {
+            const regionFeature = regionsGeoData.features.find(f => f.properties.nom === selectedRegionName);
+            if (regionFeature) {
+                return geoConicConformal().fitExtent([[40, 40], [WIDTH - 40, HEIGHT - 80]], regionFeature);
+            }
+        }
+        // Mode France entière (zoom standard)
+        return geoConicConformal().fitExtent([[40, 40], [WIDTH - 40, HEIGHT - 40]], geoData);
+    }, [geoData, regionsGeoData, selectedRegionName]);
+
+    const pathGenerator = useMemo(() => projection ? geoPath().projection(projection) : null, [projection]);
 
     // Charger GeoJSON départements et régions
     useEffect(() => {
@@ -198,7 +239,7 @@ const FireRiskMap = () => {
                     windMean: ds.wind_mean_max,
                     risk
                 };
-            }).filter(s => s.risk === 'high' || s.risk === 'critical'); // On ne garde QUE les postes atteignant les critères critiques (risque Orange et Rouge)
+            }).filter(s => s.risk !== 'low'); // On garde tous les postes avec risque (Jaune, Orange, Rouge)
 
             // 4. Agréger par département (pire risque)
             const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
@@ -355,40 +396,34 @@ const FireRiskMap = () => {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        {/* Switch Mode de vue */}
-                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255,255,255,0.2)' }}>
-                            <button 
-                                onClick={() => setViewMode('departments')}
+                        {/* Sélecteur de Région */}
+                        <div style={{ position: 'relative' }}>
+                            <select
+                                value={selectedRegionName}
+                                onChange={(e) => {
+                                    setSelectedRegionName(e.target.value);
+                                    setSelectedDept(null);
+                                }}
                                 style={{
-                                    background: viewMode === 'departments' ? '#ef4444' : 'transparent',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    padding: '6px 12px',
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #fca5a5',
+                                    background: '#7f1d1d',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '700',
                                     color: '#fff',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
+                                    outline: 'none',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s'
+                                    appearance: 'none',
+                                    paddingRight: '30px'
                                 }}
                             >
-                                Départements
-                            </button>
-                            <button 
-                                onClick={() => setViewMode('regions')}
-                                style={{
-                                    background: viewMode === 'regions' ? '#ef4444' : 'transparent',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    padding: '6px 12px',
-                                    color: '#fff',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                Régions
-                            </button>
+                                <option value="France">Toute la France</option>
+                                {regionsGeoData?.features.map(f => (
+                                    <option key={f.properties.nom} value={f.properties.nom}>{f.properties.nom}</option>
+                                ))}
+                            </select>
+                            <ChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#fca5a5' }} />
                         </div>
 
                         {/* Sélecteur de date */}
@@ -532,6 +567,7 @@ const FireRiskMap = () => {
                             {[
                                 { key: 'critical', lvl: RISK_LEVELS.CRITICAL },
                                 { key: 'high',     lvl: RISK_LEVELS.HIGH },
+                                { key: 'warning',  lvl: RISK_LEVELS.WARNING },
                             ].map(({ key, lvl }) => {
                                 const count = Object.values(deptRisk).filter(d => d.risk === key).length;
                                 return (
@@ -542,8 +578,8 @@ const FireRiskMap = () => {
                                 );
                             })}
                             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 14px' }}>
-                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#ef4444' }}>{stationData.length}</div>
-                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Postes en alerte</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#eab308' }}>{stationData.length}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Postes concernés</div>
                             </div>
                         </div>
                     </div>
@@ -581,19 +617,19 @@ const FireRiskMap = () => {
                     )}
 
                     {/* Détail de la région sélectionnée */}
-                    {viewMode === 'regions' && selectedRegion && regionRisk[selectedRegion] && (
-                        <div style={{ background: '#0f172a', border: `2px solid ${RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.color}`, borderRadius: 12, padding: 16 }}>
+                    {selectedRegionName !== 'France' && regionRisk[selectedRegionName] && (
+                        <div style={{ background: '#0f172a', border: `2px solid ${RISK_LEVELS[regionRisk[selectedRegionName].risk.toUpperCase()]?.color}`, borderRadius: 12, padding: 16 }}>
                             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10 }}>
-                                {RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.emoji} {selectedRegion}
-                                <span style={{ marginLeft: 8, fontSize: '0.78rem', color: RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.color }}>
-                                    {RISK_LEVELS[selectedRegion].toUpperCase() === 'FAIBLE' ? 'Faible' : RISK_LEVELS[regionRisk[selectedRegion].risk.toUpperCase()]?.label}
+                                {RISK_LEVELS[regionRisk[selectedRegionName].risk.toUpperCase()]?.emoji} {selectedRegionName}
+                                <span style={{ marginLeft: 8, fontSize: '0.78rem', color: RISK_LEVELS[regionRisk[selectedRegionName].risk.toUpperCase()]?.color }}>
+                                    {RISK_LEVELS[regionRisk[selectedRegionName].risk.toUpperCase()]?.label}
                                 </span>
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8 }}>
-                                {regionRisk[selectedRegion].stations.length} poste(s) en alerte :
+                                {regionRisk[selectedRegionName].stations.length} poste(s) en alerte :
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
-                                {regionRisk[selectedRegion].stations.map(s => {
+                                {regionRisk[selectedRegionName].stations.map(s => {
                                     const lvl = RISK_LEVELS[s.risk.toUpperCase()];
                                     return (
                                         <div key={s.station_id} style={{ background: '#1e293b', borderLeft: `3px solid ${lvl?.color}`, borderRadius: '0 8px 8px 0', padding: '8px 12px' }}>
@@ -632,7 +668,6 @@ const FireRiskMap = () => {
                             ))}
                         </div>
                     </div>
-
                     {lastUpdate && (
                         <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 'auto' }}>
                             Mis à jour : {format(lastUpdate, 'HH:mm', { locale: fr })} — Auto-refresh 30min
@@ -726,7 +761,7 @@ const FireRiskMap = () => {
                             <div>Chargement des données...</div>
                         </div>
                     )}
-                    {!loading && ((viewMode === 'departments' && geoData) || (viewMode === 'regions' && regionsGeoData)) && (
+                    {!loading && geoData && projection && (
                         <svg
                             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
                             style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 110px)', cursor: 'default', display: 'block' }}
@@ -740,142 +775,148 @@ const FireRiskMap = () => {
                             {/* Fond */}
                             <rect width={WIDTH} height={HEIGHT} fill="#0f172a" />
 
-                            {/* Mode Départements */}
-                            {viewMode === 'departments' && geoData.features.map(feature => {
-                                const code = feature.properties.code;
-                                const deptData = deptRisk[code];
-                                const fillColor = getDeptColor(code);
-                                const isSelected = selectedDept === code;
-                                const isHovered = hoveredDept === code;
-                                const hasRisk = !!deptData;
+                            {/* Tracés des départements (filtrés par région s'il y a un zoom) */}
+                            {geoData.features
+                                .filter(feature => {
+                                    if (selectedRegionName === "France") return true;
+                                    const regionDepts = REGIONS[selectedRegionName] || [];
+                                    return regionDepts.includes(feature.properties.code);
+                                })
+                                .map(feature => {
+                                    const code = feature.properties.code;
+                                    const deptData = deptRisk[code];
+                                    const fillColor = getDeptColor(code);
+                                    const isSelected = selectedDept === code;
+                                    const isHovered = hoveredDept === code;
+                                    const hasRisk = !!deptData;
 
-                                return (
-                                    <path
-                                        key={`dept-${code}`}
-                                        d={pathGenerator(feature)}
-                                        fill={fillColor}
-                                        stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
-                                        strokeWidth={isSelected ? 2.5 : isHovered ? 1.5 : 0.8}
-                                        style={{ cursor: hasRisk ? 'pointer' : 'default', transition: 'stroke 0.15s, stroke-width 0.15s', filter: isSelected ? 'url(#shadow)' : 'none' }}
-                                        onClick={() => {
-                                            if (hasRisk) setSelectedDept(selectedDept === code ? null : code);
-                                        }}
-                                        onMouseEnter={() => setHoveredDept(code)}
-                                        onMouseLeave={() => setHoveredDept(null)}
-                                    />
-                                );
-                            })}
+                                    return (
+                                        <path
+                                            key={`dept-${code}`}
+                                            d={pathGenerator(feature)}
+                                            fill={fillColor}
+                                            stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
+                                            strokeWidth={isSelected ? 2.5 : isHovered ? 1.5 : 0.8}
+                                            style={{ cursor: hasRisk ? 'pointer' : 'default', transition: 'stroke 0.15s, stroke-width 0.15s', filter: isSelected ? 'url(#shadow)' : 'none' }}
+                                            onClick={() => {
+                                                if (hasRisk) setSelectedDept(selectedDept === code ? null : code);
+                                            }}
+                                            onMouseEnter={() => setHoveredDept(code)}
+                                            onMouseLeave={() => setHoveredDept(null)}
+                                        />
+                                    );
+                                })
+                            }
 
-                            {/* Mode Régions */}
-                            {viewMode === 'regions' && regionsGeoData.features.map(feature => {
-                                const name = feature.properties.nom;
-                                const rData = regionRisk[name];
-                                const isSelected = selectedRegion === name;
-                                const isHovered = hoveredRegion === name;
-                                const hasRisk = !!rData;
-                                const fillColor = rData ? RISK_LEVELS[rData.risk.toUpperCase()]?.color : '#e5e7eb';
+                            {/* Limites régionales noires au-dessus de la France entière */}
+                            {selectedRegionName === "France" && regionsGeoData && (
+                                <g fill="none" stroke="#000" strokeWidth="1.5" strokeOpacity="0.4" style={{ pointerEvents: 'none' }}>
+                                    {regionsGeoData.features.map((f, idx) => (
+                                        <path key={`region-border-${idx}`} d={pathGenerator(f)} />
+                                    ))}
+                                </g>
+                            )}
 
-                                return (
-                                    <path
-                                        key={`region-${name}`}
-                                        d={pathGenerator(feature)}
-                                        fill={fillColor}
-                                        stroke={isSelected ? '#fff' : isHovered ? '#cbd5e1' : '#1e293b'}
-                                        strokeWidth={isSelected ? 2.5 : isHovered ? 1.5 : 0.8}
-                                        style={{ cursor: hasRisk ? 'pointer' : 'default', transition: 'stroke 0.15s, stroke-width 0.15s', filter: isSelected ? 'url(#shadow)' : 'none' }}
-                                        onClick={() => {
-                                            if (hasRisk) setSelectedRegion(selectedRegion === name ? null : name);
-                                        }}
-                                        onMouseEnter={() => setHoveredRegion(name)}
-                                        onMouseLeave={() => setHoveredRegion(null)}
-                                    />
-                                );
-                            })}
+                            {/* Émojis et compteurs de postes par département */}
+                            {geoData.features
+                                .filter(feature => {
+                                    if (selectedRegionName === "France") return true;
+                                    const regionDepts = REGIONS[selectedRegionName] || [];
+                                    return regionDepts.includes(feature.properties.code);
+                                })
+                                .map(feature => {
+                                    const code = feature.properties.code;
+                                    const deptData = deptRisk[code];
+                                    if (!deptData || deptData.risk === 'low') return null;
 
-                            {/* Labels de risque pour Départements */}
-                            {viewMode === 'departments' && geoData.features.map(feature => {
-                                const code = feature.properties.code;
-                                const deptData = deptRisk[code];
-                                if (!deptData || deptData.risk === 'low') return null;
-                                
-                                const isSelected = selectedDept === code;
-                                const isHighRisk = deptData.risk === 'high' || deptData.risk === 'critical';
-                                if (!isHighRisk && !isSelected) return null;
+                                    const isSelected = selectedDept === code;
+                                    const isHighRisk = deptData.risk === 'high' || deptData.risk === 'critical';
+                                    if (!isHighRisk && !isSelected) return null;
 
-                                const centroid = pathGenerator.centroid(feature);
-                                if (!centroid || isNaN(centroid[0])) return null;
-                                const lvl = RISK_LEVELS[deptData.risk.toUpperCase()];
-                                return (
-                                    <g key={`label-dept-${code}`} style={{ pointerEvents: 'none' }}>
-                                        <text
-                                            x={centroid[0]}
-                                            y={centroid[1]}
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize="14"
-                                            style={{ userSelect: 'none' }}
+                                    const centroid = pathGenerator.centroid(feature);
+                                    if (!centroid || isNaN(centroid[0])) return null;
+                                    const lvl = RISK_LEVELS[deptData.risk.toUpperCase()];
+                                    return (
+                                        <g key={`label-dept-${code}`} style={{ pointerEvents: 'none' }}>
+                                            <text
+                                                x={centroid[0]}
+                                                y={centroid[1]}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={selectedRegionName === "France" ? "14" : "24"}
+                                                style={{ userSelect: 'none' }}
+                                            >
+                                                {lvl.emoji}
+                                            </text>
+                                            <text
+                                                x={centroid[0]}
+                                                y={centroid[1] + (selectedRegionName === "France" ? 14 : 20)}
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                                fontSize={selectedRegionName === "France" ? "9" : "15"}
+                                                fill="#fff"
+                                                fontWeight="700"
+                                                style={{ userSelect: 'none', textShadow: '0 1px 3px #000' }}
+                                            >
+                                                {deptData.stations.length}p
+                                            </text>
+                                        </g>
+                                    );
+                                })
+                            }
+
+                            {/* Villes principales (si France) ou locales (si Région) */}
+                            {stationData
+                                .filter(s => {
+                                    if (!s.lat || !s.lon) return false;
+                                    if (selectedRegionName === "France") {
+                                        return MAJOR_STATIONS.includes(s.station_id);
+                                    }
+                                    const regionDepts = REGIONS[selectedRegionName] || [];
+                                    return regionDepts.includes(s.dept);
+                                })
+                                .map(s => {
+                                    const coords = projection([s.lon, s.lat]);
+                                    if (!coords || isNaN(coords[0])) return null;
+
+                                    const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                    return (
+                                        <g key={`city-point-${s.station_id}`} style={{ cursor: 'pointer' }}
+                                            onClick={() => {
+                                                setSelectedDept(s.dept);
+                                                setSearchResult({
+                                                    city: s.name,
+                                                    dept: s.dept,
+                                                    station: s,
+                                                    distance: 0
+                                                });
+                                            }}
                                         >
-                                            {lvl.emoji}
-                                        </text>
-                                        <text
-                                            x={centroid[0]}
-                                            y={centroid[1] + 14}
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize="9"
-                                            fill="#fff"
-                                            fontWeight="700"
-                                            style={{ userSelect: 'none', textShadow: '0 1px 3px #000' }}
-                                        >
-                                            {deptData.stations.length}p
-                                        </text>
-                                    </g>
-                                );
-                            })}
+                                            <circle
+                                                cx={coords[0]}
+                                                cy={coords[1]}
+                                                r={selectedRegionName === "France" ? "4" : "6"}
+                                                fill={lvl.color}
+                                                stroke="#fff"
+                                                strokeWidth={selectedRegionName === "France" ? "1.2" : "1.8"}
+                                            />
+                                            <text
+                                                x={coords[0] + (selectedRegionName === "France" ? 7 : 10)}
+                                                y={coords[1] + 3}
+                                                fontSize={selectedRegionName === "France" ? "8.5" : "13"}
+                                                fill="#e2e8f0"
+                                                fontWeight="600"
+                                                style={{ userSelect: 'none', textShadow: '0 1px 3px #0f172a, 0 1px 2px #0f172a' }}
+                                            >
+                                                {s.name}
+                                            </text>
+                                        </g>
+                                    );
+                                })
+                            }
 
-                            {/* Labels de risque pour Régions */}
-                            {viewMode === 'regions' && regionsGeoData.features.map(feature => {
-                                const name = feature.properties.nom;
-                                const rData = regionRisk[name];
-                                if (!rData || rData.risk === 'low') return null;
-
-                                const isSelected = selectedRegion === name;
-                                const isHighRisk = rData.risk === 'high' || rData.risk === 'critical';
-                                if (!isHighRisk && !isSelected) return null;
-
-                                const centroid = pathGenerator.centroid(feature);
-                                if (!centroid || isNaN(centroid[0])) return null;
-                                const lvl = RISK_LEVELS[rData.risk.toUpperCase()];
-                                return (
-                                    <g key={`label-reg-${name}`} style={{ pointerEvents: 'none' }}>
-                                        <text
-                                            x={centroid[0]}
-                                            y={centroid[1]}
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize="16"
-                                            style={{ userSelect: 'none' }}
-                                        >
-                                            {lvl.emoji}
-                                        </text>
-                                        <text
-                                            x={centroid[0]}
-                                            y={centroid[1] + 16}
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                            fontSize="10"
-                                            fill="#fff"
-                                            fontWeight="700"
-                                            style={{ userSelect: 'none', textShadow: '0 1px 3px #000' }}
-                                        >
-                                            {rData.stations.length}p
-                                        </text>
-                                    </g>
-                                );
-                            })}
-
-                            {/* Tooltip hover pour Départements */}
-                            {viewMode === 'departments' && hoveredDept && deptRisk[hoveredDept] && (() => {
+                            {/* Tooltip départements (France uniquement) */}
+                            {selectedRegionName === "France" && hoveredDept && deptRisk[hoveredDept] && (() => {
                                 const feat = geoData.features.find(f => f.properties.code === hoveredDept);
                                 if (!feat) return null;
                                 const c = pathGenerator.centroid(feat);
@@ -888,26 +929,6 @@ const FireRiskMap = () => {
                                         <rect x={Math.min(c[0]-80, WIDTH-180)} y={Math.max(c[1]-80, 5)} width={170} height={70} rx={8} fill="#1e293b" stroke={lvl.color} strokeWidth={1.5} />
                                         <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+20} fontSize="11" fill="#e2e8f0" fontWeight="700">{lvl.emoji} Dépt. {hoveredDept} — {lvl.label}</text>
                                         <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+36} fontSize="9" fill="#94a3b8">{d.stations.length} poste(s) concerné(s)</text>
-                                        {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+52} fontSize="9" fill="#94a3b8">Ex: {worst.name}</text>}
-                                        {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+64} fontSize="9" fill="#64748b">T:{worst.tempMax?.toFixed(0)}°C HR:{worst.humMin}% V:{worst.windMean}km/h</text>}
-                                    </g>
-                                );
-                            })()}
-
-                            {/* Tooltip hover pour Régions */}
-                            {viewMode === 'regions' && hoveredRegion && regionRisk[hoveredRegion] && (() => {
-                                const feat = regionsGeoData.features.find(f => f.properties.nom === hoveredRegion);
-                                if (!feat) return null;
-                                const c = pathGenerator.centroid(feat);
-                                if (!c || isNaN(c[0])) return null;
-                                const r = regionRisk[hoveredRegion];
-                                const lvl = RISK_LEVELS[r.risk.toUpperCase()];
-                                const worst = r.stations[0];
-                                return (
-                                    <g style={{ pointerEvents: 'none' }}>
-                                        <rect x={Math.min(c[0]-80, WIDTH-180)} y={Math.max(c[1]-80, 5)} width={175} height={70} rx={8} fill="#1e293b" stroke={lvl.color} strokeWidth={1.5} />
-                                        <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+20} fontSize="10" fill="#e2e8f0" fontWeight="700">{lvl.emoji} {hoveredRegion}</text>
-                                        <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+36} fontSize="9" fill="#94a3b8">{r.stations.length} poste(s) concerné(s)</text>
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+52} fontSize="9" fill="#94a3b8">Ex: {worst.name}</text>}
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+64} fontSize="9" fill="#64748b">T:{worst.tempMax?.toFixed(0)}°C HR:{worst.humMin}% V:{worst.windMean}km/h</text>}
                                     </g>
