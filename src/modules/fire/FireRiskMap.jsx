@@ -59,23 +59,50 @@ const RISK_MESSAGES = {
     critical: 'Conditions météorologiques très favorables à une propagation rapide des incendies.',
 };
 
-function computeRisk(tempMax, humMin, windMean) {
-    if (tempMax == null || humMin == null) return 'low';
+function computeRisk(temp, hum, wind) {
+    if (temp == null || hum == null) return 'low';
 
-    // Seuils critiques (3×30)
-    const hotCritical   = tempMax >= 30;
-    const dryCritical   = humMin  <= 30;
-    const windCritical  = windMean != null ? windMean >= 30 : false;
-    const criticalCount = [hotCritical, dryCritical, windCritical].filter(Boolean).length;
+    // 1. Attribution des scores individuels par paramètre
+    let tempScore = 0;
+    if (temp >= 30) tempScore = 3;      // Critique
+    else if (temp >= 28) tempScore = 2; // Élevé
+    else if (temp >= 25) tempScore = 1; // Modéré
 
-    // Seuils de vigilance
-    const hotWarning  = tempMax >= 28 && tempMax < 30;
-    const dryWarning  = humMin  > 30  && humMin  <= 40;
-    const windWarning = windMean != null ? (windMean >= 20 && windMean < 30) : false;
+    let humScore = 0;
+    if (hum <= 30) humScore = 3;      // Critique
+    else if (hum <= 35) humScore = 2; // Élevé
+    else if (hum <= 45) humScore = 1; // Modéré
 
-    if (criticalCount === 3) return 'critical';
-    if (criticalCount >= 2) return 'high';
-    if (criticalCount >= 1 || hotWarning || dryWarning || windWarning) return 'warning';
+    let windScore = 0;
+    const w = wind || 0;
+    if (w >= 30) windScore = 3;      // Critique
+    else if (w >= 25) windScore = 2; // Élevé
+    else if (w >= 15) windScore = 1; // Modéré
+
+    // 2. Détermination du niveau combiné
+    const totalScore = tempScore + humScore + windScore;
+
+    // Niveau Rouge (Très élevé / Critique) : 
+    // - Soit au moins deux critères au niveau critique (3)
+    // - Soit les 3 critères au moins au niveau élevé (2, 2, 2 -> totalScore >= 6 avec chacun >= 2)
+    const criticalCount = [tempScore === 3, humScore === 3, windScore === 3].filter(Boolean).length;
+    if (criticalCount >= 2 || (tempScore >= 2 && humScore >= 2 && windScore >= 2)) {
+        return 'critical';
+    }
+
+    // Niveau Orange (Élevé) :
+    // - Soit un critère critique (3) combiné à un autre modéré
+    // - Soit au moins deux critères élevés
+    if (totalScore >= 5 || (tempScore === 3 || humScore === 3 || windScore === 3)) {
+        return 'high';
+    }
+
+    // Niveau Jaune (Vigilance) :
+    // - Au moins un critère modéré ou plus
+    if (totalScore >= 2) {
+        return 'warning';
+    }
+
     return 'low';
 }
 
@@ -242,8 +269,7 @@ const FireRiskMap = () => {
                         risk
                     };
                 }).filter(s => {
-                    // Filtrer pour la France métropolitaine et exclure le risque faible 'low'
-                    if (s.risk === 'low') return false;
+                    // Filtrer uniquement par rapport aux coordonnées de la France métropolitaine
                     if (!s.lat || !s.lon) return false;
                     return s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
                 });
@@ -383,8 +409,8 @@ const FireRiskMap = () => {
     // ─── Couleur d'un département ─────────────────────────────────────────────
     const getDeptColor = (deptCode) => {
         const d = deptRisk[deptCode];
-        if (!d) return '#1e293b'; // Bleu nuit/ardoise sobre pour les départements sans risque
-        return RISK_LEVELS[d.risk.toUpperCase()]?.color || '#1e293b';
+        if (!d) return '#22c55e'; // Vert (faible danger) par défaut pour les départements sans risque
+        return RISK_LEVELS[d.risk.toUpperCase()]?.color || '#22c55e';
     };
 
     // ─── Stats globales ───────────────────────────────────────────────────────
@@ -893,6 +919,9 @@ const FireRiskMap = () => {
                                 .filter(s => {
                                     if (!s.lat || !s.lon) return false;
                                     
+                                    // On n'affiche que les postes avec une alerte active (supérieur à low) pour ne pas surcharger la carte
+                                    if (s.risk === 'low') return false;
+
                                     if (selectedRegionName === "France") {
                                         // À l'échelle nationale, on restreint aux 30 villes majeures
                                         return MAJOR_STATIONS.includes(s.station_id);
