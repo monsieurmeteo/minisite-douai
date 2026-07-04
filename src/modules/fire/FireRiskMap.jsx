@@ -121,6 +121,9 @@ const FireRiskMap = () => {
     const [selectedDate, setSelectedDate] = useState(() =>
         localStorage.getItem('fireRiskDate') || new Date().toISOString().split('T')[0]
     );
+    const [viewMode, setViewMode] = useState(() =>
+        localStorage.getItem('fireRiskViewMode') || 'live'
+    );
     const [geoData, setGeoData] = useState(null);
     const [regionsGeoData, setRegionsGeoData] = useState(null); // GeoJSON des régions
     const [selectedRegionName, setSelectedRegionName] = useState("France"); // "France" ou nom de région
@@ -190,96 +193,173 @@ const FireRiskMap = () => {
             .catch(err => console.error("Erreur GeoJSON Régions:", err));
     }, []);
 
-    // ─── Chargement des données temps réel ─────────────────────────────────────
+    // ─── Chargement des données (temps réel ou max journalier) ────────────────
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
 
         try {
-            console.log("[FireRiskMap] Chargement des données en direct via get_france_live...");
-            let liveData = [];
-            let from = 0;
-            const batchSize = 1000;
-            let hasMore = true;
+            let processedStations = [];
 
-            while (hasMore) {
-                const { data, error: liveError } = await supabase
-                    .rpc('get_france_live')
-                    .range(from, from + batchSize - 1);
+            if (viewMode === 'live') {
+                console.log("[FireRiskMap] Chargement en direct (get_france_live)...");
+                let liveData = [];
+                let from = 0;
+                const batchSize = 1000;
+                let hasMore = true;
 
-                if (liveError) throw liveError;
-                if (data && data.length > 0) {
-                    liveData.push(...data);
-                    if (data.length < batchSize) hasMore = false;
-                    else from += batchSize;
-                } else {
-                    hasMore = false;
-                }
-            }
+                while (hasMore) {
+                    const { data, error: liveError } = await supabase
+                        .rpc('get_france_live')
+                        .range(from, from + batchSize - 1);
 
-            if (liveData.length === 0) {
-                throw new Error("Aucune observation en direct disponible.");
-            }
-
-            // Trouver l'horodatage de la donnée la plus récente
-            let maxTimestamp = null;
-            liveData.forEach(item => {
-                if (item.obs_time) {
-                    const d = new Date(item.obs_time);
-                    if (!maxTimestamp || d > maxTimestamp) {
-                        maxTimestamp = d;
+                    if (liveError) throw liveError;
+                    if (data && data.length > 0) {
+                        liveData.push(...data);
+                        if (data.length < batchSize) hasMore = false;
+                        else from += batchSize;
+                    } else {
+                        hasMore = false;
                     }
                 }
-            });
-            if (maxTimestamp) setLastUpdate(maxTimestamp);
 
-            // Calculer le risque en direct pour chaque station
-            const stations = liveData
-                .filter(item => item.station_id < '96000000' && !item.station_id.startsWith('SIMULATION'))
-                .map(s => {
-                    let sid = String(s.station_id);
-                    if (sid.length === 7) sid = "0" + sid;
+                if (liveData.length === 0) {
+                    throw new Error("Aucune observation en direct disponible.");
+                }
 
+                // Trouver l'horodatage le plus récent
+                let maxTimestamp = null;
+                liveData.forEach(item => {
+                    if (item.obs_time) {
+                        const d = new Date(item.obs_time);
+                        if (!maxTimestamp || d > maxTimestamp) {
+                            maxTimestamp = d;
+                        }
+                    }
+                });
+                if (maxTimestamp) setLastUpdate(maxTimestamp);
+
+                processedStations = liveData
+                    .filter(item => item.station_id < '96000000' && !item.station_id.startsWith('SIMULATION'))
+                    .map(s => {
+                        let sid = String(s.station_id);
+                        if (sid.length === 7) sid = "0" + sid;
+
+                        const meta = stationLookup[sid];
+                        const lat = meta?.lat;
+                        const lon = meta?.lon;
+
+                        const temp = s.t; 
+                        const hum = s.u;  
+                        const windSpd = s.wind; 
+
+                        const risk = computeRisk(temp, hum, windSpd);
+
+                        let dept = sid.substring(0, 2);
+                        if (dept === '20') {
+                            const num3 = parseInt(sid.substring(2, 5), 10);
+                            dept = num3 < 200 ? '2A' : '2B';
+                        }
+
+                        return {
+                            station_id: sid,
+                            name: stationNamesData[sid] || meta?.name || sid,
+                            dept,
+                            lat,
+                            lon,
+                            tempMax: temp,
+                            humMin: hum,
+                            windMean: windSpd,
+                            risk
+                        };
+                    });
+            } else {
+                // Mode Maximums du Jour
+                console.log(`[FireRiskMap] Chargement des maximums du jour (${selectedDate})...`);
+                
+                // 1. Charger les maximums quotidiens (Temp et Vent)
+                let allDs = [];
+                let from = 0;
+                let hasMore = true;
+                while (hasMore) {
+                    const { data, error: e } = await supabase
+                        .from('daily_summaries')
+                        .select('station_id, temp_max, wind_mean_max')
+                        .eq('date', selectedDate)
+                        .not('temp_max', 'is', null)
+                        .range(from, from + 999);
+                    if (e) throw e;
+                    if (data?.length > 0) {
+                        allDs = allDs.concat(data);
+                        if (data.length < 1000) hasMore = false;
+                        else from += 1000;
+                    } else hasMore = false;
+                }
+
+                // 2. Charger les humidités minimales de la journée (depuis observations_6mn)
+                const humMap = {};
+                let fromH = 0;
+                let hasMoreH = true;
+                while (hasMoreH) {
+                    const { data: hData, error: e } = await supabase
+                        .from('observations_6mn')
+                        .select('station_id, u')
+                        .gte('timestamp', selectedDate + 'T00:00:00Z')
+                        .lt('timestamp', selectedDate + 'T23:59:59Z')
+                        .not('u', 'is', null)
+                        .range(fromH, fromH + 999);
+                    if (e) throw e;
+                    if (hData?.length > 0) {
+                        hData.forEach(o => {
+                            if (humMap[o.station_id] === undefined || o.u < humMap[o.station_id]) {
+                                humMap[o.station_id] = o.u;
+                            }
+                        });
+                        if (hData.length < 1000) hasMoreH = false;
+                        else fromH += 1000;
+                    } else hasMoreH = false;
+                }
+
+                setLastUpdate(new Date(selectedDate + 'T18:00:00Z')); // Arbitraire pour la journée
+
+                processedStations = allDs.map(ds => {
+                    const sid = ds.station_id;
+                    const humMin = humMap[sid] ?? null;
+                    const risk = computeRisk(ds.temp_max, humMin, ds.wind_mean_max);
                     const meta = stationLookup[sid];
-                    const lat = meta?.lat;
-                    const lon = meta?.lon;
-
-                    // Les valeurs instantanées en direct de get_france_live :
-                    const temp = s.t; // température en direct
-                    const hum = s.u;  // humidité relative en direct
-                    const windSpd = s.wind; // vitesse du vent en direct (en km/h)
-
-                    const risk = computeRisk(temp, hum, windSpd);
-
                     let dept = sid.substring(0, 2);
                     if (dept === '20') {
                         const num3 = parseInt(sid.substring(2, 5), 10);
                         dept = num3 < 200 ? '2A' : '2B';
                     }
-
                     return {
                         station_id: sid,
                         name: stationNamesData[sid] || meta?.name || sid,
                         dept,
-                        lat,
-                        lon,
-                        tempMax: temp,
-                        humMin: hum,
-                        windMean: windSpd,
+                        lat: meta?.lat,
+                        lon: meta?.lon,
+                        tempMax: ds.temp_max,
+                        humMin,
+                        windMean: ds.wind_mean_max,
                         risk
                     };
-                }).filter(s => {
-                    // Filtrer uniquement par rapport aux coordonnées de la France métropolitaine
-                    if (!s.lat || !s.lon) return false;
-                    return s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
                 });
+            }
 
-            setStationData(stations);
+            // Filtrage final : coordonnées en France métropolitaine et instruments complets
+            const filtered = processedStations.filter(s => {
+                if (!s.lat || !s.lon) return false;
+                const inMetropolitanFrance = s.lat >= 41.0 && s.lat <= 51.5 && s.lon >= -5.5 && s.lon <= 10.0;
+                if (!inMetropolitanFrance) return false;
+                return s.tempMax !== null && s.humMin !== null && s.windMean !== null;
+            });
 
-            // Agréger par département (pire risque)
+            setStationData(filtered);
+
+            // Agréger par département
             const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
             const deptMap = {};
-            stations.forEach(s => {
+            filtered.forEach(s => {
                 if (!deptMap[s.dept]) {
                     deptMap[s.dept] = { risk: s.risk, stations: [] };
                 } else if (riskOrder[s.risk] > riskOrder[deptMap[s.dept].risk]) {
@@ -287,14 +367,11 @@ const FireRiskMap = () => {
                 }
                 deptMap[s.dept].stations.push(s);
             });
-
-            // S'assurer que tous les départements français existent dans la carte de risques, 
-            // sinon ils sont à faible risque (low)
             setDeptRisk(deptMap);
 
-            // Agréger par région (pire risque)
+            // Agréger par région
             const regMap = {};
-            stations.forEach(s => {
+            filtered.forEach(s => {
                 let regionName = "Autre";
                 for (const [rName, depts] of Object.entries(REGIONS)) {
                     if (depts.includes(s.dept)) {
@@ -312,23 +389,19 @@ const FireRiskMap = () => {
             Object.values(regMap).forEach(r => {
                 r.stations.sort((a, b) => riskOrder[b.risk] - riskOrder[a.risk]);
             });
-
-            setStationData(stations);
-            setDeptRisk(deptMap);
             setRegionRisk(regMap);
-            setLastUpdate(new Date());
         } catch (err) {
             console.error('[FireRiskMap] Erreur:', err);
             setError('Impossible de charger les données.');
         } finally {
             setLoading(false);
         }
-    }, [selectedDate, stationLookup]);
+    }, [viewMode, selectedDate, stationLookup]);
 
     useEffect(() => {
         loadData();
         localStorage.setItem('fireRiskDate', selectedDate);
-    }, [selectedDate, loadData]);
+    }, [selectedDate, viewMode, loadData]);
 
     // Auto-refresh toutes les 30 minutes
     useEffect(() => {
@@ -474,6 +547,48 @@ const FireRiskMap = () => {
                             max={new Date().toISOString().split('T')[0]}
                             style={{ background: '#7f1d1d', border: '1px solid #fca5a5', borderRadius: 8, color: '#fff', padding: '6px 10px', fontSize: '0.85rem', cursor: 'pointer' }}
                         />
+
+                        {/* Sélecteur Mode de vue (En Direct / Max de la journée) */}
+                        <div style={{ display: 'flex', background: '#7f1d1d', border: '1px solid #fca5a5', borderRadius: '8px', padding: '2px', overflow: 'hidden' }}>
+                            <button
+                                onClick={() => {
+                                    setViewMode('live');
+                                    localStorage.setItem('fireRiskViewMode', 'live');
+                                }}
+                                style={{
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    background: viewMode === 'live' ? '#ef4444' : 'transparent',
+                                    color: '#fff',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s'
+                                }}
+                            >
+                                En Direct (6 min)
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setViewMode('daily_max');
+                                    localStorage.setItem('fireRiskViewMode', 'daily_max');
+                                }}
+                                style={{
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    background: viewMode === 'daily_max' ? '#ef4444' : 'transparent',
+                                    color: '#fff',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s'
+                                }}
+                            >
+                                Maximums du Jour
+                            </button>
+                        </div>
                         <button onClick={loadData} disabled={loading} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
                             {loading ? 'Chargement...' : 'Actualiser'}
