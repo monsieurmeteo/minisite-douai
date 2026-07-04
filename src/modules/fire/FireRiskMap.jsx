@@ -109,6 +109,7 @@ const FireRiskMap = () => {
     const [selectedDept, setSelectedDept] = useState(null);
     const [hoveredDept, setHoveredDept] = useState(null);
     const [hoveredRegion, setHoveredRegion] = useState(null); // Région survolée
+    const [hoveredStation, setHoveredStation] = useState(null); // Station survolée
     const [lastUpdate, setLastUpdate] = useState(null);
     const [showInfo, setShowInfo] = useState(false);
     const mapContainerRef = useRef(null);
@@ -131,13 +132,16 @@ const FireRiskMap = () => {
         return map;
     }, []);
 
-    // Projection D3 Dynamique avec fitExtent (comme sur les autres cartes)
+    // Projection D3 Dynamique avec fitExtent (comme sur les autres cartes) - Légèrement décalée à gauche en mode Région (translation de -80px sur l'axe X)
     const projection = useMemo(() => {
         if (!geoData) return null;
         if (selectedRegionName !== "France" && regionsGeoData) {
             const regionFeature = regionsGeoData.features.find(f => f.properties.nom === selectedRegionName);
             if (regionFeature) {
-                return geoConicConformal().fitExtent([[40, 40], [WIDTH - 40, HEIGHT - 80]], regionFeature);
+                const proj = geoConicConformal().fitExtent([[40, 40], [WIDTH - 40, HEIGHT - 80]], regionFeature);
+                const currentTranslate = proj.translate();
+                // On translate la carte vers la gauche (X - 90) pour faire de la place au widget Top 30 à droite
+                return proj.translate([currentTranslate[0] - 90, currentTranslate[1]]);
             }
         }
         // Mode France entière (zoom standard)
@@ -585,7 +589,7 @@ const FireRiskMap = () => {
                     </div>
 
                     {/* Détail du département sélectionné */}
-                    {viewMode === 'departments' && selectedDeptData && selectedDept && (
+                    {selectedDeptData && selectedDept && (
                         <div style={{ background: '#0f172a', border: `2px solid ${RISK_LEVELS[selectedDeptData.risk.toUpperCase()]?.color}`, borderRadius: 12, padding: 16 }}>
                             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10 }}>
                                 {RISK_LEVELS[selectedDeptData.risk.toUpperCase()]?.emoji} Dépt. {selectedDept}
@@ -891,25 +895,17 @@ const FireRiskMap = () => {
                                                     distance: 0
                                                 });
                                             }}
+                                            onMouseEnter={() => setHoveredStation(s)}
+                                            onMouseLeave={() => setHoveredStation(null)}
                                         >
                                             <circle
                                                 cx={coords[0]}
                                                 cy={coords[1]}
-                                                r={selectedRegionName === "France" ? "4" : "6"}
+                                                r={selectedRegionName === "France" ? "5.5" : "7.5"}
                                                 fill={lvl.color}
                                                 stroke="#fff"
-                                                strokeWidth={selectedRegionName === "France" ? "1.2" : "1.8"}
+                                                strokeWidth={selectedRegionName === "France" ? "1.5" : "2"}
                                             />
-                                            <text
-                                                x={coords[0] + (selectedRegionName === "France" ? 7 : 10)}
-                                                y={coords[1] + 3}
-                                                fontSize={selectedRegionName === "France" ? "8.5" : "13"}
-                                                fill="#e2e8f0"
-                                                fontWeight="600"
-                                                style={{ userSelect: 'none', textShadow: '0 1px 3px #0f172a, 0 1px 2px #0f172a' }}
-                                            >
-                                                {s.name}
-                                            </text>
                                         </g>
                                     );
                                 })
@@ -931,6 +927,25 @@ const FireRiskMap = () => {
                                         <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+36} fontSize="9" fill="#94a3b8">{d.stations.length} poste(s) concerné(s)</text>
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+52} fontSize="9" fill="#94a3b8">Ex: {worst.name}</text>}
                                         {worst && <text x={Math.min(c[0]-80,WIDTH-180)+10} y={Math.max(c[1]-80,5)+64} fontSize="9" fill="#64748b">T:{worst.tempMax?.toFixed(0)}°C HR:{worst.humMin}% V:{worst.windMean}km/h</text>}
+                                    </g>
+                                );
+                            })()}
+
+                            {/* Tooltip station survolée */}
+                            {hoveredStation && (() => {
+                                const coords = projection([hoveredStation.lon, hoveredStation.lat]);
+                                if (!coords || isNaN(coords[0])) return null;
+                                const lvl = RISK_LEVELS[hoveredStation.risk.toUpperCase()];
+                                // On décale le tooltip pour qu'il s'affiche au-dessus du point
+                                const tx = Math.min(coords[0] - 80, WIDTH - 180);
+                                const ty = Math.max(coords[1] - 80, 5);
+                                return (
+                                    <g style={{ pointerEvents: 'none' }} filter="url(#shadow)">
+                                        <rect x={tx} y={ty} width={165} height={66} rx={8} fill="#1e293b" stroke={lvl.color} strokeWidth={1.5} />
+                                        <text x={tx + 10} y={ty + 18} fontSize="10.5" fill="#fff" fontWeight="700">{lvl.emoji} {hoveredStation.name}</text>
+                                        <text x={tx + 10} y={ty + 34} fontSize="9.5" fill={lvl.color} fontWeight="600">Risque {lvl.label}</text>
+                                        <text x={tx + 10} y={ty + 48} fontSize="9" fill="#94a3b8">T:{hoveredStation.tempMax?.toFixed(1)}°C  HR:{hoveredStation.humMin}%</text>
+                                        {hoveredStation.windMean > 0 && <text x={tx + 10} y={ty + 58} fontSize="9" fill="#64748b">Vent moy. : {hoveredStation.windMean} km/h</text>}
                                     </g>
                                 );
                             })()}
