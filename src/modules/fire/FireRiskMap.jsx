@@ -47,6 +47,7 @@ const MAJOR_STATIONS = [
 // ─── Règle des 3×30 ──────────────────────────────────────────────────────────
 const RISK_LEVELS = {
     LOW:      { id: 'low',    label: 'Faible',       color: '#22c55e', bg: '#dcfce7', text: '#166534', emoji: '🟢' },
+    SENSIBLE: { id: 'sensible',label: 'À surveiller', color: '#10b981', bg: '#ecfdf5', text: '#047857', emoji: '🟢' }, // Vert émeraude brillant
     WARNING:  { id: 'warning',label: 'Vigilance',    color: '#eab308', bg: '#fef9c3', text: '#854d0e', emoji: '🟡' },
     HIGH:     { id: 'high',   label: 'Élevé',        color: '#f97316', bg: '#ffedd5', text: '#9a3412', emoji: '🟠' },
     CRITICAL: { id: 'critical',label:'Très élevé',   color: '#ef4444', bg: '#fee2e2', text: '#991b1b', emoji: '🔴' },
@@ -54,6 +55,7 @@ const RISK_LEVELS = {
 
 const RISK_MESSAGES = {
     low:      'Aucune condition favorable au départ de feux.',
+    sensible: 'Un paramètre météo approche des seuils. Surveillance locale conseillée.',
     warning:  'Conditions favorables au déclenchement d\'un incendie. Vigilance recommandée.',
     high:     'Risque élevé de départ et de propagation d\'un incendie.',
     critical: 'Conditions météorologiques très favorables à une propagation rapide des incendies.',
@@ -98,9 +100,15 @@ function computeRisk(temp, hum, wind) {
     }
 
     // Niveau Jaune (Vigilance) :
-    // - Au moins un critère modéré ou plus
+    // - Au moins un critère modéré ou plus (score total >= 2)
     if (totalScore >= 2) {
         return 'warning';
+    }
+
+    // Niveau Vert Émeraude (À surveiller) :
+    // - Un seul critère modéré actif (score total === 1)
+    if (totalScore === 1) {
+        return 'sensible';
     }
 
     return 'low';
@@ -360,7 +368,7 @@ const FireRiskMap = () => {
             setStationData(filtered);
 
             // Agréger par département
-            const riskOrder = { low: 0, warning: 1, high: 2, critical: 3 };
+            const riskOrder = { low: 0, sensible: 1, warning: 2, high: 3, critical: 4 };
             const deptMap = {};
             filtered.forEach(s => {
                 if (!deptMap[s.dept]) {
@@ -835,86 +843,142 @@ const FireRiskMap = () => {
 
                 {/* ─── CARTE SVG ─── */}
                 <div style={{ background: '#0f172a', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: '10px 16px', position: 'relative', overflow: 'hidden' }}>
-                    {/* Encadré Top 30 des stations à risque (en haut à droite) */}
-                    {!loading && filteredStations.length > 0 && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '20px',
-                            right: '20px',
-                            width: '300px',
-                            maxHeight: 'calc(100vh - 150px)',
-                            background: 'rgba(30, 41, 59, 0.85)',
-                            backdropFilter: 'blur(8px)',
-                            border: '1px solid #334155',
-                            borderRadius: '12px',
-                            padding: '12px',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
-                            zIndex: 10,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
-                                <Flame size={16} style={{ color: '#ef4444' }} />
-                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>
-                                    {selectedRegionName === "France" ? "Top 30 des postes en alerte" : `Postes en alerte (${selectedRegionName})`}
-                                </span>
+                    
+                    {/* Encadré Top des stations à risque et sous surveillance (en haut à droite) */}
+                    {!loading && filteredStations.length > 0 && (() => {
+                        const activeAlerts = filteredStations.filter(s => s.risk !== 'low' && s.risk !== 'sensible');
+                        const underSurveillance = filteredStations.filter(s => s.risk === 'sensible');
+                        
+                        return (
+                            <div style={{
+                                position: 'absolute',
+                                top: '20px',
+                                right: '20px',
+                                width: '310px',
+                                maxHeight: 'calc(100vh - 150px)',
+                                background: 'rgba(30, 41, 59, 0.88)',
+                                backdropFilter: 'blur(8px)',
+                                border: '1px solid #334155',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+                                zIndex: 10,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px'
+                            }}>
+                                {/* Section 1 : Alertes Actives */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
+                                    <Flame size={16} style={{ color: '#ef4444' }} />
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>
+                                        {selectedRegionName === "France" ? "Postes en alerte active" : `Postes en alerte (${selectedRegionName})`}
+                                    </span>
+                                </div>
+                                <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', paddingRight: '4px' }}>
+                                    {activeAlerts.length === 0 ? (
+                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', padding: '4px 8px' }}>Aucun poste en alerte active.</div>
+                                    ) : (
+                                        activeAlerts
+                                            .sort((a, b) => {
+                                                const o = { critical: 3, high: 2, warning: 1 };
+                                                return o[b.risk] - o[a.risk];
+                                            })
+                                            .slice(0, 30)
+                                            .map(s => {
+                                                const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                                return (
+                                                    <div 
+                                                        key={s.station_id} 
+                                                        onClick={() => {
+                                                            setSelectedDept(s.dept);
+                                                            setSearchResult({
+                                                                city: s.name,
+                                                                dept: s.dept,
+                                                                station: s,
+                                                                distance: 0
+                                                            });
+                                                        }}
+                                                        style={{ 
+                                                            background: 'rgba(15, 23, 42, 0.6)', 
+                                                            borderLeft: `3px solid ${lvl.color}`, 
+                                                            borderRadius: '0 6px 6px 0', 
+                                                            padding: '6px 8px',
+                                                            cursor: 'pointer',
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+                                                            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+                                                                {s.name}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.65rem', background: lvl.bg, color: lvl.text, padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>
+                                                                {lvl.label}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
+                                                            <span>🌡️ {s.tempMax?.toFixed(1)}°C</span>
+                                                            <span>💧 {s.humMin}%</span>
+                                                            <span>💨 {s.windMean}km/h</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                    )}
+                                </div>
+
+                                {/* Section 2 : Postes sous surveillance (1 critère actif) */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #334155', borderTop: '1px solid #334155', padding: '6px 0', marginTop: '4px' }}>
+                                    <Info size={14} style={{ color: '#10b981' }} />
+                                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>Sous surveillance (1 seuil franchi)</span>
+                                </div>
+                                <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', paddingRight: '4px' }}>
+                                    {underSurveillance.length === 0 ? (
+                                        <div style={{ fontSize: '0.72rem', color: '#64748b', padding: '4px 8px' }}>Aucun poste sous surveillance.</div>
+                                    ) : (
+                                        underSurveillance
+                                            .sort((a, b) => (b.tempMax || 0) - (a.tempMax || 0))
+                                            .map(s => {
+                                                const lvl = RISK_LEVELS[s.risk.toUpperCase()];
+                                                return (
+                                                    <div 
+                                                        key={s.station_id} 
+                                                        onClick={() => {
+                                                            setSelectedDept(s.dept);
+                                                            setSearchResult({
+                                                                city: s.name,
+                                                                dept: s.dept,
+                                                                station: s,
+                                                                distance: 0
+                                                            });
+                                                        }}
+                                                        style={{ 
+                                                            background: 'rgba(15, 23, 42, 0.4)', 
+                                                            borderLeft: `3px solid ${lvl.color}`, 
+                                                            borderRadius: '0 6px 6px 0', 
+                                                            padding: '6px 8px',
+                                                            cursor: 'pointer',
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '185px' }}>
+                                                                {s.name} ({s.dept})
+                                                            </span>
+                                                            <span style={{ fontSize: '0.62rem', color: '#10b981', fontWeight: 600 }}>Surveillance</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>
+                                                            <span style={{ color: s.tempMax >= 25 ? '#fbbf24' : '#64748b' }}>🌡️ {s.tempMax?.toFixed(1)}°C</span>
+                                                            <span style={{ color: s.humMin <= 45 ? '#fbbf24' : '#64748b' }}>💧 {s.humMin}%</span>
+                                                            <span style={{ color: s.windMean >= 15 ? '#fbbf24' : '#64748b' }}>💨 {s.windMean}km/h</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                    )}
+                                </div>
                             </div>
-                            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '4px' }}>
-                                {filteredStations
-                                    .sort((a, b) => {
-                                        const riskOrder = { critical: 3, high: 2, warning: 1, low: 0 };
-                                        if (riskOrder[b.risk] !== riskOrder[a.risk]) {
-                                            return riskOrder[b.risk] - riskOrder[a.risk];
-                                        }
-                                        return (b.tempMax || 0) - (a.tempMax || 0); // Deuxième critère : température la plus élevée
-                                    })
-                                    .slice(0, 30)
-                                    .map(s => {
-                                        const lvl = RISK_LEVELS[s.risk.toUpperCase()];
-                                        return (
-                                            <div 
-                                                key={s.station_id} 
-                                                onClick={() => {
-                                                    setSelectedDept(s.dept);
-                                                    setSearchResult({
-                                                        city: s.name,
-                                                        dept: s.dept,
-                                                        station: s,
-                                                        distance: 0
-                                                    });
-                                                }}
-                                                style={{ 
-                                                    background: 'rgba(15, 23, 42, 0.6)', 
-                                                    borderLeft: `3px solid ${lvl.color}`, 
-                                                    borderRadius: '0 6px 6px 0', 
-                                                    padding: '6px 8px',
-                                                    cursor: 'pointer',
-                                                    transition: 'background 0.2s'
-                                                }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(30, 41, 59, 0.9)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(15, 23, 42, 0.6)'}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
-                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
-                                                        {s.name}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.65rem', background: lvl.bg, color: lvl.text, padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>
-                                                        {lvl.label}
-                                                    </span>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '8px', fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
-                                                    <span>🌡️ {s.tempMax?.toFixed(1)}°C</span>
-                                                    <span>💧 {s.humMin}%</span>
-                                                    {s.windMean > 0 && <span>💨 {s.windMean}km/h</span>}
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                }
-                            </div>
-                        </div>
-                    )}
+                        );
+                    })()}
                     {loading && (
                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', color: '#94a3b8' }}>
                             <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
@@ -1041,16 +1105,14 @@ const FireRiskMap = () => {
                             {stationData
                                 .filter(s => {
                                     if (!s.lat || !s.lon) return false;
-                                    
-                                    // On n'affiche que les postes avec une alerte active (supérieur à low) pour ne pas surcharger la carte
-                                    if (s.risk === 'low') return false;
 
                                     if (selectedRegionName === "France") {
-                                        // À l'échelle nationale, on restreint aux 30 villes majeures
+                                        // À l'échelle nationale : on restreint aux 30 villes majeures actives ET on cache les vertes (low)
+                                        if (s.risk === 'low') return false;
                                         return MAJOR_STATIONS.includes(s.station_id);
                                     }
                                     
-                                    // À l'échelle régionale, on affiche TOUS les postes de la région qui sont en alerte
+                                    // À l'échelle régionale : on affiche TOUTES les stations complètes de la région (même les vertes/low)
                                     const regionDepts = REGIONS[selectedRegionName] || [];
                                     return regionDepts.includes(s.dept);
                                 })
