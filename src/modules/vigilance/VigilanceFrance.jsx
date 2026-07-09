@@ -81,7 +81,10 @@ const VigilanceFrance = () => {
         const p = params.get('period');
         return p !== null ? parseInt(p) : 0;
     });
-    const [selectedPhenom, setSelectedPhenom] = useState(null);
+    const [selectedPhenom, setSelectedPhenom] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('phenom') || null;
+    });
     const [viewMode, setViewMode] = useState('national'); // 'national' or 'regional'
     const [selectedRegion, setSelectedRegion] = useState(() => {
         const params = new URLSearchParams(window.location.search);

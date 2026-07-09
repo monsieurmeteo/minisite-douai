@@ -65,7 +65,7 @@ async function captureAndUpload() {
         ];
 
         for (const period of periods) {
-            // 1. Capture France nationale
+            // 1. Capture France nationale (Standard)
             console.log(`\n⏳ [FRANCE] [${period.suffix}] capture...`);
             const page = await browser.newPage();
             await page.setViewport(CONFIG.viewport);
@@ -77,18 +77,45 @@ async function captureAndUpload() {
                 await page.close();
             }
 
+            // 1b. Capture France nationale (Météo des Forêts)
+            console.log(`\n⏳ [FRANCE FORET] [${period.suffix}] capture...`);
+            const pageForet = await browser.newPage();
+            await pageForet.setViewport(CONFIG.viewport);
+            try {
+                await captureScope(pageForet, null, period.id, period.suffix, '100');
+            } catch (e) {
+                console.error(`❌ Erreur France Forêt [${period.suffix}]:`, e.message);
+            } finally {
+                await pageForet.close();
+            }
+
             // 2. Capture chaque région (concurrence de 3 pages en parallèle pour aller vite)
             const CONCURRENCY = 3;
             for (let i = 0; i < REGIONS.length; i += CONCURRENCY) {
                 const chunk = REGIONS.slice(i, i + CONCURRENCY);
+                // Standard
                 await Promise.all(chunk.map(async (region) => {
-                    console.log(`📍 CAPTURE RÉGION: ${region.name} (${region.id}) [${period.suffix}]`);
+                    console.log(`📍 CAPTURE RÉGION (Standard): ${region.name} (${region.id}) [${period.suffix}]`);
                     const page = await browser.newPage();
                     await page.setViewport(CONFIG.viewport);
                     try {
                         await captureScope(page, region.id, period.id, period.suffix);
                     } catch (e) {
                         console.error(`❌ Erreur ${region.id} [${period.suffix}]:`, e.message);
+                    } finally {
+                        await page.close();
+                    }
+                }));
+
+                // Météo des Forêts
+                await Promise.all(chunk.map(async (region) => {
+                    console.log(`📍 CAPTURE RÉGION (Forêt): ${region.name} (${region.id}) [${period.suffix}]`);
+                    const page = await browser.newPage();
+                    await page.setViewport(CONFIG.viewport);
+                    try {
+                        await captureScope(page, region.id, period.id, period.suffix, '100');
+                    } catch (e) {
+                        console.error(`❌ Erreur ${region.id} Forêt [${period.suffix}]:`, e.message);
                     } finally {
                         await page.close();
                     }
@@ -103,9 +130,14 @@ async function captureAndUpload() {
 }
 
 
-async function captureScope(page, regionId, periodId, suffix) {
-    const scopeName = regionId ? `vigilance_region_${regionId}` : 'vigilance_france';
-    const targetUrl = `${CONFIG.baseUrl}/vigilance?period=${periodId}${regionId ? `&region=${regionId}` : ''}`;
+async function captureScope(page, regionId, periodId, suffix, phenomId = null) {
+    let scopeName = regionId ? `vigilance_region_${regionId}` : 'vigilance_france';
+    if (phenomId === '100') {
+        scopeName = regionId ? `vigilance_foret_region_${regionId}` : 'vigilance_foret';
+    } else if (phenomId) {
+        scopeName = regionId ? `vigilance_region_${regionId}_phenom_${phenomId}` : `vigilance_france_phenom_${phenomId}`;
+    }
+    const targetUrl = `${CONFIG.baseUrl}/vigilance?period=${periodId}${regionId ? `&region=${regionId}` : ''}${phenomId ? `&phenom=${phenomId}` : ''}`;
     
     console.log(`⏳ [${scopeName}] [${suffix}] Chargement: ${targetUrl}`);
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
@@ -156,8 +188,9 @@ async function captureScope(page, regionId, periodId, suffix) {
 
     // Historique Latest (uniquement pour France Demain)
     if (!regionId && periodId === 1) {
-        await uploadToSupabase('vigilance_france_latest.png', fileBuffer1);
-        await uploadToSupabase('vigilance_france_latest_social.png', fileBuffer2);
+        const latestPrefix = phenomId === '100' ? 'vigilance_foret_latest' : 'vigilance_france_latest';
+        await uploadToSupabase(`${latestPrefix}.png`, fileBuffer1);
+        await uploadToSupabase(`${latestPrefix}_social.png`, fileBuffer2);
     }
 }
 
