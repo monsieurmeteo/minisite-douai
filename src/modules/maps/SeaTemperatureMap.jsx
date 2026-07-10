@@ -1,89 +1,106 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, ImageOverlay } from 'react-leaflet';
 import L from 'leaflet';
-import { Waves, RefreshCw, Anchor, Compass, Info, Search, ShieldAlert } from 'lucide-react';
+import { Waves, RefreshCw, Anchor, Compass, Info, ShieldAlert } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import './SeaTemperatureMap.css';
 
-// Temperature color scale for marine observations
-const SEA_TEMP_SCALE = [
-    { min: -Infinity, max: 12, color: '#1e3a8a', label: '< 12°C' },
-    { min: 12, max: 14, color: '#2563eb', label: '12 - 14°C' },
-    { min: 14, max: 16, color: '#0ea5e9', label: '14 - 16°C' },
-    { min: 16, max: 18, color: '#14b8a6', label: '16 - 18°C' },
-    { min: 18, max: 20, color: '#10b981', label: '18 - 20°C' },
-    { min: 20, max: 22, color: '#eab308', label: '20 - 22°C' },
-    { min: 22, max: 24, color: '#f97316', label: '22 - 24°C' },
-    { min: 24, max: 26, color: '#ef4444', label: '24 - 26°C' },
-    { min: 26, max: Infinity, color: '#db2777', label: '> 26°C' },
+// Supabase base URL
+const SUPA_URL = 'https://ubdevaemtwbzxksjlhjg.supabase.co/storage/v1/object/public/vigilance-captures';
+
+// Color stops for legend (same as Python script, in °C)
+const COLOR_STOPS = [
+    [6,  '#08306b'], [10, '#08519c'], [13, '#2171b5'],
+    [15, '#4292c6'], [17, '#6baed6'], [19, '#9ecae1'],
+    [20, '#31a354'], [21, '#74c476'], [22, '#c7e55c'],
+    [23, '#fee027'], [24, '#fd9f61'], [26, '#e6550d'],
+    [28, '#a50f15'], [30, '#67000d'],
 ];
 
-const getSeaTempColor = (value) => {
-    if (value === null || value === undefined || isNaN(value)) return '#64748b';
-    const range = SEA_TEMP_SCALE.find(r => value >= r.min && value < r.max);
-    return range ? range.color : '#db2777';
-};
+// Bounds: same as Python script [south, west, north, east]
+const SST_BOUNDS = [[36.0, -10.0], [52.0, 16.0]]; // [[sw_lat, sw_lon], [ne_lat, ne_lon]]
+
+function createMarkerIcon(temp) {
+    const color = temp !== null ? tempToHex(temp) : '#64748b';
+    const displayVal = temp !== null ? temp.toFixed(1) : '?';
+    return L.divIcon({
+        className: 'custom-sea-marker',
+        html: `<div class="sea-marker-circle" style="background-color:${color};">
+                 <span>${displayVal}</span>
+               </div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+    });
+}
+
+function tempToHex(t) {
+    for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+        if (t >= COLOR_STOPS[i][0] && t <= COLOR_STOPS[i + 1][0]) return COLOR_STOPS[i][1];
+    }
+    return t < COLOR_STOPS[0][0] ? COLOR_STOPS[0][1] : COLOR_STOPS[COLOR_STOPS.length - 1][1];
+}
 
 export default function SeaTemperatureMap() {
-    const [stations, setStations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterType, setFilterType] = useState('all'); // 'all', 'bouee', 'bateau'
+    const [stations, setStations]   = useState([]);
+    const [metadata, setMetadata]   = useState(null);  // SST image metadata
+    const [sstUrl, setSstUrl]       = useState(null);
+    const [loading, setLoading]     = useState(true);
+    const [error, setError]         = useState(null);
+    const [showMarkers, setShowMarkers] = useState(true);
+    const [opacity, setOpacity]     = useState(0.8);
     const [selectedStation, setSelectedStation] = useState(null);
+    const [filterType, setFilterType] = useState('all');
 
-    // Fetch data from public Supabase Storage URL
     const loadData = async () => {
         setLoading(true);
         setError(null);
         try {
-            // Append timestamp to bust CDN cache
-            const url = `https://ubdevaemtwbzxksjlhjg.supabase.co/storage/v1/object/public/vigilance-captures/sea_temperatures.json?t=${Date.now()}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("Erreur de chargement des données de température de mer");
-            const data = await res.json();
-            setStations(data);
-            
-            // Auto-select first station if available
-            if (data.length > 0) {
-                setSelectedStation(data[0]);
+            const ts = Date.now();
+
+            // Load SST metadata (image URL + date)
+            const metaRes = await fetch(`${SUPA_URL}/sst_metadata.json?t=${ts}`);
+            if (metaRes.ok) {
+                const meta = await metaRes.json();
+                setMetadata(meta);
+                // Cache-bust the image URL
+                setSstUrl(`${SUPA_URL}/sst_france.png?t=${ts}`);
+            } else {
+                // No Copernicus image yet → show notice
+                setMetadata(null);
+                setSstUrl(null);
             }
+
+            // Load station buoy data (always)
+            const stRes = await fetch(`${SUPA_URL}/sea_temperatures.json?t=${ts}`);
+            if (stRes.ok) setStations(await stRes.json());
+
         } catch (e) {
-            console.error("Error loading sea temperatures:", e);
             setError(e.message);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    useEffect(() => { loadData(); }, []);
 
-    // Filter and search stations
-    const filteredStations = useMemo(() => {
-        return stations.filter(s => {
-            const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                  s.id.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesType = filterType === 'all' || s.type === filterType;
-            return matchesSearch && matchesType;
-        });
-    }, [stations, searchQuery, filterType]);
+    const filteredStations = stations.filter(s => {
+        if (filterType === 'all') return true;
+        return s.type === filterType;
+    });
 
-    // Create custom circle marker with Leaflet divIcon
-    const createMarkerIcon = (temp, type) => {
-        const color = getSeaTempColor(temp);
-        const isBateau = type === 'bateau';
-        const displayVal = temp !== null && temp !== undefined ? temp.toFixed(1) : '?';
-        return L.divIcon({
-            className: 'custom-sea-marker',
-            html: `<div class="sea-marker-circle" style="background-color: ${color}; border-color: ${isBateau ? '#000000' : '#ffffff'};">
-                     <span>${displayVal}</span>
-                   </div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-    };
+    const validStations = stations.filter(s => s.temperature !== null);
+    const avgTemp = validStations.length
+        ? (validStations.reduce((a, s) => a + s.temperature, 0) / validStations.length).toFixed(1)
+        : null;
+    const maxTemp = validStations.length
+        ? Math.max(...validStations.map(s => s.temperature)).toFixed(1)
+        : null;
+
+    // Gradient CSS for legend
+    const gradientCss = COLOR_STOPS.map(([t, c], i) => {
+        const pct = ((t - COLOR_STOPS[0][0]) / (COLOR_STOPS[COLOR_STOPS.length-1][0] - COLOR_STOPS[0][0]) * 100).toFixed(1);
+        return `${c} ${pct}%`;
+    }).join(', ');
 
     return (
         <div className="sea-map-container">
@@ -92,8 +109,12 @@ export default function SeaTemperatureMap() {
                     <Waves size={24} style={{ color: '#0ea5e9' }} />
                     <span>Température de la Mer (SST)</span>
                 </h1>
-                
                 <div className="sea-map-header-actions">
+                    {metadata && (
+                        <span className="sst-date-badge">
+                            Données du {metadata.date}
+                        </span>
+                    )}
                     <button className="sea-btn" onClick={loadData} disabled={loading}>
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         <span>Actualiser</span>
@@ -102,172 +123,183 @@ export default function SeaTemperatureMap() {
             </header>
 
             <div className="sea-map-body">
-                {/* Map Area */}
                 <div className="leaflet-map-wrapper">
                     {loading && (
-                        <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm z-[1000] flex items-center justify-center flex-col gap-3">
+                        <div className="map-overlay-loader">
                             <RefreshCw className="animate-spin text-sky-400" size={36} />
-                            <span className="text-slate-300 font-semibold">Chargement des données marines...</span>
+                            <span>Chargement des données marines...</span>
                         </div>
                     )}
-                    
                     {error && (
-                        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-[1000] flex items-center justify-center flex-col gap-4 p-4 text-center">
+                        <div className="map-overlay-error">
                             <ShieldAlert className="text-rose-500" size={48} />
-                            <h3 className="text-xl font-bold text-white">Impossible de charger la carte</h3>
-                            <p className="text-slate-400 max-w-md">{error}</p>
+                            <h3>Impossible de charger la carte</h3>
+                            <p>{error}</p>
                             <button className="sea-btn" onClick={loadData}>Réessayer</button>
                         </div>
                     )}
 
-                    <MapContainer 
-                        center={[46.2, -1.0]} 
-                        zoom={5.5} 
-                        style={{ height: '100%', width: '100%', background: '#0f172a' }}
-                        zoomControl={true}
-                    >
-                        <TileLayer
-                            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                        />
-                        
-                        {filteredStations.map(stn => (
-                            <Marker
-                                key={stn.id}
-                                position={[stn.latitude, stn.longitude]}
-                                icon={createMarkerIcon(stn.temperature, stn.type)}
-                                eventHandlers={{
-                                    click: () => {
-                                        setSelectedStation(stn);
-                                    }
-                                }}
-                            >
-                                <Popup>
-                                    <div className="popup-details">
-                                        <h3 className="popup-title">{stn.name}</h3>
-                                        <div className="sea-info-row">
-                                            <span className="label">Type :</span>
-                                            <span className="value capitalize">{stn.type === 'bouee' ? 'Bouée météo' : 'Bateau / Navire'}</span>
-                                        </div>
-                                        <div className="sea-info-row">
-                                            <span className="label">Température :</span>
-                                            <span className="value text-warning">{stn.temperature !== null ? `${stn.temperature.toFixed(1)} °C` : 'N/A'}</span>
-                                        </div>
-                                        <div className="sea-info-row">
-                                            <span className="label">Relevé :</span>
-                                            <span className="value">{stn.time || 'N/A'} (UTC)</span>
-                                        </div>
-                                        <div className="sea-info-row">
-                                            <span className="label">Coords :</span>
-                                            <span className="value">{stn.latitude.toFixed(3)}N, {stn.longitude.toFixed(3)}E</span>
-                                        </div>
-                                        <a 
-                                            href={`https://www.meteociel.fr/temps-reel/obs_boueebateau.php?code2=${stn.id}`} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="popup-link"
-                                        >
-                                            Fiche Meteociel complète &rarr;
-                                        </a>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </MapContainer>
-                </div>
+                    {!loading && (
+                        <MapContainer
+                            center={[44.0, 3.0]}
+                            zoom={5}
+                            style={{ height: '100%', width: '100%', background: '#0f172a' }}
+                        >
+                            {/* Base map — dark, no labels */}
+                            <TileLayer
+                                url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+                                attribution='&copy; CartoDB'
+                                zIndex={100}
+                            />
 
-                {/* Sidebar Controls */}
-                <div className="sea-sidebar">
-                    <div className="filter-section">
-                        <span className="filter-title">Recherche</span>
-                        <input
-                            type="text"
-                            placeholder="Nom ou code station..."
-                            className="sea-search-input"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
+                            {/* SST Satellite image overlay (Copernicus) */}
+                            {sstUrl && (
+                                <ImageOverlay
+                                    url={sstUrl}
+                                    bounds={SST_BOUNDS}
+                                    opacity={opacity}
+                                    zIndex={300}
+                                />
+                            )}
 
-                    <div className="filter-section">
-                        <span className="filter-title">Filtrer par type</span>
-                        <div className="filter-buttons">
-                            <button 
-                                className={`sea-btn ${filterType === 'all' ? 'active' : ''}`}
-                                onClick={() => setFilterType('all')}
-                            >
-                                <Compass size={16} />
-                                <span>Tous ({stations.length})</span>
-                            </button>
-                            <button 
-                                className={`sea-btn ${filterType === 'bouee' ? 'active' : ''}`}
-                                onClick={() => setFilterType('bouee')}
-                            >
-                                <Waves size={16} />
-                                <span>Bouées ({stations.filter(s => s.type === 'bouee').length})</span>
-                            </button>
-                            <button 
-                                className={`sea-btn ${filterType === 'bateau' ? 'active' : ''}`}
-                                onClick={() => setFilterType('bateau')}
-                            >
-                                <Anchor size={16} />
-                                <span>Bateaux ({stations.filter(s => s.type === 'bateau').length})</span>
-                            </button>
-                        </div>
-                    </div>
+                            {/* Labels on top */}
+                            <TileLayer
+                                url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+                                zIndex={500}
+                                opacity={0.9}
+                            />
 
-                    {selectedStation && (
-                        <div className="sea-info-card">
-                            <h2>Détail Station</h2>
-                            <div className="sea-info-row">
-                                <span className="label">Nom</span>
-                                <span className="value">{selectedStation.name}</span>
-                            </div>
-                            <div className="sea-info-row">
-                                <span className="label">Code</span>
-                                <span className="value">{selectedStation.id}</span>
-                            </div>
-                            <div className="sea-info-row">
-                                <span className="label">Température</span>
-                                <span className="value temp">
-                                    {selectedStation.temperature !== null ? `${selectedStation.temperature.toFixed(1)} °C` : 'N/A'}
-                                </span>
-                            </div>
-                            <div className="sea-info-row">
-                                <span className="label">Heure (UTC)</span>
-                                <span className="value">{selectedStation.time || 'N/A'}</span>
-                            </div>
-                            <div className="sea-info-row">
-                                <span className="label">Latitude</span>
-                                <span className="value">{selectedStation.latitude}° N</span>
-                            </div>
-                            <div className="sea-info-row">
-                                <span className="label">Longitude</span>
-                                <span className="value">{selectedStation.longitude}° E</span>
-                            </div>
-                        </div>
+                            {/* Station markers */}
+                            {showMarkers && filteredStations.map(stn => (
+                                <Marker
+                                    key={stn.id}
+                                    position={[stn.latitude, stn.longitude]}
+                                    icon={createMarkerIcon(stn.temperature)}
+                                    eventHandlers={{ click: () => setSelectedStation(stn) }}
+                                >
+                                    <Popup>
+                                        <div className="popup-details">
+                                            <h3 className="popup-title">{stn.name}</h3>
+                                            <div className="sea-info-row">
+                                                <span className="label">Type :</span>
+                                                <span className="value capitalize">{stn.type === 'bouee' ? 'Bouée météo' : 'Bateau'}</span>
+                                            </div>
+                                            <div className="sea-info-row">
+                                                <span className="label">Température :</span>
+                                                <span className="value text-warning">{stn.temperature !== null ? `${stn.temperature.toFixed(1)} °C` : 'N/A'}</span>
+                                            </div>
+                                            <div className="sea-info-row">
+                                                <span className="label">Heure UTC :</span>
+                                                <span className="value">{stn.time || 'N/A'}</span>
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            ))}
+                        </MapContainer>
                     )}
 
+                    {/* Notice if no SST image yet */}
+                    {!loading && !sstUrl && !error && (
+                        <div className="sst-notice">
+                            <Waves size={20} />
+                            <span>Image satellite en attente de la première génération (ce soir après 21h30)</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Sidebar */}
+                <div className="sea-sidebar">
+                    {/* Stats */}
+                    <div className="sea-stats-row">
+                        <div className="sea-stat">
+                            <span className="stat-val">{validStations.length}</span>
+                            <span className="stat-lbl">Stations</span>
+                        </div>
+                        <div className="sea-stat">
+                            <span className="stat-val">{avgTemp ? `${avgTemp}°C` : '—'}</span>
+                            <span className="stat-lbl">Moy. mer</span>
+                        </div>
+                        <div className="sea-stat">
+                            <span className="stat-val">{maxTemp ? `${maxTemp}°C` : '—'}</span>
+                            <span className="stat-lbl">Max</span>
+                        </div>
+                    </div>
+
+                    {/* Affichage controls */}
                     <div className="filter-section">
-                        <span className="filter-title">Légende</span>
-                        <div className="legend-grid">
-                            {SEA_TEMP_SCALE.map((item, idx) => (
-                                <div className="legend-item" key={idx}>
-                                    <div className="legend-color-box" style={{ backgroundColor: item.color }}></div>
-                                    <span>{item.label}</span>
-                                </div>
+                        <span className="filter-title">Affichage</span>
+                        <div className="sst-controls">
+                            <label className="sst-toggle">
+                                <input type="checkbox" checked={showMarkers} onChange={e => setShowMarkers(e.target.checked)} />
+                                <span>Afficher les bouées</span>
+                            </label>
+                            <label className="sst-slider-label">
+                                <span>Opacité carte : {Math.round(opacity * 100)}%</span>
+                                <input
+                                    type="range" min="0.2" max="1" step="0.05"
+                                    value={opacity}
+                                    onChange={e => setOpacity(parseFloat(e.target.value))}
+                                    className="sst-slider"
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Filter type */}
+                    <div className="filter-section">
+                        <span className="filter-title">Filtrer les stations</span>
+                        <div className="filter-buttons">
+                            {[['all', 'Toutes'], ['bouee', 'Bouées'], ['bateau', 'Bateaux']].map(([val, lbl]) => (
+                                <button
+                                    key={val}
+                                    className={`sea-btn ${filterType === val ? 'active' : ''}`}
+                                    onClick={() => setFilterType(val)}
+                                >
+                                    {val === 'bouee' ? <Waves size={14} /> : val === 'bateau' ? <Anchor size={14} /> : <Compass size={14} />}
+                                    <span>{lbl}</span>
+                                </button>
                             ))}
                         </div>
                     </div>
 
-                    <div className="sea-info-card" style={{ background: 'rgba(14, 165, 233, 0.05)', borderColor: 'rgba(14, 165, 233, 0.2)' }}>
+                    {/* Legend */}
+                    <div className="sst-legend">
+                        <span className="filter-title">Légende SST</span>
+                        <div className="sst-gradient-bar" style={{ background: `linear-gradient(to right, ${gradientCss})` }} />
+                        <div className="sst-legend-labels">
+                            <span>{COLOR_STOPS[0][0]}°C</span>
+                            <span>18°C</span>
+                            <span>{COLOR_STOPS[COLOR_STOPS.length-1][0]}°C</span>
+                        </div>
+                    </div>
+
+                    {/* Selected station */}
+                    {selectedStation && (
+                        <div className="sea-info-card">
+                            <h2>Détail Station</h2>
+                            <div className="sea-info-row"><span className="label">Nom</span><span className="value">{selectedStation.name}</span></div>
+                            <div className="sea-info-row"><span className="label">Type</span><span className="value">{selectedStation.type === 'bouee' ? 'Bouée' : 'Bateau'}</span></div>
+                            <div className="sea-info-row"><span className="label">Température</span>
+                                <span className="value temp">{selectedStation.temperature !== null ? `${selectedStation.temperature.toFixed(1)} °C` : 'N/A'}</span>
+                            </div>
+                            <div className="sea-info-row"><span className="label">Heure (UTC)</span><span className="value">{selectedStation.time || 'N/A'}</span></div>
+                            <div className="sea-info-row"><span className="label">Position</span>
+                                <span className="value">{selectedStation.latitude?.toFixed(2)}°N, {selectedStation.longitude?.toFixed(2)}°E</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Source */}
+                    <div className="sea-info-card" style={{ background: 'rgba(14,165,233,0.05)', borderColor: 'rgba(14,165,233,0.2)' }}>
                         <div className="flex gap-2 text-sky-400 mb-1 items-center">
                             <Info size={16} />
                             <span className="font-semibold text-xs text-sky-400 uppercase tracking-wider">Source</span>
                         </div>
                         <p className="text-slate-400 text-xs leading-relaxed m-0">
-                            Données temps réel issues de Meteociel (SST Medspiration & RGHSST).
-                            Mise à jour quotidiennement en soirée.
+                            {metadata
+                                ? `© ${metadata.attribution || 'Copernicus Marine Service'} — L4 NRT ~2km`
+                                : 'Données bouées : Meteociel. Image SST : Copernicus Marine Service (générée chaque soir après 21h30).'}
                         </p>
                     </div>
                 </div>
