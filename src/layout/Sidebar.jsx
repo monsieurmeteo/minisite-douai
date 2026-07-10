@@ -158,9 +158,21 @@ export default function Sidebar({ isOpen, onClose }) {
           <Thermometer size={18} style={{ color: '#ef4444' }} />
           <span>Carte Températures</span>
         </NavLink>
+        <NavLink to="/carte-temperature-mer" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Waves size={18} style={{ color: '#0ea5e9' }} />
+          <span>Température de la Mer</span>
+        </NavLink>
+        <NavLink to="/carte-humidex" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Thermometer size={18} style={{ color: '#ec4899' }} />
+          <span>Carte Humidex</span>
+        </NavLink>
         <NavLink to="/carte-feux" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <Flame size={18} style={{ color: '#f97316' }} />
           <span>🔥 Risque Incendie</span>
+        </NavLink>
+        <NavLink to="/previsions-feux" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
+          <Flame size={18} style={{ color: '#ef4444' }} />
+          <span>🔮 Prévision Risque Feux</span>
         </NavLink>
         <NavLink to="/cartes-mensuelles" className={({ isActive }) => clsx("nav-item", { active: isActive })}>
           <BarChart3 size={18} style={{ color: '#f59e0b' }} />

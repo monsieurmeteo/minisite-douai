@@ -28,9 +28,12 @@ import NationalRecordsMonitor from './modules/climatology/NationalRecordsMonitor
 import Temperatures30Villes from './modules/observations/Temperatures30Villes';
 import WindGustMap from './modules/maps/WindGustMap';
 import FireRiskMap from './modules/fire/FireRiskMap';
+import FireRiskForecast from './modules/fire/FireRiskForecast';
 import RainfallMap from './modules/maps/RainfallMap';
 import HumidityMap from './modules/maps/HumidityMap';
 import TemperatureMap from './modules/maps/TemperatureMap';
+import SeaTemperatureMap from './modules/maps/SeaTemperatureMap';
+import HumidexMap from './modules/maps/HumidexMap';
 import MonthlyMapsHub from './modules/maps/MonthlyMapsHub';
 import MeteocielArchives from './modules/rankings/MeteocielArchives';
 import StationArchives from './modules/rankings/StationArchives';
@@ -90,12 +93,15 @@ function App() {
           <Route path="/carte-pluie" element={<RainfallMap />} />
           <Route path="/carte-humidite" element={<HumidityMap />} />
           <Route path="/carte-temperatures" element={<TemperatureMap />} />
+          <Route path="/carte-temperature-mer" element={<SeaTemperatureMap />} />
+          <Route path="/carte-humidex" element={<HumidexMap />} />
           <Route path="/cartes-mensuelles" element={<MonthlyMapsHub />} />
           <Route path="/archives-classements" element={<MeteocielArchives />} />
           <Route path="/archives-station" element={<StationArchives />} />
           <Route path="/hdf-radar" element={<HDFRadar />} />
           <Route path="/windy" element={<WindyModule />} />
           <Route path="/carte-feux" element={<FireRiskMap />} />
+          <Route path="/previsions-feux" element={<FireRiskForecast />} />
 
         </Routes>
 
