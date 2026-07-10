@@ -26,8 +26,8 @@ const REGIONS = [
     { id: 'PAC', name: 'Provence-Alpes-Côte d\'Azur', deps: ['04', '05', '06', '13', '83', '84'] },
 ];
 
-const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms, regionId = null }) => {
-    console.log(`[SocialCard] Rendering for regionId: ${regionId}`);
+const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, phenoms, regionId = null, selectedPhenom = null }) => {
+    console.log(`[SocialCard] Rendering for regionId: ${regionId}, selectedPhenom: ${selectedPhenom}`);
     const regionConfig = regionId ? REGIONS.find(r => r.id === regionId) : null;
     if (regionId && !regionConfig) console.warn(`[SocialCard] ⚠️ Region ${regionId} not found in config!`);
 
@@ -47,7 +47,13 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
         }
     });
     const activeVigilance = Array.from(activeVigilanceMap.values());
-    const maxLevel = Math.max(...activeVigilance.map(d => d.level || 1), 1);
+    const maxLevel = Math.max(...activeVigilance.map(d => {
+        if (selectedPhenom) {
+            const risk = d.risks?.find(r => r.id.toString() === selectedPhenom.toString());
+            return risk ? parseInt(risk.level) : 1;
+        }
+        return d.level || 1;
+    }), 1);
 
     // 2. Calcul des phénomènes par niveau PRÉCIS
     const activePhenomsList = [];
@@ -92,7 +98,12 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
 
     const mapData = {};
     activeVigilance.forEach(d => {
-        mapData[d.dep_code] = d.level;
+        let displayLevel = d.level;
+        if (selectedPhenom) {
+            const risk = d.risks?.find(r => r.id.toString() === selectedPhenom.toString());
+            displayLevel = risk ? risk.level : 1;
+        }
+        mapData[d.dep_code] = displayLevel;
     });
 
     const getParisDate = (date) => {
@@ -118,6 +129,18 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
 
     const isReady = geoData && filteredFeatures.length > 0 && projection;
 
+    let titleStr = `⚠️ VIGILANCE ${regionConfig ? regionConfig.name.toUpperCase() : 'NATIONALE'}`;
+    if (selectedPhenom === "100") {
+        titleStr = `🔥 MÉTÉO DES FORÊTS ${regionConfig ? regionConfig.name.toUpperCase() : 'NATIONALE'}`;
+    } else if (selectedPhenom) {
+        const pObj = phenoms.find(p => p.id.toString() === selectedPhenom.toString());
+        if (pObj) {
+            titleStr = `⚠️ VIGILANCE ${pObj.name.toUpperCase()} - ${regionConfig ? regionConfig.name.toUpperCase() : 'NATIONALE'}`;
+        }
+    }
+
+    const isForest = selectedPhenom === "100" || (!selectedPhenom && activePhenomsList[0]?.id?.toString() === "100");
+
     return (
         <div className="social-fb-container" data-ready={isReady ? "true" : "false"}>
             <div id="vigilance-social-card" className="social-fb-card">
@@ -125,10 +148,10 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                 <div className={`social-fb-header ${headerClass}`}>
                     <div className="header-top-line">
                         <ShieldAlert size={40} className="header-icon" />
-                        <h1>⚠️ VIGILANCE {regionConfig ? regionConfig.name.toUpperCase() : 'NATIONALE'} - {targetDateFullStr.toUpperCase()}</h1>
+                        <h1>{titleStr} - {targetDateFullStr.toUpperCase()}</h1>
                     </div>
                     <div className="header-bottom-line">
-                        <span>{activePhenomsList.length > 0 ? `RISQUE PRINCIPAL : ${mainPhenomName}` : 'SITUATION CALME'}</span>
+                        <span>{selectedPhenom === "100" ? "RISQUE DE DÉPART D'INCENDIE DE VÉGÉTATION" : (activePhenomsList.length > 0 ? `RISQUE PRINCIPAL : ${mainPhenomName}` : 'SITUATION CALME')}</span>
                     </div>
                 </div>
 
@@ -165,7 +188,7 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                         </svg>
 
                         <div className="fb-legend-minimal">
-                            {activePhenomsList[0]?.id?.toString() === "100" && (
+                            {isForest && (
                                 <div className="legend-title" style={{ 
                                     fontWeight: 'bold', 
                                     marginBottom: '8px', 
@@ -179,7 +202,7 @@ const VigilanceSocialCard = ({ geoData, vigilanceData, period, lastUpdate, pheno
                             )}
                             {[1, 2, 3, 4].map(lvl => {
                                 let label = lvl === 1 ? 'Vert' : lvl === 2 ? 'Jaune' : lvl === 3 ? 'Orange' : 'Rouge';
-                                if (activePhenomsList[0]?.id?.toString() === "100") {
+                                if (isForest) {
                                     label = lvl === 1 ? 'Faible' : lvl === 2 ? 'Modéré' : lvl === 3 ? 'Elevé' : 'Très élevé';
                                 }
                                 return (

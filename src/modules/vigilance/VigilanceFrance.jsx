@@ -838,13 +838,14 @@ const VigilanceFrance = () => {
 
             <div id="vigilance-capture-full" className="social-capture-container no-display-web">
                 <VigilanceSocialCard
-                    key={`${selectedRegion}-${period}`}
+                    key={`${selectedRegion}-${period}-${selectedPhenom}`}
                     geoData={geoData}
                     vigilanceData={vigilanceData}
                     period={period}
                     lastUpdate={globalLastUpdate}
                     phenoms={PHENOMENONS}
                     regionId={selectedRegion}
+                    selectedPhenom={selectedPhenom}
                 />
             </div>
 
