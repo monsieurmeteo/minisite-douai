@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { execSync } from 'child_process';
 
 // Charge les variables d'environnement (local ou GitHub Actions)
 // Déclencheur manuel de capture : 30 avril 2026 - 16:31
@@ -52,6 +53,14 @@ const REGIONS = [
 
 async function captureAndUpload() {
     console.log('\n📸 CAPTURE VIGILANCE (FRANCE & RÉGIONS)\n');
+
+    // Exécuter le scraper de température de la mer
+    try {
+        console.log("🌊 Lancement du scraper de température de la mer...");
+        execSync('python scripts/scrape_sea_temperatures.py', { stdio: 'inherit' });
+    } catch (e) {
+        console.error("⚠️ Impossible d'exécuter le scraper de mer:", e.message);
+    }
 
     const browser = await puppeteer.launch({
         headless: "new",
